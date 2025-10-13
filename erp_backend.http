@@ -244,3 +244,241 @@ Content-Type: application/json
 }
 
 ###
+
+### ===== UPDATE USER API TESTS =====
+
+### 21. Update User - Partial Update (chỉ cập nhật name và position)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "name": "Nguyễn Văn A Updated",
+  "position": "Senior Full Stack Developer"
+}
+
+###
+
+### 22. Update User - Partial Update (chỉ cập nhật email)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "email": "nguyen.vana.updated@example.com"
+}
+
+###
+
+### 23. Update User - Partial Update (chỉ cập nhật password)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "password": "newpassword123"
+}
+
+###
+
+### 24. Update User - Partial Update (cập nhật nhiều trường)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "name": "Nguyễn Văn A Final",
+  "phoneNumber": "0901234567",
+  "address": "123 Updated Street, District 1, Ho Chi Minh City",
+  "role": "Admin",
+  "secondaryEmail": "nguyen.vana.backup@example.com"
+}
+
+###
+
+### 25. Update User - Partial Update (set empty values cho optional fields)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "phoneNumber": "",
+  "address": "",
+  "secondaryEmail": ""
+}
+
+###
+
+### 26. Update User - ID Mismatch (nếu gửi ID trong body)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "id": 2,
+  "name": "Test User"
+}
+
+###
+
+### 27. Update User - User Not Found (404 Not Found)
+PUT {{erp_backend_HostAddress}}/api/users/999
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "name": "Non Existent User"
+}
+
+###
+
+### 28. Update User - Email đã tồn tại (400 Bad Request)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "email": "admin@example.com"
+}
+
+###
+
+### 29. Update User - Validation Error (Email không hợp lệ)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "email": "invalid-email-format"
+}
+
+###
+
+### 30. Update User - Validation Error (Tên quá dài)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "name": "Tên rất dài vượt quá giới hạn 100 ký tự Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt"
+}
+
+###
+
+### 31. Update User - Validation Error (Email quá dài)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "email": "very.long.email.that.exceeds.the.150.character.limit.for.email.field.in.database.this.should.fail.validation.lorem.ipsum@example.com"
+}
+
+###
+
+### 32. Update User - Validation Error (Password quá dài)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "password": "Very.long.password.that.exceeds.the.255.character.limit.for.password.field.in.database.Lorem.ipsum.dolor.sit.amet.consectetur.adipiscing.elit.sed.do.eiusmod.tempor.incididunt.ut.labore.et.dolore.magna.aliqua.Ut.enim.ad.minim.veniam"
+}
+
+###
+
+### 33. Update User - Unauthorized (No Token)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+
+{
+  "name": "Test User"
+}
+
+###
+
+### 34. Update User - Invalid Token
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer invalid-token-here
+
+{
+  "name": "Test User"
+}
+
+###
+
+### 35. Update User - Empty request body (không cập nhật gì)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+}
+
+###
+
+### 36. Update User - Ignore invalid fields (chỉ cập nhật trường hợp lệ)
+PUT {{erp_backend_HostAddress}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+{
+  "name": "Valid Name Update",
+  "invalidField": "This will be ignored",
+  "createdAt": "2024-01-01T00:00:00Z",
+  "updatedAt": "2024-01-01T00:00:00Z",
+  "someOtherField": 123
+}
+
+###
+
+### ===== DELETE USER API TESTS =====
+
+### 37. Delete User - Thành công
+DELETE {{erp_backend_HostAddress}}/api/users/1
+Authorization: Bearer {JWT_TOKEN}
+
+###
+
+### 38. Delete User - User Not Found (404 Not Found)
+DELETE {{erp_backend_HostAddress}}/api/users/999
+Authorization: Bearer {JWT_TOKEN}
+
+###
+
+### 39. Delete User - Unauthorized (No Token)
+DELETE {{erp_backend_HostAddress}}/api/users/1
+
+###
+
+### 40. Delete User - Invalid Token
+DELETE {{erp_backend_HostAddress}}/api/users/1
+Authorization: Bearer invalid-token-here
+
+###
+
+### ===== DELETE CUSTOMER API TESTS =====
+
+### 41. Delete Customer - Thành công
+DELETE {{erp_backend_HostAddress}}/api/customers/1
+Authorization: Bearer {JWT_TOKEN}
+
+###
+
+### 42. Delete Customer - Customer Not Found (404 Not Found)
+DELETE {{erp_backend_HostAddress}}/api/customers/999
+Authorization: Bearer {JWT_TOKEN}
+
+###
+
+### 43. Delete Customer - Unauthorized (No Token)
+DELETE {{erp_backend_HostAddress}}/api/customers/1
+
+###
+
+### 44. Delete Customer - Invalid Token
+DELETE {{erp_backend_HostAddress}}/api/customers/1
+Authorization: Bearer invalid-token-here
+
+###

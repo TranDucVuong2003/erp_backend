@@ -2,6 +2,7 @@
 using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -101,6 +102,7 @@ namespace erp_backend.Controllers
 		}
 
 		[HttpPost("register")]
+		[Authorize]
 		public async Task<IActionResult> Register([FromBody] RegisterRequest request)
 		{
 			try
