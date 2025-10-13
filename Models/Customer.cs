@@ -81,9 +81,9 @@ namespace erp_backend.Models
 		public bool IsActive { get; set; } = true;
 
 		// Common fields
-		[Required]
+
 		[StringLength(20)]
-		public string CustomerType { get; set; } = string.Empty; // 'individual' or 'company'
+		public string CustomerType { get; set; } = string.Empty; 
 
 		[StringLength(20)]
 		public string? Status { get; set; }

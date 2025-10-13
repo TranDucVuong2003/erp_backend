@@ -1,0 +1,12 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\Controllers",
+    "\\Data",
+    "\\Models",
+    "\\Models\\DTOs",
+    "\\test_fe"
+  ],
+  "SelectedNode": "\\Models\\DTOs\\AuthDtos.cs",
+  "PreviewInSolutionExplorer": false
+}

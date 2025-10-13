@@ -14,6 +14,8 @@ namespace erp_backend.Data
         public DbSet<User> Users { get; set; }
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Deal> Deals { get; set; }
+		public DbSet<JwtToken> JwtTokens { get; set; }
+
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -25,8 +27,29 @@ namespace erp_backend.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Password).IsRequired();
+                entity.Property(e => e.Role).HasMaxLength(50).HasDefaultValue("User");
                 entity.HasIndex(e => e.Email).IsUnique();
                 entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+            });
+
+            // Configure JwtToken entity
+            modelBuilder.Entity<JwtToken>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Token).IsRequired();
+                entity.Property(e => e.Expiration).HasColumnType("timestamp with time zone");
+
+                // Foreign key relationship
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Index
+                entity.HasIndex(e => e.Token);
+                entity.HasIndex(e => e.UserId);
             });
 
 			// Configure Customer entity
