@@ -52,4 +52,47 @@ namespace erp_backend.Models.DTOs
 		
 		public string Role { get; set; } = "User";
 	}
+
+	public class UpdateUserResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public UserInfo User { get; set; } = null!;
+		public DateTime UpdatedAt { get; set; }
+	}
+
+	public class DeleteUserResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public UserInfo DeletedUser { get; set; } = null!;
+		public DateTime DeletedAt { get; set; }
+	}
+
+	public class CustomerInfo
+	{
+		public int Id { get; set; }
+		public string? Name { get; set; }
+		public string? Email { get; set; }
+		public string? PhoneNumber { get; set; }
+		public string? CompanyName { get; set; }
+		public string? RepresentativeName { get; set; }
+		public string? RepresentativeEmail { get; set; }
+		public string CustomerType { get; set; } = string.Empty;
+		public bool IsActive { get; set; }
+		public string? Status { get; set; }
+	}
+
+	public class DeleteCustomerResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public CustomerInfo DeletedCustomer { get; set; } = null!;
+		public DateTime DeletedAt { get; set; }
+	}
+
+	public class UpdateCustomerResponse
+	{
+		public string Message { get; set; }
+		public CustomerInfo Customer { get; set; }
+		public DateTime UpdatedAt { get; set; }
+	}
+
 }

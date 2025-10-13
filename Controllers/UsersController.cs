@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using erp_backend.Data;
+﻿using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace erp_backend.Controllers
 {
@@ -21,14 +22,16 @@ namespace erp_backend.Controllers
 
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<User>>> GetUsers()
+		[Authorize]
+		public async Task<ActionResult<IEnumerable<User>>> GetUsers()
         {
             return await _context.Users.ToListAsync();
         }
 
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<User>> GetUser(int id)
+		[Authorize]
+		public async Task<ActionResult<User>> GetUser(int id)
         {
             var user = await _context.Users.FindAsync(id);
 
@@ -42,7 +45,8 @@ namespace erp_backend.Controllers
 
 
         [HttpPost]
-        public async Task<ActionResult<User>> CreateUser(User user)
+		[Authorize]
+		public async Task<ActionResult<User>> CreateUser(User user)
         {
             try
             {
@@ -73,6 +77,7 @@ namespace erp_backend.Controllers
 
 
 		[HttpPut("{id}")]
+		[Authorize]
 		public async Task<ActionResult<UpdateUserResponse>> UpdateUser(int id, [FromBody] Dictionary<string, object?> updateData)
 		{
 			try
@@ -304,7 +309,8 @@ namespace erp_backend.Controllers
 		}
 
 		[HttpDelete("{id}")]
-        public async Task<ActionResult<DeleteUserResponse>> DeleteUser(int id)
+		[Authorize]
+		public async Task<ActionResult<DeleteUserResponse>> DeleteUser(int id)
         {
             try
             {
