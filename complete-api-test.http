@@ -1,0 +1,238 @@
+### ===== ERP BACKEND - COMPLETE API TESTING =====
+
+@baseUrl = https://localhost:7211
+@authToken = 
+
+### 1. Register User
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Nguy?n V?n A",
+  "email": "nguyenvana@example.com",
+  "password": "123456",
+  "confirmPassword": "123456",
+  "role": "User"
+}
+
+### 2. Register Admin
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Admin User",
+  "email": "admin@example.com",
+  "password": "admin123",
+  "confirmPassword": "admin123",
+  "role": "Admin"
+}
+
+### 3. Login User (Copy token from response)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "nguyenvana@example.com",
+  "password": "123456"
+}
+
+### 4. Login Admin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "admin123"
+}
+
+### ===== PROTECTED ENDPOINTS (Need Authorization) =====
+
+### 5. Get All Customers
+GET {{baseUrl}}/api/customers
+Authorization: Bearer {{authToken}}
+
+### 6. Get Customer by ID
+GET {{baseUrl}}/api/customers/1
+Authorization: Bearer {{authToken}}
+
+### 7. Create Individual Customer
+POST {{baseUrl}}/api/customers
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "customerType": "individual",
+  "name": "Nguy?n Th? B",
+  "email": "nguyenthib@test.com",
+  "phoneNumber": "0987654321",
+  "address": "123 Test Street, Ho Chi Minh City",
+  "isActive": true
+}
+
+### 8. Create Company Customer
+POST {{baseUrl}}/api/customers
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "customerType": "company",
+  "companyName": "Công ty TNHH ABC",
+  "representativeName": "Nguy?n V?n C",
+  "representativeEmail": "nguyenvanc@abc.com",
+  "representativePhone": "0901234567",
+  "companyAddress": "456 Business District, Ho Chi Minh City",
+  "isActive": true
+}
+
+### 9. Update Customer (PUT)
+PUT {{baseUrl}}/api/customers/1
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "customerType": "individual",
+  "name": "Nguy?n Th? B - Updated",
+  "email": "nguyenthib.updated@test.com",
+  "phoneNumber": "0987654321",
+  "address": "456 Updated Street, Ho Chi Minh City",
+  "isActive": true
+}
+
+### 10. Partial Update Customer (PATCH)
+PATCH {{baseUrl}}/api/customers/1
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Nguy?n Th? B - Patched",
+  "phoneNumber": "0999888777",
+  "notes": "Updated via PATCH request"
+}
+
+### 11. Toggle Customer Status
+PATCH {{baseUrl}}/api/customers/1/toggle-status
+Authorization: Bearer {{authToken}}
+
+### 12. Get Active Customers
+GET {{baseUrl}}/api/customers/active
+Authorization: Bearer {{authToken}}
+
+### 13. Get Customers by Type - Individual
+GET {{baseUrl}}/api/customers/by-type/individual
+Authorization: Bearer {{authToken}}
+
+### 14. Get Customers by Type - Company
+GET {{baseUrl}}/api/customers/by-type/company
+Authorization: Bearer {{authToken}}
+
+### 15. Get Individual Customers
+GET {{baseUrl}}/api/customers/individuals
+Authorization: Bearer {{authToken}}
+
+### 16. Get Company Customers
+GET {{baseUrl}}/api/customers/companies
+Authorization: Bearer {{authToken}}
+
+### 17. Get Customer Type Statistics
+GET {{baseUrl}}/api/customers/type-statistics
+Authorization: Bearer {{authToken}}
+
+### 18. Delete Customer
+DELETE {{baseUrl}}/api/customers/1
+Authorization: Bearer {{authToken}}
+
+### ===== ERROR CASES =====
+
+### 19. Login with Wrong Password
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "nguyenvana@example.com",
+  "password": "wrongpassword"
+}
+
+### 20. Login with Non-existent Email
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "notexist@example.com",
+  "password": "123456"
+}
+
+### 21. Register with Existing Email
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Another User",
+  "email": "nguyenvana@example.com",
+  "password": "123456",
+  "confirmPassword": "123456"
+}
+
+### 22. Register with Invalid Data
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "",
+  "email": "invalid-email",
+  "password": "123",
+  "confirmPassword": "456"
+}
+
+### 23. Access Protected Endpoint Without Token
+GET {{baseUrl}}/api/customers
+
+### 24. Access with Invalid Token
+GET {{baseUrl}}/api/customers
+Authorization: Bearer invalid.jwt.token.here
+
+### ===== VALIDATION TESTS =====
+
+### 25. Create Customer with Missing Required Fields (Individual)
+POST {{baseUrl}}/api/customers
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "customerType": "individual",
+  "name": "",
+  "email": "",
+  "phoneNumber": ""
+}
+
+### 26. Create Customer with Missing Required Fields (Company)
+POST {{baseUrl}}/api/customers
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "customerType": "company",
+  "companyName": "",
+  "representativeName": "",
+  "representativeEmail": "",
+  "representativePhone": ""
+}
+
+### 27. Create Customer with Duplicate Email
+POST {{baseUrl}}/api/customers
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "customerType": "individual",
+  "name": "Duplicate Email Test",
+  "email": "nguyenthib@test.com",
+  "phoneNumber": "0987654321",
+  "address": "Test Address",
+  "isActive": true
+}
+
+### ===== NOTES =====
+# 1. Run requests in order: Register ? Login ? Copy token ? Test protected endpoints
+# 2. Replace {{authToken}} variable with actual token from login response
+# 3. Server must be running on https://localhost:7211
+# 4. Token expires after 60 minutes

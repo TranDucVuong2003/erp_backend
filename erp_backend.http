@@ -1,6 +1,246 @@
-@erp_backend_HostAddress = http://localhost:5056
+﻿@erp_backend_HostAddress = http://localhost:5056
 
+### Test Weather API
 GET {{erp_backend_HostAddress}}/weatherforecast/
 Accept: application/json
+
+###
+
+### 1. Register User - Thành công
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Nguyễn Văn A",
+  "email": "nguyen.vana@example.com",
+  "password": "123456",
+  "confirmPassword": "123456",
+  "position": "Full Stack Developer",
+  "role": "User"
+}
+
+###
+
+### 2. Register Admin - Thành công
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Admin System",
+  "email": "admin@example.com",
+  "password": "admin123",
+  "confirmPassword": "admin123",
+  "position": "System Administrator",
+  "role": "Admin"
+}
+
+###
+
+### 3. Register - Email đã tồn tại (Test Error)
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test User Duplicate",
+  "email": "nguyen.vana@example.com",
+  "password": "123456",
+  "confirmPassword": "123456",
+  "position": "Tester",
+  "role": "User"
+}
+
+###
+
+### 4. Register - Validation Error (Mật khẩu ngắn)
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test User",
+  "email": "test@example.com",
+  "password": "123",
+  "confirmPassword": "123",
+  "position": "Tester",
+  "role": "User"
+}
+
+###
+
+### 5. Register - Validation Error (Email không hợp lệ)
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test User",
+  "email": "invalid-email",
+  "password": "123456",
+  "confirmPassword": "123456",
+  "position": "Tester",
+  "role": "User"
+}
+
+###
+
+### 6. Register - Validation Error (Mật khẩu không khớp)
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test User",
+  "email": "test2@example.com",
+  "password": "123456",
+  "confirmPassword": "654321",
+  "position": "Tester",
+  "role": "User"
+}
+
+###
+
+### 7. Login - Thành công
+POST {{erp_backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "nguyen.vana@example.com",
+  "password": "123456"
+}
+
+###
+
+### 8. Login Admin - Thành công
+POST {{erp_backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "admin123"
+}
+
+###
+
+### 9. Login - Email không tồn tại
+POST {{erp_backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "notexist@example.com",
+  "password": "123456"
+}
+
+###
+
+### 10. Login - Mật khẩu sai
+POST {{erp_backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "nguyen.vana@example.com",
+  "password": "wrongpassword"
+}
+
+###
+
+### 11. Login - Validation Error (Email trống)
+POST {{erp_backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "",
+  "password": "123456"
+}
+
+###
+
+### 12. Login - Validation Error (Email không hợp lệ)
+POST {{erp_backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "invalid-email",
+  "password": "123456"
+}
+
+###
+
+### ===== TEST PROTECTED ENDPOINTS (Need JWT Token) =====
+### Copy JWT token from successful login response above and replace {JWT_TOKEN} below
+
+### 13. Get All Users (Protected - Need JWT Token)
+GET {{erp_backend_HostAddress}}/api/users
+Accept: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+###
+
+### 14. Get User by ID (Protected - Need JWT Token)
+GET {{erp_backend_HostAddress}}/api/users/1
+Accept: application/json
+Authorization: Bearer {JWT_TOKEN}
+
+###
+
+### 15. Test Unauthorized Access (No Token)
+GET {{erp_backend_HostAddress}}/api/users
+Accept: application/json
+
+###
+
+### 16. Test Invalid Token
+GET {{erp_backend_HostAddress}}/api/users
+Accept: application/json
+Authorization: Bearer invalid-token-here
+
+###
+
+### ===== ADDITIONAL TEST CASES =====
+
+### 17. Register với tên quá dài (Validation Error)
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Tên rất dài vượt quá giới hạn 100 ký tự - Lorem ipsum dolor sit amet consectetur adipiscing elit sed do",
+  "email": "longname@example.com",
+  "password": "123456",
+  "confirmPassword": "123456",
+  "position": "Developer",
+  "role": "User"
+}
+
+###
+
+### 18. Register với chức vụ quá dài (Validation Error)
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test User",
+  "email": "longposition@example.com", 
+  "password": "123456",
+  "confirmPassword": "123456",
+  "position": "Chức vụ rất dài vượt quá giới hạn 100 ký tự - Lorem ipsum dolor sit amet consectetur adipiscing elit",
+  "role": "User"
+}
+
+###
+
+### 19. Register không có trường bắt buộc (Missing required fields)
+POST {{erp_backend_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "position": "Developer",
+  "role": "User"
+}
+
+###
+
+### 20. Login không có trường bắt buộc (Missing required fields)
+POST {{erp_backend_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com"
+}
 
 ###

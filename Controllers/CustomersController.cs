@@ -1,34 +1,37 @@
-using erp_backend.Data;
+﻿using erp_backend.Data;
 using erp_backend.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace erp_backend.Controllers
 {
-    [ApiController]
-    [Route("api/[controller]")]
+	[ApiController]
+	[Route("api/[controller]")]
 	public class CustomersController : ControllerBase
-    {
-        private readonly ApplicationDbContext _context;
-        private readonly ILogger<CustomersController> _logger;
+	{
+		private readonly ApplicationDbContext _context;
+		private readonly ILogger<CustomersController> _logger;
 
 		public CustomersController(ApplicationDbContext context)
-        {
-            _context = context;
-        }
-
-        [HttpGet]
-		public async Task<ActionResult<IEnumerable<Customer>>> GetCustomers()
-        {
-            return await _context.Customers.ToListAsync();
+		{
+			_context = context;
 		}
 
+		// Lấy danh sách tất cả khách hàng
+		[HttpGet]
+		public async Task<ActionResult<IEnumerable<Customer>>> GetCustomers()
+		{
+			return await _context.Customers.ToListAsync();
+		}
+
+		// Lấy khách hàng đang hoạt động
 		[HttpGet("active")]
 		public async Task<ActionResult<IEnumerable<Customer>>> GetActiveCustomers()
 		{
 			return await _context.Customers.Where(c => c.IsActive).ToListAsync();
 		}
 
+		// Lấy khách hàng theo ID
 		[HttpGet("{id}")]
 		public async Task<ActionResult<Customer>> GetCustomer(int id)
 		{
@@ -42,10 +45,11 @@ namespace erp_backend.Controllers
 			return customer;
 		}
 
+		// Tạo khách hàng mới
 		[HttpPost]
 		public async Task<ActionResult<Customer>> CreateCustomer(Customer customer)
 		{
-			// Ki?m tra model validation
+			// Kiểm tra model validation
 			if (!ModelState.IsValid)
 			{
 				return BadRequest(ModelState);
@@ -54,246 +58,313 @@ namespace erp_backend.Controllers
 			// Validation cho CustomerType
 			if (string.IsNullOrWhiteSpace(customer.CustomerType))
 			{
-				return BadRequest("Lo?i kh�ch h�ng l� b?t bu?c");
+				return BadRequest("Loại khách hàng là bắt buộc");
 			}
 
 			if (customer.CustomerType != "individual" && customer.CustomerType != "company")
 			{
-				return BadRequest("Lo?i kh�ch h�ng ph?i l� 'individual' ho?c 'company'");
+				return BadRequest("Loại khách hàng phải là 'individual' hoặc 'company'");
 			}
 
-			// Validation theo lo?i kh�ch h�ng
+			// Validation theo loại khách hàng
 			if (customer.CustomerType == "individual")
 			{
 				if (string.IsNullOrWhiteSpace(customer.Name))
-				{
-					return BadRequest("T�n l� b?t bu?c cho kh�ch h�ng c� nh�n");
-				}
+					return BadRequest("Tên là bắt buộc cho khách hàng cá nhân");
 				if (string.IsNullOrWhiteSpace(customer.Email))
-				{
-					return BadRequest("Email l� b?t bu?c cho kh�ch h�ng c� nh�n");
-				}
+					return BadRequest("Email là bắt buộc cho khách hàng cá nhân");
 				if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
-				{
-					return BadRequest("S? di?n tho?i l� b?t bu?c cho kh�ch h�ng c� nh�n");
-				}
+					return BadRequest("Số điện thoại là bắt buộc cho khách hàng cá nhân");
 			}
 			else if (customer.CustomerType == "company")
 			{
 				if (string.IsNullOrWhiteSpace(customer.CompanyName))
-				{
-					return BadRequest("T�n c�ng ty l� b?t bu?c");
-				}
+					return BadRequest("Tên công ty là bắt buộc");
 				if (string.IsNullOrWhiteSpace(customer.RepresentativeName))
-				{
-					return BadRequest("T�n ngu?i d?i di?n l� b?t bu?c");
-				}
+					return BadRequest("Tên người đại diện là bắt buộc");
 				if (string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
-				{
-					return BadRequest("Email ngu?i d?i di?n l� b?t bu?c");
-				}
+					return BadRequest("Email người đại diện là bắt buộc");
 				if (string.IsNullOrWhiteSpace(customer.RepresentativePhone))
-				{
-					return BadRequest("S? di?n tho?i ngu?i d?i di?n l� b?t bu?c");
-				}
+					return BadRequest("Số điện thoại người đại diện là bắt buộc");
 			}
 
-			// Ki?m tra email unique (individual)
+			// Kiểm tra email trùng (individual)
 			if (!string.IsNullOrWhiteSpace(customer.Email))
 			{
 				var existingCustomer = await _context.Customers
 					.FirstOrDefaultAsync(c => c.Email == customer.Email);
 				if (existingCustomer != null)
-				{
-					return BadRequest("Email d� t?n t?i");
-				}
+					return BadRequest("Email đã tồn tại");
 			}
 
-			// Ki?m tra email unique (representative)
+			// Kiểm tra email trùng (representative)
 			if (!string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
 			{
 				var existingCustomer = await _context.Customers
 					.FirstOrDefaultAsync(c => c.RepresentativeEmail == customer.RepresentativeEmail);
 				if (existingCustomer != null)
-				{
-					return BadRequest("Email ngu?i d?i di?n d� t?n t?i");
-				}
+					return BadRequest("Email người đại diện đã tồn tại");
 			}
 
-			// Fix PostgreSQL DateTime UTC issue
+			// Gán thời gian tạo UTC
 			customer.CreatedAt = DateTime.UtcNow;
-			
-			// Convert nullable DateTime fields to UTC if they have values
+
+			// Fix DateTime UTC cho BirthDate và EstablishedDate
 			if (customer.BirthDate.HasValue)
-			{
-				if (customer.BirthDate.Value.Kind == DateTimeKind.Unspecified)
-				{
-					customer.BirthDate = DateTime.SpecifyKind(customer.BirthDate.Value, DateTimeKind.Utc);
-				}
-				else if (customer.BirthDate.Value.Kind == DateTimeKind.Local)
-				{
-					customer.BirthDate = customer.BirthDate.Value.ToUniversalTime();
-				}
-			}
-			
+				customer.BirthDate = ToUtc(customer.BirthDate.Value);
+
 			if (customer.EstablishedDate.HasValue)
-			{
-				if (customer.EstablishedDate.Value.Kind == DateTimeKind.Unspecified)
-				{
-					customer.EstablishedDate = DateTime.SpecifyKind(customer.EstablishedDate.Value, DateTimeKind.Utc);
-				}
-				else if (customer.EstablishedDate.Value.Kind == DateTimeKind.Local)
-				{
-					customer.EstablishedDate = customer.EstablishedDate.Value.ToUniversalTime();
-				}
-			}
-			
+				customer.EstablishedDate = ToUtc(customer.EstablishedDate.Value);
+
 			_context.Customers.Add(customer);
 			await _context.SaveChangesAsync();
 
 			return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, customer);
 		}
 
+		// Cập nhật khách hàng
 		[HttpPut("{id}")]
 		public async Task<IActionResult> UpdateCustomer(int id, Customer customer)
 		{
 			if (id != customer.Id)
+				return BadRequest("ID không khớp với dữ liệu khách hàng");
+
+			// Lấy customer hiện tại từ DB
+			var existing = await _context.Customers.FindAsync(id);
+			if (existing == null)
+				return NotFound();
+
+			// Chỉ validate CustomerType nếu có giá trị mới
+			if (!string.IsNullOrWhiteSpace(customer.CustomerType))
 			{
-				return BadRequest();
+				if (customer.CustomerType != "individual" && customer.CustomerType != "company")
+					return BadRequest("Loại khách hàng phải là 'individual' hoặc 'company'");
+				
+				existing.CustomerType = customer.CustomerType;
 			}
 
-			// Ki?m tra model validation
-			if (!ModelState.IsValid)
-			{
-				return BadRequest(ModelState);
-			}
-
-			// Validation cho CustomerType
-			if (string.IsNullOrWhiteSpace(customer.CustomerType))
-			{
-				return BadRequest("Lo?i kh�ch h�ng l� b?t bu?c");
-			}
-
-			if (customer.CustomerType != "individual" && customer.CustomerType != "company")
-			{
-				return BadRequest("Lo?i kh�ch h�ng ph?i l� 'individual' ho?c 'company'");
-			}
-
-			// Validation theo lo?i kh�ch h�ng
-			if (customer.CustomerType == "individual")
-			{
-				if (string.IsNullOrWhiteSpace(customer.Name))
-				{
-					return BadRequest("T�n l� b?t bu?c cho kh�ch h�ng c� nh�n");
-				}
-				if (string.IsNullOrWhiteSpace(customer.Email))
-				{
-					return BadRequest("Email l� b?t bu?c cho kh�ch h�ng c� nh�n");
-				}
-				if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
-				{
-					return BadRequest("S? di?n tho?i l� b?t bu?c cho kh�ch h�ng c� nh�n");
-				}
-			}
-			else if (customer.CustomerType == "company")
-			{
-				if (string.IsNullOrWhiteSpace(customer.CompanyName))
-				{
-					return BadRequest("T�n c�ng ty l� b?t bu?c");
-				}
-				if (string.IsNullOrWhiteSpace(customer.RepresentativeName))
-				{
-					return BadRequest("T�n ngu?i d?i di?n l� b?t bu?c");
-				}
-				if (string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
-				{
-					return BadRequest("Email ngu?i d?i di?n l� b?t bu?c");
-				}
-				if (string.IsNullOrWhiteSpace(customer.RepresentativePhone))
-				{
-					return BadRequest("S? di?n tho?i ngu?i d?i di?n l� b?t bu?c");
-				}
-			}
-
-			// Ki?m tra email unique (individual - tr? customer hi?n t?i)
+			// Cập nhật các trường Individual fields chỉ khi có giá trị
+			if (!string.IsNullOrWhiteSpace(customer.Name))
+				existing.Name = customer.Name;
+			
 			if (!string.IsNullOrWhiteSpace(customer.Email))
 			{
-				var existingCustomer = await _context.Customers
+				// Kiểm tra email trùng
+				var duplicateEmail = await _context.Customers
 					.FirstOrDefaultAsync(c => c.Email == customer.Email && c.Id != id);
-				if (existingCustomer != null)
-				{
-					return BadRequest("Email d� t?n t?i");
-				}
+				if (duplicateEmail != null)
+					return BadRequest("Email đã tồn tại");
+				existing.Email = customer.Email;
 			}
-
-			// Ki?m tra email unique (representative - tr? customer hi?n t?i)
-			if (!string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
-			{
-				var existingCustomer = await _context.Customers
-					.FirstOrDefaultAsync(c => c.RepresentativeEmail == customer.RepresentativeEmail && c.Id != id);
-				if (existingCustomer != null)
-				{
-					return BadRequest("Email ngu?i d?i di?n d� t?n t?i");
-				}
-			}
-
-			// Fix PostgreSQL DateTime UTC issue
-			customer.UpdatedAt = DateTime.UtcNow;
 			
-			// Convert nullable DateTime fields to UTC if they have values
+			if (!string.IsNullOrWhiteSpace(customer.PhoneNumber))
+				existing.PhoneNumber = customer.PhoneNumber;
+			
+			if (!string.IsNullOrWhiteSpace(customer.Address))
+				existing.Address = customer.Address;
+			
 			if (customer.BirthDate.HasValue)
-			{
-				if (customer.BirthDate.Value.Kind == DateTimeKind.Unspecified)
-				{
-					customer.BirthDate = DateTime.SpecifyKind(customer.BirthDate.Value, DateTimeKind.Utc);
-				}
-				else if (customer.BirthDate.Value.Kind == DateTimeKind.Local)
-				{
-					customer.BirthDate = customer.BirthDate.Value.ToUniversalTime();
-				}
-			}
+				existing.BirthDate = ToUtc(customer.BirthDate.Value);
+			
+			if (!string.IsNullOrWhiteSpace(customer.IdNumber))
+				existing.IdNumber = customer.IdNumber;
+			
+			if (!string.IsNullOrWhiteSpace(customer.Domain))
+				existing.Domain = customer.Domain;
+
+			// Cập nhật các trường Company fields chỉ khi có giá trị
+			if (!string.IsNullOrWhiteSpace(customer.CompanyName))
+				existing.CompanyName = customer.CompanyName;
+			
+			if (!string.IsNullOrWhiteSpace(customer.CompanyAddress))
+				existing.CompanyAddress = customer.CompanyAddress;
 			
 			if (customer.EstablishedDate.HasValue)
-			{
-				if (customer.EstablishedDate.Value.Kind == DateTimeKind.Unspecified)
-				{
-					customer.EstablishedDate = DateTime.SpecifyKind(customer.EstablishedDate.Value, DateTimeKind.Utc);
-				}
-				else if (customer.EstablishedDate.Value.Kind == DateTimeKind.Local)
-				{
-					customer.EstablishedDate = customer.EstablishedDate.Value.ToUniversalTime();
-				}
-			}
+				existing.EstablishedDate = ToUtc(customer.EstablishedDate.Value);
 			
-			_context.Entry(customer).State = EntityState.Modified;
+			if (!string.IsNullOrWhiteSpace(customer.TaxCode))
+				existing.TaxCode = customer.TaxCode;
+			
+			if (!string.IsNullOrWhiteSpace(customer.CompanyDomain))
+				existing.CompanyDomain = customer.CompanyDomain;
+
+			// Cập nhật các trường Representative info chỉ khi có giá trị
+			if (!string.IsNullOrWhiteSpace(customer.RepresentativeName))
+				existing.RepresentativeName = customer.RepresentativeName;
+			
+			if (!string.IsNullOrWhiteSpace(customer.RepresentativePosition))
+				existing.RepresentativePosition = customer.RepresentativePosition;
+			
+			if (!string.IsNullOrWhiteSpace(customer.RepresentativeIdNumber))
+				existing.RepresentativeIdNumber = customer.RepresentativeIdNumber;
+			
+			if (!string.IsNullOrWhiteSpace(customer.RepresentativePhone))
+				existing.RepresentativePhone = customer.RepresentativePhone;
+			
+			if (!string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
+			{
+				// Kiểm tra email người đại diện trùng
+				var duplicateRepEmail = await _context.Customers
+					.FirstOrDefaultAsync(c => c.RepresentativeEmail == customer.RepresentativeEmail && c.Id != id);
+				if (duplicateRepEmail != null)
+					return BadRequest("Email người đại diện đã tồn tại");
+				existing.RepresentativeEmail = customer.RepresentativeEmail;
+			}
+
+			// Cập nhật các trường Technical contact chỉ khi có giá trị
+			if (!string.IsNullOrWhiteSpace(customer.TechContactName))
+				existing.TechContactName = customer.TechContactName;
+			
+			if (!string.IsNullOrWhiteSpace(customer.TechContactPhone))
+				existing.TechContactPhone = customer.TechContactPhone;
+			
+			if (!string.IsNullOrWhiteSpace(customer.TechContactEmail))
+				existing.TechContactEmail = customer.TechContactEmail;
+
+			// Cập nhật các trường khác chỉ khi có giá trị
+			if (!string.IsNullOrWhiteSpace(customer.Status))
+				existing.Status = customer.Status;
+			
+			if (!string.IsNullOrWhiteSpace(customer.Notes))
+				existing.Notes = customer.Notes;
+
+			// Cập nhật IsActive (boolean luôn có giá trị, kiểm tra xem có khác với giá trị hiện tại không)
+			existing.IsActive = customer.IsActive;
+
+			// Validation sau khi cập nhật dựa trên CustomerType hiện tại
+			if (existing.CustomerType == "individual")
+			{
+				if (string.IsNullOrWhiteSpace(existing.Name))
+					return BadRequest("Tên là bắt buộc cho khách hàng cá nhân");
+				if (string.IsNullOrWhiteSpace(existing.Email))
+					return BadRequest("Email là bắt buộc cho khách hàng cá nhân");
+				if (string.IsNullOrWhiteSpace(existing.PhoneNumber))
+					return BadRequest("Số điện thoại là bắt buộc cho khách hàng cá nhân");
+			}
+			else if (existing.CustomerType == "company")
+			{
+				if (string.IsNullOrWhiteSpace(existing.CompanyName))
+					return BadRequest("Tên công ty là bắt buộc");
+				if (string.IsNullOrWhiteSpace(existing.RepresentativeName))
+					return BadRequest("Tên người đại diện là bắt buộc");
+				if (string.IsNullOrWhiteSpace(existing.RepresentativeEmail))
+					return BadRequest("Email người đại diện là bắt buộc");
+				if (string.IsNullOrWhiteSpace(existing.RepresentativePhone))
+					return BadRequest("Số điện thoại người đại diện là bắt buộc");
+			}
+
+			// Cập nhật thời gian
+			existing.UpdatedAt = DateTime.UtcNow;
+
+			await _context.SaveChangesAsync();
+
+			// Trả về object vừa được update (HTTP 200 OK)
+			return Ok(existing);
+		}
+
+
+		// Cập nhật một phần thông tin khách hàng (PATCH)
+		[HttpPatch("{id}")]
+		public async Task<IActionResult> PartialUpdateCustomer(int id, [FromBody] Dictionary<string, object> updateData)
+		{
+			var existing = await _context.Customers.FindAsync(id);
+			if (existing == null)
+				return NotFound();
 
 			try
 			{
-				await _context.SaveChangesAsync();
-			}
-			catch (DbUpdateConcurrencyException)
-			{
-				if (!CustomerExists(id))
+				// Convert dynamic object to dictionary để dễ xử lý
+				var updates = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(updateData.ToString());
+				
+				foreach (var update in updates)
 				{
-					return NotFound();
-				}
-				else
-				{
-					throw;
-				}
-			}
+					var propertyName = update.Key;
+					var value = update.Value?.ToString();
 
-			return NoContent();
+					switch (propertyName.ToLower())
+					{
+						case "name":
+							if (!string.IsNullOrWhiteSpace(value))
+								existing.Name = value;
+							break;
+						case "email":
+							if (!string.IsNullOrWhiteSpace(value))
+							{
+								var emailToCheck = value;
+								var duplicateEmail = await _context.Customers
+									.FirstOrDefaultAsync(c => c.Email == emailToCheck && c.Id != id);
+								if (duplicateEmail != null)
+									return BadRequest("Email đã tồn tại");
+								existing.Email = value;
+							}
+							break;
+						case "phonenumber":
+							if (!string.IsNullOrWhiteSpace(value))
+								existing.PhoneNumber = value;
+							break;
+						case "address":
+							if (!string.IsNullOrWhiteSpace(value))
+								existing.Address = value;
+							break;
+						case "customertype":
+							if (!string.IsNullOrWhiteSpace(value) && (value == "individual" || value == "company"))
+								existing.CustomerType = value;
+							break;
+						case "companyname":
+							if (!string.IsNullOrWhiteSpace(value))
+								existing.CompanyName = value;
+							break;
+						case "representativename":
+							if (!string.IsNullOrWhiteSpace(value))
+								existing.RepresentativeName = value;
+							break;
+						case "representativeemail":
+							if (!string.IsNullOrWhiteSpace(value))
+							{
+								var repEmailToCheck = value;
+								var duplicateRepEmail = await _context.Customers
+									.FirstOrDefaultAsync(c => c.RepresentativeEmail == repEmailToCheck && c.Id != id);
+								if (duplicateRepEmail != null)
+									return BadRequest("Email người đại diện đã tồn tại");
+								existing.RepresentativeEmail = value;
+							}
+							break;
+						case "representativephone":
+							if (!string.IsNullOrWhiteSpace(value))
+								existing.RepresentativePhone = value;
+							break;
+						case "isactive":
+							if (bool.TryParse(value, out bool isActive))
+								existing.IsActive = isActive;
+							break;
+						case "status":
+							if (!string.IsNullOrWhiteSpace(value))
+								existing.Status = value;
+							break;
+						case "notes":
+							existing.Notes = value; // Cho phép cập nhật notes thành null/empty
+							break;
+					}
+				}
+
+				existing.UpdatedAt = DateTime.UtcNow;
+				await _context.SaveChangesAsync();
+
+				return Ok(existing);
+			}
+			catch (Exception ex)
+			{
+				return BadRequest($"Lỗi cập nhật: {ex.Message}");
+			}
 		}
 
+		// Bật/tắt trạng thái hoạt động của khách hàng
 		[HttpPatch("{id}/toggle-status")]
 		public async Task<IActionResult> ToggleCustomerStatus(int id)
 		{
 			var customer = await _context.Customers.FindAsync(id);
 			if (customer == null)
-			{
 				return NotFound();
-			}
 
 			customer.IsActive = !customer.IsActive;
 			customer.UpdatedAt = DateTime.UtcNow;
@@ -302,14 +373,13 @@ namespace erp_backend.Controllers
 			return Ok(new { id = customer.Id, isActive = customer.IsActive });
 		}
 
+		// Xóa khách hàng
 		[HttpDelete("{id}")]
 		public async Task<IActionResult> DeleteCustomer(int id)
 		{
 			var customer = await _context.Customers.FindAsync(id);
 			if (customer == null)
-			{
 				return NotFound();
-			}
 
 			_context.Customers.Remove(customer);
 			await _context.SaveChangesAsync();
@@ -317,16 +387,16 @@ namespace erp_backend.Controllers
 			return NoContent();
 		}
 
-		// L?y kh�ch h�ng theo lo?i
+		// Lấy khách hàng theo loại (individual / company)
 		[HttpGet("by-type/{customerType}")]
 		public async Task<ActionResult<IEnumerable<Customer>>> GetCustomersByType(string customerType)
 		{
 			return await _context.Customers
 				.Where(c => c.CustomerType == customerType)
 				.ToListAsync();
-		}						
+		}
 
-		// Th?ng k� theo lo?i kh�ch h�ng
+		// Thống kê khách hàng theo loại
 		[HttpGet("type-statistics")]
 		public async Task<ActionResult<object>> GetTypeStatistics()
 		{
@@ -343,7 +413,7 @@ namespace erp_backend.Controllers
 			return Ok(statistics);
 		}
 
-		// L?y kh�ch h�ng c� nh�n
+		// Lấy danh sách khách hàng cá nhân
 		[HttpGet("individuals")]
 		public async Task<ActionResult<IEnumerable<Customer>>> GetIndividualCustomers()
 		{
@@ -352,7 +422,7 @@ namespace erp_backend.Controllers
 				.ToListAsync();
 		}
 
-		// L?y kh�ch h�ng c�ng ty
+		// Lấy danh sách khách hàng công ty
 		[HttpGet("companies")]
 		public async Task<ActionResult<IEnumerable<Customer>>> GetCompanyCustomers()
 		{
@@ -364,6 +434,16 @@ namespace erp_backend.Controllers
 		private bool CustomerExists(int id)
 		{
 			return _context.Customers.Any(e => e.Id == id);
+		}
+
+		// Hàm hỗ trợ chuyển DateTime về UTC an toàn
+		private DateTime ToUtc(DateTime dateTime)
+		{
+			if (dateTime.Kind == DateTimeKind.Unspecified)
+				return DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+			if (dateTime.Kind == DateTimeKind.Local)
+				return dateTime.ToUniversalTime();
+			return dateTime;
 		}
 	}
 }
