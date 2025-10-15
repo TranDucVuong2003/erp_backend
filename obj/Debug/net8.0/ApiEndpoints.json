@@ -469,16 +469,16 @@
     "ReturnTypes": []
   },
   {
-    "ContainingType": "erp_backend.Controllers.DealsController",
-    "Method": "GetDeals",
-    "RelativePath": "api/Deals",
+    "ContainingType": "erp_backend.Controllers.SaleOrdersController",
+    "Method": "GetSaleOrders",
+    "RelativePath": "api/SaleOrders",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
     "Parameters": [],
     "ReturnTypes": [
       {
-        "Type": "System.Collections.Generic.IEnumerable\u00601[[erp_backend.Models.Deal, erp_backend, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+        "Type": "System.Collections.Generic.IEnumerable\u00601[[erp_backend.Models.SaleOrder, erp_backend, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
         "MediaTypes": [
           "text/plain",
           "application/json",
@@ -489,22 +489,22 @@
     ]
   },
   {
-    "ContainingType": "erp_backend.Controllers.DealsController",
-    "Method": "CreateDeal",
-    "RelativePath": "api/Deals",
+    "ContainingType": "erp_backend.Controllers.SaleOrdersController",
+    "Method": "CreateSaleOrder",
+    "RelativePath": "api/SaleOrders",
     "HttpMethod": "POST",
     "IsController": true,
     "Order": 0,
     "Parameters": [
       {
-        "Name": "deal",
-        "Type": "erp_backend.Models.Deal",
+        "Name": "saleOrder",
+        "Type": "erp_backend.Models.SaleOrder",
         "IsRequired": true
       }
     ],
     "ReturnTypes": [
       {
-        "Type": "erp_backend.Models.Deal",
+        "Type": "erp_backend.Models.SaleOrder",
         "MediaTypes": [
           "text/plain",
           "application/json",
@@ -515,9 +515,9 @@
     ]
   },
   {
-    "ContainingType": "erp_backend.Controllers.DealsController",
-    "Method": "GetDeal",
-    "RelativePath": "api/Deals/{id}",
+    "ContainingType": "erp_backend.Controllers.SaleOrdersController",
+    "Method": "GetSaleOrder",
+    "RelativePath": "api/SaleOrders/{id}",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
@@ -530,7 +530,7 @@
     ],
     "ReturnTypes": [
       {
-        "Type": "erp_backend.Models.Deal",
+        "Type": "erp_backend.Models.SaleOrder",
         "MediaTypes": [
           "text/plain",
           "application/json",
@@ -541,9 +541,9 @@
     ]
   },
   {
-    "ContainingType": "erp_backend.Controllers.DealsController",
-    "Method": "UpdateDeal",
-    "RelativePath": "api/Deals/{id}",
+    "ContainingType": "erp_backend.Controllers.SaleOrdersController",
+    "Method": "UpdateSaleOrder",
+    "RelativePath": "api/SaleOrders/{id}",
     "HttpMethod": "PUT",
     "IsController": true,
     "Order": 0,
@@ -561,7 +561,7 @@
     ],
     "ReturnTypes": [
       {
-        "Type": "erp_backend.Models.DTOs.UpdateDealResponse",
+        "Type": "erp_backend.Models.DTOs.UpdateSaleOrderResponse",
         "MediaTypes": [
           "text/plain",
           "application/json",
@@ -572,9 +572,9 @@
     ]
   },
   {
-    "ContainingType": "erp_backend.Controllers.DealsController",
-    "Method": "DeleteDeal",
-    "RelativePath": "api/Deals/{id}",
+    "ContainingType": "erp_backend.Controllers.SaleOrdersController",
+    "Method": "DeleteSaleOrder",
+    "RelativePath": "api/SaleOrders/{id}",
     "HttpMethod": "DELETE",
     "IsController": true,
     "Order": 0,
@@ -587,7 +587,7 @@
     ],
     "ReturnTypes": [
       {
-        "Type": "erp_backend.Models.DTOs.DeleteDealResponse",
+        "Type": "erp_backend.Models.DTOs.DeleteSaleOrderResponse",
         "MediaTypes": [
           "text/plain",
           "application/json",
@@ -598,9 +598,9 @@
     ]
   },
   {
-    "ContainingType": "erp_backend.Controllers.DealsController",
-    "Method": "UpdateDealProbability",
-    "RelativePath": "api/Deals/{id}/probability",
+    "ContainingType": "erp_backend.Controllers.SaleOrdersController",
+    "Method": "UpdateSaleOrderProbability",
+    "RelativePath": "api/SaleOrders/{id}/probability",
     "HttpMethod": "PATCH",
     "IsController": true,
     "Order": 0,
@@ -619,9 +619,9 @@
     "ReturnTypes": []
   },
   {
-    "ContainingType": "erp_backend.Controllers.DealsController",
-    "Method": "GetDealsByCustomer",
-    "RelativePath": "api/Deals/by-customer/{customerId}",
+    "ContainingType": "erp_backend.Controllers.SaleOrdersController",
+    "Method": "GetSaleOrdersByCustomer",
+    "RelativePath": "api/SaleOrders/by-customer/{customerId}",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
@@ -634,7 +634,7 @@
     ],
     "ReturnTypes": [
       {
-        "Type": "System.Collections.Generic.IEnumerable\u00601[[erp_backend.Models.Deal, erp_backend, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+        "Type": "System.Collections.Generic.IEnumerable\u00601[[erp_backend.Models.SaleOrder, erp_backend, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
         "MediaTypes": [
           "text/plain",
           "application/json",
@@ -645,9 +645,9 @@
     ]
   },
   {
-    "ContainingType": "erp_backend.Controllers.DealsController",
-    "Method": "GetDealStatistics",
-    "RelativePath": "api/Deals/statistics",
+    "ContainingType": "erp_backend.Controllers.SaleOrdersController",
+    "Method": "GetSaleOrderStatistics",
+    "RelativePath": "api/SaleOrders/statistics",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,

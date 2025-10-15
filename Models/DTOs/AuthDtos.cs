@@ -95,7 +95,7 @@ namespace erp_backend.Models.DTOs
 		public DateTime UpdatedAt { get; set; }
 	}
 
-	public class DealInfo
+	public class SaleOrderInfo
 	{
 		public int Id { get; set; }
 		public string Title { get; set; } = string.Empty;
@@ -107,17 +107,17 @@ namespace erp_backend.Models.DTOs
 		public int? AddonId { get; set; }
 	}
 
-	public class UpdateDealResponse
+	public class UpdateSaleOrderResponse
 	{
 		public string Message { get; set; } = string.Empty;
-		public DealInfo Deal { get; set; } = null!;
+		public SaleOrderInfo SaleOrder { get; set; } = null!;
 		public DateTime UpdatedAt { get; set; }
 	}
 
-	public class DeleteDealResponse
+	public class DeleteSaleOrderResponse
 	{
 		public string Message { get; set; } = string.Empty;
-		public DealInfo DeletedDeal { get; set; } = null!;
+		public SaleOrderInfo DeletedSaleOrder { get; set; } = null!;
 		public DateTime DeletedAt { get; set; }
 	}
 
