@@ -13,7 +13,7 @@ namespace erp_backend.Data
         // DbSets
         public DbSet<User> Users { get; set; }
         public DbSet<Customer> Customers { get; set; }
-        public DbSet<Deal> Deals { get; set; }
+        public DbSet<SaleOrder> SaleOrders { get; set; }
         public DbSet<Service> Services { get; set; }
         public DbSet<Addon> Addons { get; set; }
 		public DbSet<JwtToken> JwtTokens { get; set; }
@@ -144,8 +144,8 @@ namespace erp_backend.Data
 				entity.HasIndex(e => e.IsActive);
 			});
 
-			// Configure Deal entity
-			modelBuilder.Entity<Deal>(entity =>
+			// Configure SaleOrder entity
+			modelBuilder.Entity<SaleOrder>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 

@@ -9,46 +9,46 @@ namespace erp_backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class DealsController : ControllerBase
+    public class SaleOrdersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-        private readonly ILogger<DealsController> _logger;
+        private readonly ILogger<SaleOrdersController> _logger;
 
-        public DealsController(ApplicationDbContext context, ILogger<DealsController> logger)
+        public SaleOrdersController(ApplicationDbContext context, ILogger<SaleOrdersController> logger)
         {
             _context = context;
             _logger = logger;
         }
 
-        // L?y danh sách t?t c? deals
+        // L?y danh sách t?t c? sale orders
         [HttpGet]
         [Authorize]
-        public async Task<ActionResult<IEnumerable<Deal>>> GetDeals()
+        public async Task<ActionResult<IEnumerable<SaleOrder>>> GetSaleOrders()
         {
-            return await _context.Deals.ToListAsync();
+            return await _context.SaleOrders.ToListAsync();
         }
 
-        // L?y deals theo customer ID
+        // L?y sale orders theo customer ID
         [HttpGet("by-customer/{customerId}")]
         [Authorize]
-        public async Task<ActionResult<IEnumerable<Deal>>> GetDealsByCustomer(int customerId)
+        public async Task<ActionResult<IEnumerable<SaleOrder>>> GetSaleOrdersByCustomer(int customerId)
         {
-            return await _context.Deals
+            return await _context.SaleOrders
                 .Where(d => d.CustomerId == customerId)
                 .ToListAsync();
         }
 
-        // Th?ng kê deals
+        // Th?ng kê sale orders
         [HttpGet("statistics")]
         [Authorize]
-        public async Task<ActionResult<object>> GetDealStatistics()
+        public async Task<ActionResult<object>> GetSaleOrderStatistics()
         {
-            var totalDeals = await _context.Deals.CountAsync();
-            var totalValue = await _context.Deals.SumAsync(d => d.Value);
-            var averageProbability = totalDeals > 0 ? await _context.Deals.AverageAsync(d => d.Probability) : 0;
+            var totalSaleOrders = await _context.SaleOrders.CountAsync();
+            var totalValue = await _context.SaleOrders.SumAsync(d => d.Value);
+            var averageProbability = totalSaleOrders > 0 ? await _context.SaleOrders.AverageAsync(d => d.Probability) : 0;
             
-            var deals = await _context.Deals.ToListAsync();
-            var probabilityRanges = deals
+            var saleOrders = await _context.SaleOrders.ToListAsync();
+            var probabilityRanges = saleOrders
                 .GroupBy(d => d.Probability switch
                 {
                     >= 0 and <= 25 => "Low (0-25%)",
@@ -67,32 +67,32 @@ namespace erp_backend.Controllers
 
             return Ok(new
             {
-                TotalDeals = totalDeals,
+                TotalSaleOrders = totalSaleOrders,
                 TotalValue = totalValue,
                 AverageProbability = Math.Round(averageProbability, 2),
                 ProbabilityRanges = probabilityRanges
             });
         }
 
-        // L?y deal theo ID
+        // L?y sale order theo ID
         [HttpGet("{id}")]
         [Authorize]
-        public async Task<ActionResult<Deal>> GetDeal(int id)
+        public async Task<ActionResult<SaleOrder>> GetSaleOrder(int id)
         {
-            var deal = await _context.Deals.FindAsync(id);
+            var saleOrder = await _context.SaleOrders.FindAsync(id);
 
-            if (deal == null)
+            if (saleOrder == null)
             {
-                return NotFound(new { message = "Không tìm th?y deal" });
+                return NotFound(new { message = "Không tìm th?y sale order" });
             }
 
-            return deal;
+            return saleOrder;
         }
 
-        // T?o deal m?i
+        // T?o sale order m?i
         [HttpPost]
         [Authorize]
-        public async Task<ActionResult<Deal>> CreateDeal(Deal deal)
+        public async Task<ActionResult<SaleOrder>> CreateSaleOrder(SaleOrder saleOrder)
         {
             try
             {
@@ -103,28 +103,28 @@ namespace erp_backend.Controllers
                 }
 
                 // Validate customer exists
-                var customerExists = await _context.Customers.AnyAsync(c => c.Id == deal.CustomerId);
+                var customerExists = await _context.Customers.AnyAsync(c => c.Id == saleOrder.CustomerId);
                 if (!customerExists)
                 {
                     return BadRequest(new { message = "Customer không t?n t?i" });
                 }
 
-                // Validate deal value
-                if (deal.Value < 0)
+                // Validate sale order value
+                if (saleOrder.Value < 0)
                 {
-                    return BadRequest(new { message = "Giá tr? deal ph?i l?n h?n ho?c b?ng 0" });
+                    return BadRequest(new { message = "Giá tr? sale order ph?i l?n h?n ho?c b?ng 0" });
                 }
 
                 // Validate probability range
-                if (deal.Probability < 0 || deal.Probability > 100)
+                if (saleOrder.Probability < 0 || saleOrder.Probability > 100)
                 {
                     return BadRequest(new { message = "Xác su?t ph?i t? 0-100%" });
                 }
 
                 // Validate service exists if provided
-                if (deal.ServiceId.HasValue && deal.ServiceId > 0)
+                if (saleOrder.ServiceId.HasValue && saleOrder.ServiceId > 0)
                 {
-                    var serviceExists = await _context.Services.AnyAsync(s => s.Id == deal.ServiceId);
+                    var serviceExists = await _context.Services.AnyAsync(s => s.Id == saleOrder.ServiceId);
                     if (!serviceExists)
                     {
                         return BadRequest(new { message = "Service không t?n t?i" });
@@ -132,40 +132,40 @@ namespace erp_backend.Controllers
                 }
 
                 // Validate addon exists if provided
-                if (deal.AddonId.HasValue && deal.AddonId > 0)
+                if (saleOrder.AddonId.HasValue && saleOrder.AddonId > 0)
                 {
-                    var addonExists = await _context.Addons.AnyAsync(a => a.Id == deal.AddonId);
+                    var addonExists = await _context.Addons.AnyAsync(a => a.Id == saleOrder.AddonId);
                     if (!addonExists)
                     {
                         return BadRequest(new { message = "Addon không t?n t?i" });
                     }
                 }
 
-                deal.CreatedAt = DateTime.UtcNow;
-                _context.Deals.Add(deal);
+                saleOrder.CreatedAt = DateTime.UtcNow;
+                _context.SaleOrders.Add(saleOrder);
                 await _context.SaveChangesAsync();
 
-                return CreatedAtAction(nameof(GetDeal), new { id = deal.Id }, deal);
+                return CreatedAtAction(nameof(GetSaleOrder), new { id = saleOrder.Id }, saleOrder);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "L?i khi t?o deal m?i");
-                return StatusCode(500, new { message = "L?i server khi t?o deal", error = ex.Message });
+                _logger.LogError(ex, "L?i khi t?o sale order m?i");
+                return StatusCode(500, new { message = "L?i server khi t?o sale order", error = ex.Message });
             }
         }
 
-        // C?p nh?t deal
+        // C?p nh?t sale order
         [HttpPut("{id}")]
         [Authorize]
-        public async Task<ActionResult<UpdateDealResponse>> UpdateDeal(int id, [FromBody] Dictionary<string, object?> updateData)
+        public async Task<ActionResult<UpdateSaleOrderResponse>> UpdateSaleOrder(int id, [FromBody] Dictionary<string, object?> updateData)
         {
             try
             {
-                // Ki?m tra xem deal có t?n t?i không
-                var existingDeal = await _context.Deals.FindAsync(id);
-                if (existingDeal == null)
+                // Ki?m tra xem sale order có t?n t?i không
+                var existingSaleOrder = await _context.SaleOrders.FindAsync(id);
+                if (existingSaleOrder == null)
                 {
-                    return NotFound(new { message = "Không tìm th?y deal" });
+                    return NotFound(new { message = "Không tìm th?y sale order" });
                 }
 
                 // C?p nh?t t?ng tr??ng n?u có trong request
@@ -183,7 +183,7 @@ namespace erp_backend.Controllers
                                 {
                                     return BadRequest(new { message = "Tiêu ?? không ???c v??t quá 255 ký t?" });
                                 }
-                                existingDeal.Title = value;
+                                existingSaleOrder.Title = value;
                             }
                             break;
 
@@ -198,7 +198,7 @@ namespace erp_backend.Controllers
                                     {
                                         return BadRequest(new { message = "Customer không t?n t?i" });
                                     }
-                                    existingDeal.CustomerId = customerId;
+                                    existingSaleOrder.CustomerId = customerId;
                                 }
                                 else
                                 {
@@ -210,17 +210,17 @@ namespace erp_backend.Controllers
                         case "value":
                             if (kvp.Value != null)
                             {
-                                if (decimal.TryParse(kvp.Value.ToString(), out decimal dealValue))
+                                if (decimal.TryParse(kvp.Value.ToString(), out decimal saleOrderValue))
                                 {
-                                    if (dealValue < 0)
+                                    if (saleOrderValue < 0)
                                     {
-                                        return BadRequest(new { message = "Giá tr? deal ph?i l?n h?n ho?c b?ng 0" });
+                                        return BadRequest(new { message = "Giá tr? sale order ph?i l?n h?n ho?c b?ng 0" });
                                     }
-                                    existingDeal.Value = dealValue;
+                                    existingSaleOrder.Value = saleOrderValue;
                                 }
                                 else
                                 {
-                                    return BadRequest(new { message = "Giá tr? deal không h?p l?" });
+                                    return BadRequest(new { message = "Giá tr? sale order không h?p l?" });
                                 }
                             }
                             break;
@@ -234,7 +234,7 @@ namespace erp_backend.Controllers
                                     {
                                         return BadRequest(new { message = "Xác su?t ph?i t? 0-100%" });
                                     }
-                                    existingDeal.Probability = probability;
+                                    existingSaleOrder.Probability = probability;
                                 }
                                 else
                                 {
@@ -250,7 +250,7 @@ namespace erp_backend.Controllers
                                 {
                                     return BadRequest(new { message = "Ghi chú không ???c v??t quá 2000 ký t?" });
                                 }
-                                existingDeal.Notes = string.IsNullOrWhiteSpace(value) ? null : value;
+                                existingSaleOrder.Notes = string.IsNullOrWhiteSpace(value) ? null : value;
                             }
                             break;
 
@@ -268,7 +268,7 @@ namespace erp_backend.Controllers
                                             return BadRequest(new { message = "Service không t?n t?i" });
                                         }
                                     }
-                                    existingDeal.ServiceId = serviceId > 0 ? serviceId : null;
+                                    existingSaleOrder.ServiceId = serviceId > 0 ? serviceId : null;
                                 }
                                 else
                                 {
@@ -291,7 +291,7 @@ namespace erp_backend.Controllers
                                             return BadRequest(new { message = "Addon không t?n t?i" });
                                         }
                                     }
-                                    existingDeal.AddonId = addonId > 0 ? addonId : null;
+                                    existingSaleOrder.AddonId = addonId > 0 ? addonId : null;
                                 }
                                 else
                                 {
@@ -313,41 +313,41 @@ namespace erp_backend.Controllers
                 }
 
                 // C?p nh?t th?i gian
-                existingDeal.UpdatedAt = DateTime.UtcNow;
+                existingSaleOrder.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
                 // T?o response
-                var response = new UpdateDealResponse
+                var response = new UpdateSaleOrderResponse
                 {
-                    Message = "C?p nh?t thông tin deal thành công",
-                    Deal = new DealInfo
+                    Message = "C?p nh?t thông tin sale order thành công",
+                    SaleOrder = new SaleOrderInfo
                     {
-                        Id = existingDeal.Id,
-                        Title = existingDeal.Title,
-                        CustomerId = existingDeal.CustomerId,
-                        Value = existingDeal.Value,
-                        Probability = existingDeal.Probability,
-                        Notes = existingDeal.Notes,
-                        ServiceId = existingDeal.ServiceId,
-                        AddonId = existingDeal.AddonId
+                        Id = existingSaleOrder.Id,
+                        Title = existingSaleOrder.Title,
+                        CustomerId = existingSaleOrder.CustomerId,
+                        Value = existingSaleOrder.Value,
+                        Probability = existingSaleOrder.Probability,
+                        Notes = existingSaleOrder.Notes,
+                        ServiceId = existingSaleOrder.ServiceId,
+                        AddonId = existingSaleOrder.AddonId
                     },
-                    UpdatedAt = existingDeal.UpdatedAt.Value
+                    UpdatedAt = existingSaleOrder.UpdatedAt.Value
                 };
 
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "L?i khi c?p nh?t deal v?i ID: {DealId}", id);
-                return StatusCode(500, new { message = "L?i server khi c?p nh?t deal", error = ex.Message });
+                _logger.LogError(ex, "L?i khi c?p nh?t sale order v?i ID: {SaleOrderId}", id);
+                return StatusCode(500, new { message = "L?i server khi c?p nh?t sale order", error = ex.Message });
             }
         }
 
-        // C?p nh?t xác su?t deal
+        // C?p nh?t xác su?t sale order
         [HttpPatch("{id}/probability")]
         [Authorize]
-        public async Task<IActionResult> UpdateDealProbability(int id, [FromBody] Dictionary<string, int> request)
+        public async Task<IActionResult> UpdateSaleOrderProbability(int id, [FromBody] Dictionary<string, int> request)
         {
             try
             {
@@ -363,65 +363,65 @@ namespace erp_backend.Controllers
                     return BadRequest(new { message = "Xác su?t ph?i t? 0-100%" });
                 }
 
-                var deal = await _context.Deals.FindAsync(id);
-                if (deal == null)
+                var saleOrder = await _context.SaleOrders.FindAsync(id);
+                if (saleOrder == null)
                 {
-                    return NotFound(new { message = "Không tìm th?y deal" });
+                    return NotFound(new { message = "Không tìm th?y sale order" });
                 }
 
-                deal.Probability = probability;
-                deal.UpdatedAt = DateTime.UtcNow;
+                saleOrder.Probability = probability;
+                saleOrder.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
                 return Ok(new 
                 { 
                     message = "C?p nh?t xác su?t thành công",
-                    id = deal.Id, 
-                    probability = deal.Probability,
-                    updatedAt = deal.UpdatedAt
+                    id = saleOrder.Id, 
+                    probability = saleOrder.Probability,
+                    updatedAt = saleOrder.UpdatedAt
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "L?i khi c?p nh?t xác su?t deal v?i ID: {DealId}", id);
+                _logger.LogError(ex, "L?i khi c?p nh?t xác su?t sale order v?i ID: {SaleOrderId}", id);
                 return StatusCode(500, new { message = "L?i server khi c?p nh?t xác su?t", error = ex.Message });
             }
         }
 
-        // Xóa deal
+        // Xóa sale order
         [HttpDelete("{id}")]
         [Authorize]
-        public async Task<ActionResult<DeleteDealResponse>> DeleteDeal(int id)
+        public async Task<ActionResult<DeleteSaleOrderResponse>> DeleteSaleOrder(int id)
         {
             try
             {
-                var deal = await _context.Deals.FindAsync(id);
-                if (deal == null)
+                var saleOrder = await _context.SaleOrders.FindAsync(id);
+                if (saleOrder == null)
                 {
-                    return NotFound(new { message = "Không tìm th?y deal" });
+                    return NotFound(new { message = "Không tìm th?y sale order" });
                 }
 
-                // L?u thông tin deal tr??c khi xóa ?? tr? v? trong response
-                var deletedDealInfo = new DealInfo
+                // L?u thông tin sale order tr??c khi xóa ?? tr? v? trong response
+                var deletedSaleOrderInfo = new SaleOrderInfo
                 {
-                    Id = deal.Id,
-                    Title = deal.Title,
-                    CustomerId = deal.CustomerId,
-                    Value = deal.Value,
-                    Probability = deal.Probability,
-                    Notes = deal.Notes,
-                    ServiceId = deal.ServiceId,
-                    AddonId = deal.AddonId
+                    Id = saleOrder.Id,
+                    Title = saleOrder.Title,
+                    CustomerId = saleOrder.CustomerId,
+                    Value = saleOrder.Value,
+                    Probability = saleOrder.Probability,
+                    Notes = saleOrder.Notes,
+                    ServiceId = saleOrder.ServiceId,
+                    AddonId = saleOrder.AddonId
                 };
 
-                _context.Deals.Remove(deal);
+                _context.SaleOrders.Remove(saleOrder);
                 await _context.SaveChangesAsync();
 
                 // T?o response
-                var response = new DeleteDealResponse
+                var response = new DeleteSaleOrderResponse
                 {
-                    Message = "Xóa deal thành công",
-                    DeletedDeal = deletedDealInfo,
+                    Message = "Xóa sale order thành công",
+                    DeletedSaleOrder = deletedSaleOrderInfo,
                     DeletedAt = DateTime.UtcNow
                 };
 
@@ -429,14 +429,14 @@ namespace erp_backend.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "L?i khi xóa deal v?i ID: {DealId}", id);
-                return StatusCode(500, new { message = "L?i server khi xóa deal", error = ex.Message });
+                _logger.LogError(ex, "L?i khi xóa sale order v?i ID: {SaleOrderId}", id);
+                return StatusCode(500, new { message = "L?i server khi xóa sale order", error = ex.Message });
             }
         }
 
-        private bool DealExists(int id)
+        private bool SaleOrderExists(int id)
         {
-            return _context.Deals.Any(e => e.Id == id);
+            return _context.SaleOrders.Any(e => e.Id == id);
         }
     }
 }
