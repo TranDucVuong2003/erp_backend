@@ -90,9 +90,86 @@ namespace erp_backend.Models.DTOs
 
 	public class UpdateCustomerResponse
 	{
-		public string Message { get; set; }
-		public CustomerInfo Customer { get; set; }
+		public string Message { get; set; } = string.Empty;
+		public CustomerInfo Customer { get; set; } = null!;
 		public DateTime UpdatedAt { get; set; }
 	}
 
+	public class DealInfo
+	{
+		public int Id { get; set; }
+		public string Title { get; set; } = string.Empty;
+		public int CustomerId { get; set; }
+		public decimal Value { get; set; }
+		public int Probability { get; set; }
+		public string? Notes { get; set; }
+		public int? ServiceId { get; set; }
+		public int? AddonId { get; set; }
+	}
+
+	public class UpdateDealResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public DealInfo Deal { get; set; } = null!;
+		public DateTime UpdatedAt { get; set; }
+	}
+
+	public class DeleteDealResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public DealInfo DeletedDeal { get; set; } = null!;
+		public DateTime DeletedAt { get; set; }
+	}
+
+	public class ServiceInfo
+	{
+		public int Id { get; set; }
+		public string Name { get; set; } = string.Empty;
+		public string? Description { get; set; }
+		public decimal Price { get; set; }
+		public int Quantity { get; set; }
+		public string? Category { get; set; }
+		public bool IsActive { get; set; }
+		public string? Notes { get; set; }
+	}
+
+	public class UpdateServiceResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public ServiceInfo Service { get; set; } = null!;
+		public DateTime UpdatedAt { get; set; }
+	}
+
+	public class DeleteServiceResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public ServiceInfo DeletedService { get; set; } = null!;
+		public DateTime DeletedAt { get; set; }
+	}
+
+	public class AddonInfo
+	{
+		public int Id { get; set; }
+		public string Name { get; set; } = string.Empty;
+		public string? Description { get; set; }
+		public decimal Price { get; set; }
+		public int Quantity { get; set; }
+		public string? Type { get; set; }
+		public bool IsActive { get; set; }
+		public string? Notes { get; set; }
+	}
+
+	public class UpdateAddonResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public AddonInfo Addon { get; set; } = null!;
+		public DateTime UpdatedAt { get; set; }
+	}
+
+	public class DeleteAddonResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public AddonInfo DeletedAddon { get; set; } = null!;
+		public DateTime DeletedAt { get; set; }
+	}
 }
