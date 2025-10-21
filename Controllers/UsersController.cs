@@ -50,10 +50,49 @@ namespace erp_backend.Controllers
         {
             try
             {
-                // Kiểm tra email trùng
+                // Validate required fields
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                // Kiểm tra email chính trùng
                 if (await _context.Users.AnyAsync(u => u.Email == user.Email))
                 {
                     return BadRequest(new { message = "Email đã tồn tại" });
+                }
+
+                // Validate và xử lý SecondaryEmail nếu có
+                if (!string.IsNullOrWhiteSpace(user.SecondaryEmail))
+                {
+                    // Validate format email phụ
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(user.SecondaryEmail, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+                    {
+                        return BadRequest(new { message = "Định dạng email phụ không hợp lệ" });
+                    }
+
+                    // Kiểm tra email phụ không trùng với email chính của user khác
+                    if (await _context.Users.AnyAsync(u => u.Email == user.SecondaryEmail))
+                    {
+                        return BadRequest(new { message = "Email phụ không được trùng với email chính của người dùng khác" });
+                    }
+
+                    // Kiểm tra email phụ không trùng với email phụ của user khác
+                    if (await _context.Users.AnyAsync(u => u.SecondaryEmail == user.SecondaryEmail))
+                    {
+                        return BadRequest(new { message = "Email phụ đã được sử dụng bởi người dùng khác" });
+                    }
+
+                    // Kiểm tra email phụ không trùng với email chính của cùng user
+                    if (user.Email == user.SecondaryEmail)
+                    {
+                        return BadRequest(new { message = "Email phụ không được trùng với email chính" });
+                    }
+                }
+                else
+                {
+                    // Nếu SecondaryEmail là empty string hoặc whitespace, set về null
+                    user.SecondaryEmail = null;
                 }
 
                 // Hash password trước khi lưu
@@ -239,20 +278,44 @@ namespace erp_backend.Controllers
 						case "secondaryemail":
 							if (value != null)
 							{
-								if (!string.IsNullOrEmpty(value))
+								if (!string.IsNullOrWhiteSpace(value))
 								{
 									if (value.Length > 150)
 									{
 										return BadRequest(new { message = "Email phụ không được vượt quá 150 ký tự" });
 									}
 
-									// Validate email format if not empty
+									// Validate email format
 									if (!System.Text.RegularExpressions.Regex.IsMatch(value, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
 									{
 										return BadRequest(new { message = "Định dạng email phụ không hợp lệ" });
 									}
+
+									// Kiểm tra email phụ không trùng với email chính của user khác
+									if (await _context.Users.AnyAsync(u => u.Email == value && u.Id != id))
+									{
+										return BadRequest(new { message = "Email phụ không được trùng với email chính của người dùng khác" });
+									}
+
+									// Kiểm tra email phụ không trùng với email phụ của user khác
+									if (await _context.Users.AnyAsync(u => u.SecondaryEmail == value && u.Id != id))
+									{
+										return BadRequest(new { message = "Email phụ đã được sử dụng bởi người dùng khác" });
+									}
+
+									// Kiểm tra email phụ không trùng với email chính của cùng user
+									if (existingUser.Email == value)
+									{
+										return BadRequest(new { message = "Email phụ không được trùng với email chính" });
+									}
+
+									existingUser.SecondaryEmail = value;
 								}
-								existingUser.SecondaryEmail = value;
+								else
+								{
+									// Nếu value là empty string hoặc whitespace, set về null
+									existingUser.SecondaryEmail = null;
+								}
 							}
 							break;
 

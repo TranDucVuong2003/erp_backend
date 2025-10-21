@@ -1,0 +1,981 @@
+{
+	"info": {
+		"_postman_id": "ticket-system-api-collection",
+		"name": "Ticket System API",
+		"description": "Complete API collection for Ticket Management System",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Setup",
+			"item": [
+				{
+					"name": "Create Technical Support Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Technical Support\"\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/TicketCategories",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketCategories"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"if (pm.response.code === 201) {",
+									"    var responseJson = pm.response.json();",
+									"    pm.environment.set(\"techSupportCategoryId\", responseJson.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Create Bug Report Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Bug Report\"\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/TicketCategories",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketCategories"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Feature Request Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Feature Request\"\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/TicketCategories",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketCategories"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Ticket Categories",
+			"item": [
+				{
+					"name": "Get All Categories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/TicketCategories",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketCategories"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response is an array\", function () {",
+									"    var responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Category by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/TicketCategories/{{techSupportCategoryId}}",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketCategories",
+								"{{techSupportCategoryId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Category",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": {{techSupportCategoryId}},\n    \"name\": \"Technical Support - Updated\",\n    \"createdAt\": \"{{currentTimestamp}}\"\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/TicketCategories/{{techSupportCategoryId}}",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketCategories",
+								"{{techSupportCategoryId}}"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "pre-request",
+							"script": {
+								"exec": [
+									"pm.environment.set(\"currentTimestamp\", new Date().toISOString());"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "3. Tickets CRUD",
+			"item": [
+				{
+					"name": "Create High Priority Ticket",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Website Loading Issues\",\n    \"description\": \"The website is loading very slowly, sometimes taking more than 30 seconds to load. This affects user experience significantly. Need urgent investigation.\",\n    \"customerId\": 1,\n    \"priority\": \"High\",\n    \"status\": 1,\n    \"categoryId\": {{techSupportCategoryId}},\n    \"urgencyLevel\": 4,\n    \"userId\": 1,\n    \"createdById\": 1,\n    \"dateline\": \"2024-12-31T23:59:59Z\"\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"if (pm.response.code === 201) {",
+									"    var responseJson = pm.response.json();",
+									"    pm.environment.set(\"ticketId1\", responseJson.id);",
+									"    ",
+									"    pm.test(\"Response has required fields\", function () {",
+									"        pm.expect(responseJson).to.have.property(\"id\");",
+									"        pm.expect(responseJson).to.have.property(\"title\");",
+									"        pm.expect(responseJson).to.have.property(\"customer\");",
+									"        pm.expect(responseJson).to.have.property(\"category\");",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Create Critical Priority Ticket",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Login System Down\",\n    \"description\": \"Users cannot login to the system. Getting 'Authentication failed' error even with correct credentials. This is blocking all user access.\",\n    \"customerId\": 1,\n    \"priority\": \"Critical\",\n    \"status\": 1,\n    \"categoryId\": 2,\n    \"urgencyLevel\": 5,\n    \"createdById\": 1\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var responseJson = pm.response.json();",
+									"    pm.environment.set(\"ticketId2\", responseJson.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get All Tickets",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Ticket by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId1}}",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId1}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Ticket",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": {{ticketId1}},\n    \"title\": \"Website Loading Issues - Escalated\",\n    \"description\": \"The website is loading very slowly, sometimes taking more than 30 seconds to load. This affects user experience significantly. Customer called again today expressing frustration. Need immediate resolution.\",\n    \"customerId\": 1,\n    \"priority\": \"Critical\",\n    \"status\": 2,\n    \"categoryId\": {{techSupportCategoryId}},\n    \"urgencyLevel\": 5,\n    \"userId\": 1,\n    \"createdById\": 1,\n    \"dateline\": \"2024-12-25T23:59:59Z\",\n    \"createdAt\": \"{{currentTimestamp}}\"\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId1}}",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId1}}"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "pre-request",
+							"script": {
+								"exec": [
+									"pm.environment.set(\"currentTimestamp\", new Date().toISOString());"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "4. Ticket Management",
+			"item": [
+				{
+					"name": "Assign Ticket to User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "1"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId2}}/assign",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId2}}",
+								"assign"
+							]
+						}
+					}
+				},
+				{
+					"name": "Unassign Ticket",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "null"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId2}}/assign",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId2}}",
+								"assign"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Status to In Progress",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "2"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId1}}/status",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId1}}",
+								"status"
+							]
+						}
+					}
+				},
+				{
+					"name": "Close Ticket",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "3"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId1}}/status",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId1}}",
+								"status"
+							]
+						}
+					}
+				},
+				{
+					"name": "Reopen Ticket",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "1"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId1}}/status",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId1}}",
+								"status"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Filtering & Search",
+			"item": [
+				{
+					"name": "Filter by Customer ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets?customerId=1",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							],
+							"query": [
+								{
+									"key": "customerId",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Filter by Priority",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets?priority=Critical",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							],
+							"query": [
+								{
+									"key": "priority",
+									"value": "Critical"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Filter by Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets?status=1",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Filter by Urgency Level",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets?urgencyLevel=5",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							],
+							"query": [
+								{
+									"key": "urgencyLevel",
+									"value": "5"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Multiple Filters",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets?customerId=1&priority=Critical&status=1",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							],
+							"query": [
+								{
+									"key": "customerId",
+									"value": "1"
+								},
+								{
+									"key": "priority",
+									"value": "Critical"
+								},
+								{
+									"key": "status",
+									"value": "1"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Ticket Logs",
+			"item": [
+				{
+					"name": "Create Log Entry",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"ticketId\": {{ticketId1}},\n    \"content\": \"Started investigating the issue. Checking server performance metrics and database response times.\",\n    \"userId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/TicketLogs",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketLogs"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var responseJson = pm.response.json();",
+									"    pm.environment.set(\"logId1\", responseJson.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Create Another Log Entry",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"ticketId\": {{ticketId1}},\n    \"content\": \"Found the root cause: Database queries are not optimized. Working on fixing the slow queries.\",\n    \"userId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/TicketLogs",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketLogs"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get All Logs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/TicketLogs",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketLogs"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Logs by Ticket ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/TicketLogs?ticketId={{ticketId1}}",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketLogs"
+							],
+							"query": [
+								{
+									"key": "ticketId",
+									"value": "{{ticketId1}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Logs via Tickets Endpoint",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId1}}/logs",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId1}}",
+								"logs"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Log Entry",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": {{logId1}},\n    \"ticketId\": {{ticketId1}},\n    \"content\": \"Started investigating the issue. Checking server performance metrics, database response times, and network latency. Initial findings suggest database bottleneck.\",\n    \"userId\": 1,\n    \"createdAt\": \"{{currentTimestamp}}\"\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/TicketLogs/{{logId1}}",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketLogs",
+								"{{logId1}}"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "pre-request",
+							"script": {
+								"exec": [
+									"pm.environment.set(\"currentTimestamp\", new Date().toISOString());"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "7. Error Cases",
+			"item": [
+				{
+					"name": "Create Ticket - Invalid Customer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Test Ticket\",\n    \"description\": \"Test description\",\n    \"customerId\": 999,\n    \"priority\": \"Low\",\n    \"status\": 1,\n    \"categoryId\": 1,\n    \"urgencyLevel\": 1\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test(\"Error message contains Customer\", function () {",
+									"    pm.expect(pm.response.text()).to.include(\"Customer\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Create Duplicate Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Technical Support\"\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/TicketCategories",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"TicketCategories"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test(\"Error message about duplicate category\", function () {",
+									"    pm.expect(pm.response.text()).to.include(\"?� t?n t?i\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Assign Invalid User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "999"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/{{ticketId1}}/assign",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"{{ticketId1}}",
+								"assign"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Non-existent Ticket",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{apiUrl}}/Tickets/999",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"Tickets",
+								"999"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"    pm.response.to.have.status(404);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://localhost:7228",
+			"type": "string"
+		},
+		{
+			"key": "apiUrl",
+			"value": "{{baseUrl}}/api",
+			"type": "string"
+		}
+	]
+}

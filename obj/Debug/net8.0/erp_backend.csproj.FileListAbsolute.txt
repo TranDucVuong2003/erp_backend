@@ -273,3 +273,6 @@ D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\System.IdentityModel.
 D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
 D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.dll
 D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Ticket_System_API_Collection.postman_collection.json
+D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Ticket_System_Environment.postman_environment.json
+D:\.Net\.Net Core\erp_backend\erp_backend\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt

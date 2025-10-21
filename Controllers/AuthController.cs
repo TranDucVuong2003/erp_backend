@@ -101,46 +101,46 @@ namespace erp_backend.Controllers
 			}
 		}
 
-		[HttpPost("register")]
-		[Authorize]
-		public async Task<IActionResult> Register([FromBody] RegisterRequest request)
-		{
-			try
-			{
-				if (!ModelState.IsValid)
-				{
-					return BadRequest(ModelState);
-				}
+		//[HttpPost("register")]
+		//[Authorize]
+		//public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+		//{
+		//	try
+		//	{
+		//		if (!ModelState.IsValid)
+		//		{
+		//			return BadRequest(ModelState);
+		//		}
 
-				// Check if email already exists
-				if (await _context.Users.AnyAsync(u => u.Email == request.Email))
-				{
-					return BadRequest(new { message = "Email đã tồn tại" });
-				}
+		//		// Check if email already exists
+		//		if (await _context.Users.AnyAsync(u => u.Email == request.Email))
+		//		{
+		//			return BadRequest(new { message = "Email đã tồn tại" });
+		//		}
 
-				// Hash password
-				var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
+		//		// Hash password
+		//		var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
 
-				// Create user
-				var user = new User
-				{
-					Name = request.Name,
-					Email = request.Email,
-					Password = hashedPassword,
-					Position = request.Position,
-					Role = request.Role,
-					CreatedAt = DateTime.UtcNow
-				};
+		//		// Create user
+		//		var user = new User
+		//		{
+		//			Name = request.Name,
+		//			Email = request.Email,
+		//			Password = hashedPassword,
+		//			Position = request.Position,
+		//			Role = request.Role,
+		//			CreatedAt = DateTime.UtcNow
+		//		};
 
-				_context.Users.Add(user);
-				await _context.SaveChangesAsync();
+		//		_context.Users.Add(user);
+		//		await _context.SaveChangesAsync();
 
-				return Ok(new { message = "Đăng ký thành công", userId = user.Id });
-			}
-			catch (Exception ex)
-			{
-				return StatusCode(500, new { message = "Lỗi server", error = ex.Message });
-			}
-		}
+		//		return Ok(new { message = "Đăng ký thành công", userId = user.Id });
+		//	}
+		//	catch (Exception ex)
+		//	{
+		//		return StatusCode(500, new { message = "Lỗi server", error = ex.Message });
+		//	}
+		//}
 	}
 }

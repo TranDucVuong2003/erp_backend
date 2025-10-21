@@ -33,7 +33,7 @@ namespace erp_backend.Models
 
         [EmailAddress]
         [StringLength(150)]
-        public string SecondaryEmail { get; set; } = string.Empty;
+        public string? SecondaryEmail { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
