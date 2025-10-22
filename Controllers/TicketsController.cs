@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
+using erp_backend.Models.DTOs;
 
 namespace erp_backend.Controllers
 {
@@ -187,7 +188,7 @@ namespace erp_backend.Controllers
 
         // PUT: api/Tickets/5/status
         [HttpPut("{id}/status")]
-        public async Task<IActionResult> UpdateTicketStatus(int id, [FromBody] string status)
+        public async Task<ActionResult<Ticket>> UpdateTicketStatus(int id, [FromBody] UpdateTicketStatusRequest request)
         {
             var ticket = await _context.Tickets.FindAsync(id);
             if (ticket == null)
@@ -195,11 +196,22 @@ namespace erp_backend.Controllers
                 return NotFound();
             }
 
-            ticket.Status = status;
+            // Validate request
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Status))
+            {
+                return BadRequest("Status không được để trống.");
+            }
+
+            ticket.Status = request.Status;
             ticket.UpdatedAt = DateTime.UtcNow;
 
             // If status indicates closed, set ClosedAt
-            if (status?.ToLower() == "closed" || status?.ToLower() == "completed") 
+            if (request.Status?.ToLower() == "closed" || request.Status?.ToLower() == "completed") 
             {
                 ticket.ClosedAt = DateTime.UtcNow;
             }
@@ -210,7 +222,30 @@ namespace erp_backend.Controllers
 
             await _context.SaveChangesAsync();
 
-            return NoContent();
+            // Load related data để trả về response đầy đủ
+            await _context.Entry(ticket)
+                .Reference(t => t.Customer)
+                .LoadAsync();
+            
+            await _context.Entry(ticket)
+                .Reference(t => t.Category)
+                .LoadAsync();
+
+            if (ticket.UserId.HasValue)
+            {
+                await _context.Entry(ticket)
+                    .Reference(t => t.AssignedTo)
+                    .LoadAsync();
+            }
+
+            if (ticket.CreatedById.HasValue)
+            {
+                await _context.Entry(ticket)
+                    .Reference(t => t.CreatedBy)
+                    .LoadAsync();
+            }
+
+            return Ok(ticket);
         }
 
         // POST: api/Tickets

@@ -11,17 +11,33 @@ namespace erp_backend.Models.DTOs
 		[Required(ErrorMessage = "Mật khẩu là bắt buộc")]
 		public string Password { get; set; } = string.Empty;
 		
-
+		public string? DeviceInfo { get; set; }
 	}
 
 	public class LoginResponse
 	{
-		public string Token { get; set; } = string.Empty;
-		public DateTime Expiration { get; set; }
-		public UserInfo User { get; set; } = null!;
+		public string AccessToken { get; set; } = string.Empty;
+		public DateTime ExpiresAt { get; set; }
+		public UserInfo User { get; set; } = new UserInfo();
 		public string Message { get; set; } = "Đăng nhập thành công";
 	}
 
+	public class RefreshTokenResponse
+	{
+		public string AccessToken { get; set; } = string.Empty;
+		public DateTime ExpiresAt { get; set; }
+	}
+
+	public class SessionInfo
+	{
+		public int Id { get; set; }
+		public string DeviceInfo { get; set; } = string.Empty;
+		public string IpAddress { get; set; } = string.Empty;
+		public DateTime CreatedAt { get; set; }
+		public DateTime ExpiresAt { get; set; }
+		public bool IsCurrentSession { get; set; }
+	}
+	
 	public class UserInfo
 	{
 		public int Id { get; set; }
