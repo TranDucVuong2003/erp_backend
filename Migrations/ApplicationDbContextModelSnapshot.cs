@@ -382,6 +382,9 @@ namespace erp_backend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AssignedToId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("CategoryId")
                         .HasColumnType("integer");
 
@@ -429,10 +432,9 @@ namespace erp_backend.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
-                    b.Property<int?>("UserId")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
+
+                    b.HasIndex("AssignedToId");
 
                     b.HasIndex("CategoryId");
 
@@ -447,8 +449,6 @@ namespace erp_backend.Migrations
                     b.HasIndex("Status");
 
                     b.HasIndex("UrgencyLevel");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("Tickets");
                 });
@@ -615,6 +615,11 @@ namespace erp_backend.Migrations
 
             modelBuilder.Entity("erp_backend.Models.Ticket", b =>
                 {
+                    b.HasOne("erp_backend.Models.User", "AssignedTo")
+                        .WithMany()
+                        .HasForeignKey("AssignedToId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("erp_backend.Models.TicketCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")
@@ -631,11 +636,6 @@ namespace erp_backend.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("erp_backend.Models.User", "AssignedTo")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("AssignedTo");
 

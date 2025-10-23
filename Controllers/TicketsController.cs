@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using erp_backend.Services;
+using System.Security.Claims;
 
 namespace erp_backend.Controllers
 {
@@ -11,10 +13,14 @@ namespace erp_backend.Controllers
     public class TicketsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<TicketsController> _logger;
 
-        public TicketsController(ApplicationDbContext context)
+        public TicketsController(ApplicationDbContext context, IEmailService emailService, ILogger<TicketsController> logger)
         {
             _context = context;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         // GET: api/Tickets
@@ -22,7 +28,7 @@ namespace erp_backend.Controllers
         public async Task<ActionResult<IEnumerable<Ticket>>> GetTickets(
             [FromQuery] int? customerId,
             [FromQuery] int? categoryId,
-            [FromQuery] int? userId,
+            [FromQuery] int? assignedToId,
             [FromQuery] string? priority,
             [FromQuery] string? status,
             [FromQuery] int? urgencyLevel)
@@ -41,14 +47,14 @@ namespace erp_backend.Controllers
             if (categoryId.HasValue)
                 query = query.Where(t => t.CategoryId == categoryId.Value);
 
-            if (userId.HasValue)
-                query = query.Where(t => t.UserId == userId.Value);
+            if (assignedToId.HasValue)
+                query = query.Where(t => t.AssignedToId == assignedToId.Value);
 
             if (!string.IsNullOrEmpty(priority))
-                query = query.Where(t => t.Priority == priority);
+                query = query.Where(t => t.Priority.ToLower() == priority.ToLower());
 
             if (!string.IsNullOrEmpty(status))
-                query = query.Where(t => t.Status == status);
+                query = query.Where(t => t.Status.ToLower() == status.ToLower());
 
             if (urgencyLevel.HasValue)
                 query = query.Where(t => t.UrgencyLevel == urgencyLevel.Value);
@@ -84,7 +90,7 @@ namespace erp_backend.Controllers
             var ticketExists = await _context.Tickets.AnyAsync(t => t.Id == id);
             if (!ticketExists)
             {
-                return NotFound("Ticket không t?n t?i.");
+                return NotFound("Ticket không tồn tại.");
             }
 
             var logs = await _context.TicketLogs
@@ -105,26 +111,29 @@ namespace erp_backend.Controllers
                 return BadRequest();
             }
 
+            // Normalize status
+            ticket.Status = NormalizeStatus(ticket.Status);
+
             // Verify required foreign keys exist
             var customerExists = await _context.Customers.AnyAsync(c => c.Id == ticket.CustomerId);
             if (!customerExists)
             {
-                return BadRequest("Customer không t?n t?i.");
+                return BadRequest("Customer không tồn tại.");
             }
 
             var categoryExists = await _context.TicketCategories.AnyAsync(tc => tc.Id == ticket.CategoryId);
             if (!categoryExists)
             {
-                return BadRequest("TicketCategory không t?n t?i.");
+                return BadRequest("TicketCategory không tồn tại.");
             }
 
             // Verify optional foreign keys if they are provided
-            if (ticket.UserId.HasValue)
+            if (ticket.AssignedToId.HasValue)
             {
-                var assignedUserExists = await _context.Users.AnyAsync(u => u.Id == ticket.UserId.Value);
+                var assignedUserExists = await _context.Users.AnyAsync(u => u.Id == ticket.AssignedToId.Value);
                 if (!assignedUserExists)
                 {
-                    return BadRequest("Assigned User không t?n t?i.");
+                    return BadRequest("Assigned User không tồn tại.");
                 }
             }
 
@@ -133,8 +142,21 @@ namespace erp_backend.Controllers
                 var createdByExists = await _context.Users.AnyAsync(u => u.Id == ticket.CreatedById.Value);
                 if (!createdByExists)
                 {
-                    return BadRequest("Created By User không t?n t?i.");
+                    return BadRequest("Created By User không tồn tại.");
                 }
+            }
+
+            // Handle ClosedAt timestamp based on status
+            if (IsClosedStatus(ticket.Status))
+            {
+                if (ticket.ClosedAt == null)
+                {
+                    ticket.ClosedAt = DateTime.UtcNow;
+                }
+            }
+            else
+            {
+                ticket.ClosedAt = null;
             }
 
             ticket.UpdatedAt = DateTime.UtcNow;
@@ -161,157 +183,214 @@ namespace erp_backend.Controllers
 
         // PUT: api/Tickets/5/assign
         [HttpPut("{id}/assign")]
-        public async Task<IActionResult> AssignTicket(int id, [FromBody] int? userId)
+        public async Task<IActionResult> AssignTicket(int id, [FromBody] int? assignedToId)
         {
-            var ticket = await _context.Tickets.FindAsync(id);
-            if (ticket == null)
+            try
             {
-                return NotFound();
-            }
-
-            if (userId.HasValue)
-            {
-                var userExists = await _context.Users.AnyAsync(u => u.Id == userId.Value);
-                if (!userExists)
+                var ticket = await _context.Tickets
+                    .Include(t => t.CreatedBy)
+                    .Include(t => t.AssignedTo)
+                    .FirstOrDefaultAsync(t => t.Id == id);
+                    
+                if (ticket == null)
                 {
-                    return BadRequest("User không t?n t?i.");
+                    return NotFound();
                 }
+
+                User? newAssignedUser = null;
+                if (assignedToId.HasValue)
+                {
+                    newAssignedUser = await _context.Users.FindAsync(assignedToId.Value);
+                    if (newAssignedUser == null)
+                    {
+                        return BadRequest("User không tồn tại.");
+                    }
+                }
+
+                // Get current user for logging
+                var currentUserId = GetCurrentUserId();
+                var currentUser = await _context.Users.FindAsync(currentUserId);
+
+                var oldAssigned = ticket.AssignedTo?.Name ?? "Chưa phân công";
+                var newAssigned = newAssignedUser?.Name ?? "Chưa phân công";
+
+                ticket.AssignedToId = assignedToId;
+                ticket.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                // Send email notification about assignment change
+                if (currentUser != null)
+                {
+                    var logContent = $"Ticket đã được phân công từ '{oldAssigned}' sang '{newAssigned}'";
+                    
+                    // Load full ticket data for email
+                    await _context.Entry(ticket)
+                        .Reference(t => t.AssignedTo)
+                        .LoadAsync();
+                        
+                    await _emailService.SendTicketLogNotificationAsync(ticket, currentUser, logContent);
+                }
+
+                return NoContent();
             }
-
-            ticket.UserId = userId;
-            ticket.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            return NoContent();
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error assigning ticket {TicketId}", id);
+                return StatusCode(500, new { message = "Error assigning ticket", error = ex.Message });
+            }
         }
 
         // PUT: api/Tickets/5/status
         [HttpPut("{id}/status")]
         public async Task<ActionResult<Ticket>> UpdateTicketStatus(int id, [FromBody] UpdateTicketStatusRequest request)
         {
-            var ticket = await _context.Tickets.FindAsync(id);
-            if (ticket == null)
+            try
             {
-                return NotFound();
-            }
+                var ticket = await _context.Tickets
+                    .Include(t => t.CreatedBy)
+                    .Include(t => t.AssignedTo)
+                    .Include(t => t.Customer)
+                    .Include(t => t.Category)
+                    .FirstOrDefaultAsync(t => t.Id == id);
+                    
+                if (ticket == null)
+                {
+                    return NotFound();
+                }
 
-            // Validate request
-            if (!ModelState.IsValid)
+                // Validate request
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Status))
+                {
+                    return BadRequest("Status không được để trống.");
+                }
+
+                // Normalize and validate status
+                var normalizedStatus = NormalizeStatus(request.Status);
+                if (!IsValidStatus(normalizedStatus))
+                {
+                    return BadRequest($"Status '{request.Status}' không hợp lệ. Các giá trị hợp lệ: Open, In Progress, Closed, On Hold, Cancelled");
+                }
+
+                // Get current user for logging
+                var currentUserId = GetCurrentUserId();
+                var currentUser = await _context.Users.FindAsync(currentUserId);
+
+                var oldStatus = ticket.Status;
+                ticket.Status = normalizedStatus;
+                ticket.UpdatedAt = DateTime.UtcNow;
+
+                // If status indicates closed, set ClosedAt
+                if (IsClosedStatus(normalizedStatus))
+                {
+                    ticket.ClosedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    ticket.ClosedAt = null;
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Send email notification about status change
+                if (currentUser != null)
+                {
+                    var logContent = $"Trạng thái ticket đã được thay đổi từ '{oldStatus}' thành '{normalizedStatus}'";
+                    await _emailService.SendTicketLogNotificationAsync(ticket, currentUser, logContent);
+                }
+
+                return Ok(ticket);
+            }
+            catch (Exception ex)
             {
-                return BadRequest(ModelState);
+                _logger.LogError(ex, "Error updating ticket status for ticket {TicketId}", id);
+                return StatusCode(500, new { message = "Error updating ticket status", error = ex.Message });
             }
-
-            if (string.IsNullOrWhiteSpace(request.Status))
-            {
-                return BadRequest("Status không được để trống.");
-            }
-
-            ticket.Status = request.Status;
-            ticket.UpdatedAt = DateTime.UtcNow;
-
-            // If status indicates closed, set ClosedAt
-            if (request.Status?.ToLower() == "closed" || request.Status?.ToLower() == "completed") 
-            {
-                ticket.ClosedAt = DateTime.UtcNow;
-            }
-            else
-            {
-                ticket.ClosedAt = null;
-            }
-
-            await _context.SaveChangesAsync();
-
-            // Load related data để trả về response đầy đủ
-            await _context.Entry(ticket)
-                .Reference(t => t.Customer)
-                .LoadAsync();
-            
-            await _context.Entry(ticket)
-                .Reference(t => t.Category)
-                .LoadAsync();
-
-            if (ticket.UserId.HasValue)
-            {
-                await _context.Entry(ticket)
-                    .Reference(t => t.AssignedTo)
-                    .LoadAsync();
-            }
-
-            if (ticket.CreatedById.HasValue)
-            {
-                await _context.Entry(ticket)
-                    .Reference(t => t.CreatedBy)
-                    .LoadAsync();
-            }
-
-            return Ok(ticket);
         }
 
         // POST: api/Tickets
         [HttpPost]
         public async Task<ActionResult<Ticket>> PostTicket(Ticket ticket)
         {
-            // Verify required foreign keys exist
-            var customerExists = await _context.Customers.AnyAsync(c => c.Id == ticket.CustomerId);
-            if (!customerExists)
+            try
             {
-                return BadRequest("Customer không tồn tại.");
-            }
+                // Normalize status
+                ticket.Status = NormalizeStatus(ticket.Status);
 
-            var categoryExists = await _context.TicketCategories.AnyAsync(tc => tc.Id == ticket.CategoryId);
-            if (!categoryExists)
-            {
-                return BadRequest("TicketCategory không tồn tại.");
-            }
-
-            // Verify optional foreign keys if they are provided
-            if (ticket.UserId.HasValue)
-            {
-                var assignedUserExists = await _context.Users.AnyAsync(u => u.Id == ticket.UserId.Value);
-                if (!assignedUserExists)
+                // Validate status
+                if (!IsValidStatus(ticket.Status))
                 {
-                    return BadRequest("Assigned User không tồn tại.");
+                    return BadRequest($"Status '{ticket.Status}' không hợp lệ. Các giá trị hợp lệ: Open, In Progress, Closed, On Hold, Cancelled");
                 }
-            }
 
-            if (ticket.CreatedById.HasValue)
-            {
-                var createdByExists = await _context.Users.AnyAsync(u => u.Id == ticket.CreatedById.Value);
-                if (!createdByExists)
+                // Verify required foreign keys exist
+                var customerExists = await _context.Customers.AnyAsync(c => c.Id == ticket.CustomerId);
+                if (!customerExists)
                 {
-                    return BadRequest("Created By User không t?n t?i.");
+                    return BadRequest("Customer không tồn tại.");
                 }
+
+                var categoryExists = await _context.TicketCategories.AnyAsync(tc => tc.Id == ticket.CategoryId);
+                if (!categoryExists)
+                {
+                    return BadRequest("TicketCategory không tồn tại.");
+                }
+
+                // Verify optional foreign keys if they are provided
+                if (ticket.AssignedToId.HasValue)
+                {
+                    var assignedUserExists = await _context.Users.AnyAsync(u => u.Id == ticket.AssignedToId.Value);
+                    if (!assignedUserExists)
+                    {
+                        return BadRequest("Assigned User không tồn tại.");
+                    }
+                }
+
+                if (ticket.CreatedById.HasValue)
+                {
+                    var createdByExists = await _context.Users.AnyAsync(u => u.Id == ticket.CreatedById.Value);
+                    if (!createdByExists)
+                    {
+                        return BadRequest("Created By User không tồn tại.");
+                    }
+                }
+
+                // Handle ClosedAt for new tickets
+                if (IsClosedStatus(ticket.Status))
+                {
+                    ticket.ClosedAt = DateTime.UtcNow;
+                }
+
+                ticket.CreatedAt = DateTime.UtcNow;
+                _context.Tickets.Add(ticket);
+                await _context.SaveChangesAsync();
+
+                // Load related data for response and email
+                await LoadTicketRelatedData(ticket);
+
+                // Send email notification for new ticket
+                if (ticket.CreatedById.HasValue)
+                {
+                    var createdByUser = await _context.Users.FindAsync(ticket.CreatedById.Value);
+                    if (createdByUser != null)
+                    {
+                        var logContent = $"Ticket mới đã được tạo với tiêu đề: {ticket.Title}";
+                        await _emailService.SendTicketLogNotificationAsync(ticket, createdByUser, logContent);
+                    }
+                }
+
+                return CreatedAtAction("GetTicket", new { id = ticket.Id }, ticket);
             }
-
-            ticket.CreatedAt = DateTime.UtcNow;
-            _context.Tickets.Add(ticket);
-            await _context.SaveChangesAsync();
-
-            // Load related data for response
-            await _context.Entry(ticket)
-                .Reference(t => t.Customer)
-                .LoadAsync();
-            
-            await _context.Entry(ticket)
-                .Reference(t => t.Category)
-                .LoadAsync();
-
-            if (ticket.UserId.HasValue)
+            catch (Exception ex)
             {
-                await _context.Entry(ticket)
-                    .Reference(t => t.AssignedTo)
-                    .LoadAsync();
+                _logger.LogError(ex, "Error creating new ticket");
+                return StatusCode(500, new { message = "Error creating ticket", error = ex.Message });
             }
-
-            if (ticket.CreatedById.HasValue)
-            {
-                await _context.Entry(ticket)
-                    .Reference(t => t.CreatedBy)
-                    .LoadAsync();
-            }
-
-            return CreatedAtAction("GetTicket", new { id = ticket.Id }, ticket);
         }
 
         // DELETE: api/Tickets/5
@@ -328,7 +407,7 @@ namespace erp_backend.Controllers
             var hasLogs = await _context.TicketLogs.AnyAsync(tl => tl.TicketId == id);
             if (hasLogs)
             {
-                return BadRequest("Không th? xóa ticket có logs. Hãy xóa logs tr??c.");
+                return BadRequest("Không thể xóa ticket có logs. Hãy xóa logs trước.");
             }
 
             _context.Tickets.Remove(ticket);
@@ -340,6 +419,81 @@ namespace erp_backend.Controllers
         private bool TicketExists(int id)
         {
             return _context.Tickets.Any(e => e.Id == id);
+        }
+
+        private async Task LoadTicketRelatedData(Ticket ticket)
+        {
+            await _context.Entry(ticket)
+                .Reference(t => t.Customer)
+                .LoadAsync();
+            
+            await _context.Entry(ticket)
+                .Reference(t => t.Category)
+                .LoadAsync();
+
+            if (ticket.AssignedToId.HasValue)
+            {
+                await _context.Entry(ticket)
+                    .Reference(t => t.AssignedTo)
+                    .LoadAsync();
+            }
+
+            if (ticket.CreatedById.HasValue)
+            {
+                await _context.Entry(ticket)
+                    .Reference(t => t.CreatedBy)
+                    .LoadAsync();
+            }
+        }
+
+        private int GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                             ?? User.FindFirst("sub")?.Value
+                             ?? User.FindFirst("UserId")?.Value
+                             ?? User.FindFirst("id")?.Value;
+
+            return int.TryParse(userIdClaim, out var userId) ? userId : 0;
+        }
+
+        /// <summary>
+        /// Normalize status string to standard format
+        /// </summary>
+        private string NormalizeStatus(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return "Open";
+
+            return status.Trim().ToLower() switch
+            {
+                "open" or "new" => "Open",
+                "in progress" or "working" or "inprogress" or "in_progress" => "In Progress",
+                "closed" or "completed" or "resolved" or "done" => "Closed",
+                "on hold" or "pending" or "onhold" => "On Hold",
+                "cancelled" or "canceled" => "Cancelled",
+                _ => status.Trim() // Return original if no match
+            };
+        }
+
+        /// <summary>
+        /// Check if status is valid
+        /// </summary>
+        private bool IsValidStatus(string status)
+        {
+            var validStatuses = new[] { "Open", "In Progress", "Closed", "On Hold", "Cancelled" };
+            return validStatuses.Contains(status);
+        }
+
+        /// <summary>
+        /// Check if status indicates ticket is closed
+        /// </summary>
+        private bool IsClosedStatus(string status)
+        {
+            return status?.ToLower() switch
+            {
+                "closed" or "completed" or "resolved" or "done" => true,
+                _ => false
+            };
         }
     }
 }

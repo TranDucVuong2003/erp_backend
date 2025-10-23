@@ -1548,6 +1548,76 @@
         }
       }
     },
+    "/api/Test/send-test-email/{ticketId}": {
+      "post": {
+        "tags": [
+          "Test"
+        ],
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Test/ticket-email-info/{ticketId}": {
+      "get": {
+        "tags": [
+          "Test"
+        ],
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Test/email-config-status": {
+      "get": {
+        "tags": [
+          "Test"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Test/debug-user-claims": {
+      "get": {
+        "tags": [
+          "Test"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/TicketCategories": {
       "get": {
         "tags": [
@@ -1997,7 +2067,7 @@
             }
           },
           {
-            "name": "userId",
+            "name": "assignedToId",
             "in": "query",
             "schema": {
               "type": "integer",
@@ -3286,7 +3356,7 @@
             "type": "integer",
             "format": "int32"
           },
-          "userId": {
+          "assignedToId": {
             "type": "integer",
             "format": "int32",
             "nullable": true

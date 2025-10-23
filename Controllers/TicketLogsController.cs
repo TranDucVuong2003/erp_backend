@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
+using erp_backend.Services;
 
 namespace erp_backend.Controllers
 {
@@ -10,10 +11,17 @@ namespace erp_backend.Controllers
 	public class TicketLogsController : ControllerBase
 	{
 		private readonly ApplicationDbContext _context;
+		private readonly IEmailService _emailService;
+		private readonly ILogger<TicketLogsController> _logger;
 
-		public TicketLogsController(ApplicationDbContext context)
+		public TicketLogsController(
+			ApplicationDbContext context, 
+			IEmailService emailService,
+			ILogger<TicketLogsController> logger)
 		{
 			_context = context;
+			_emailService = emailService;
+			_logger = logger;
 		}
 
 		// GET: api/TicketLogs
@@ -130,34 +138,59 @@ namespace erp_backend.Controllers
 		[HttpPost]
 		public async Task<ActionResult<TicketLog>> PostTicketLog(TicketLog ticketLog)
 		{
-			// Kiểm tra ticket có tồn tại không
-			var ticketExists = await _context.Tickets.AnyAsync(t => t.Id == ticketLog.TicketId);
-			if (!ticketExists)
+			try
 			{
-				return BadRequest("Ticket không tồn tại.");
-			}
+				// Kiểm tra ticket có tồn tại không và load đầy đủ thông tin cho email
+				var ticket = await _context.Tickets
+					.Include(t => t.AssignedTo)  // Người được phân công
+					.Include(t => t.CreatedBy)   // Người tạo ticket
+					.Include(t => t.Category)    // Category cho email template
+					.Include(t => t.Customer)    // Customer info
+					.FirstOrDefaultAsync(t => t.Id == ticketLog.TicketId);
+					
+				if (ticket == null)
+				{
+					return BadRequest("Ticket không tồn tại.");
+				}
 
-			// Kiểm tra user có tồn tại không
-			var userExists = await _context.Users.AnyAsync(u => u.Id == ticketLog.UserId);
-			if (!userExists)
+				// Kiểm tra user có tồn tại không
+				var user = await _context.Users.FindAsync(ticketLog.UserId);
+				if (user == null)
+				{
+					return BadRequest("User không tồn tại.");
+				}
+
+				_logger.LogInformation("Creating ticket log for ticket {TicketId} by user {UserId}. Ticket CreatedBy: {CreatedById}, AssignedTo: {AssignedToId}", 
+					ticketLog.TicketId, ticketLog.UserId, ticket.CreatedById, ticket.AssignedToId);
+
+				ticketLog.CreatedAt = DateTime.UtcNow;
+				_context.TicketLogs.Add(ticketLog);
+				await _context.SaveChangesAsync();
+
+				// Load dữ liệu liên quan để trả về
+				await _context.Entry(ticketLog)
+					.Reference(tl => tl.User)
+					.LoadAsync();
+
+				await _context.Entry(ticketLog)
+					.Reference(tl => tl.Ticket)
+					.LoadAsync();
+
+				// Gửi email thông báo với thông tin đầy đủ
+				_logger.LogInformation("Sending email notification for ticket {TicketId}. CreatedBy: {CreatedByEmail}, AssignedTo: {AssignedToEmail}", 
+					ticket.Id, 
+					ticket.CreatedBy?.Email ?? "null", 
+					ticket.AssignedTo?.Email ?? "null");
+
+				await _emailService.SendTicketLogNotificationAsync(ticket, user, ticketLog.Content);
+
+				return CreatedAtAction(nameof(GetTicketLog), new { id = ticketLog.Id }, ticketLog);
+			}
+			catch (Exception ex)
 			{
-				return BadRequest("User không tồn tại.");
+				_logger.LogError(ex, "Error creating ticket log for ticket {TicketId}", ticketLog.TicketId);
+				return StatusCode(500, new { message = "Lỗi server khi tạo ticket log", error = ex.Message });
 			}
-
-			ticketLog.CreatedAt = DateTime.UtcNow;
-			_context.TicketLogs.Add(ticketLog);
-			await _context.SaveChangesAsync();
-
-			// Load dữ liệu liên quan để trả về
-			await _context.Entry(ticketLog)
-				.Reference(tl => tl.User)
-				.LoadAsync();
-
-			await _context.Entry(ticketLog)
-				.Reference(tl => tl.Ticket)
-				.LoadAsync();
-
-			return CreatedAtAction(nameof(GetTicketLog), new { id = ticketLog.Id }, ticketLog);
 		}
 
 		// DELETE: api/TicketLogs/5

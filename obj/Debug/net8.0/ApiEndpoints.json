@@ -880,6 +880,58 @@
     ]
   },
   {
+    "ContainingType": "erp_backend.Controllers.TestController",
+    "Method": "DebugUserClaims",
+    "RelativePath": "api/Test/debug-user-claims",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "erp_backend.Controllers.TestController",
+    "Method": "CheckEmailConfiguration",
+    "RelativePath": "api/Test/email-config-status",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "erp_backend.Controllers.TestController",
+    "Method": "SendTestEmail",
+    "RelativePath": "api/Test/send-test-email/{ticketId}",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "ticketId",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "erp_backend.Controllers.TestController",
+    "Method": "GetTicketEmailInfo",
+    "RelativePath": "api/Test/ticket-email-info/{ticketId}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "ticketId",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
     "ContainingType": "erp_backend.Controllers.TicketCategoriesController",
     "Method": "GetTicketCategories",
     "RelativePath": "api/TicketCategories",
@@ -1149,7 +1201,7 @@
         "IsRequired": false
       },
       {
-        "Name": "userId",
+        "Name": "assignedToId",
         "Type": "System.Nullable\u00601[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
         "IsRequired": false
       },
@@ -1284,7 +1336,7 @@
         "IsRequired": true
       },
       {
-        "Name": "userId",
+        "Name": "assignedToId",
         "Type": "System.Nullable\u00601[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
         "IsRequired": false
       }

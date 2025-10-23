@@ -13,25 +13,25 @@ namespace erp_backend.Models
 		[Required]
 		public string Description { get; set; } = string.Empty; // Rich text content
 
-	// Customer Information
-	[Required]
-	public int CustomerId { get; set; }
-	public virtual Customer? Customer { get; set; }
+		// Customer Information
+	    [Required]
+		public int CustomerId { get; set; }
+		public virtual Customer? Customer { get; set; }
 
-	// Ticket Classification
-	public string Priority { get; set; } = string.Empty;
-	public string Status { get; set; } = string.Empty;
+		// Ticket Classification
+		public string Priority { get; set; } = string.Empty;
+		public string Status { get; set; } = string.Empty;
 
 		[Required]
-	public int CategoryId { get; set; }
-	public virtual TicketCategory? Category { get; set; }
+		public int CategoryId { get; set; }
+		public virtual TicketCategory? Category { get; set; }
 
 		// Urgency level (1-5 stars như trong UI React)
 		[Range(1, 5)]
 		public int UrgencyLevel { get; set; } = 1;
 
 		// Assignment
-		public int? UserId { get; set; }
+		public int? AssignedToId { get; set; }
 		public virtual User? AssignedTo { get; set; }
 
 		public int? CreatedById { get; set; }

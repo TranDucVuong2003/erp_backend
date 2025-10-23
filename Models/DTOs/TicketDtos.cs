@@ -18,15 +18,13 @@ namespace erp_backend.Models.DTOs
         public string Priority { get; set; } = string.Empty;
 
         [Required]
-        public int Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         [Required]
         public int CategoryId { get; set; }
 
         [Range(1, 5)]
         public int UrgencyLevel { get; set; } = 1;
-
-        public int? UserId { get; set; }
 
         public int? CreatedById { get; set; }
 
@@ -46,7 +44,7 @@ namespace erp_backend.Models.DTOs
         public string Priority { get; set; } = string.Empty;
 
         [Required]
-        public int Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         [Required]
         public int CategoryId { get; set; }
@@ -54,20 +52,20 @@ namespace erp_backend.Models.DTOs
         [Range(1, 5)]
         public int UrgencyLevel { get; set; } = 1;
 
-        public int? UserId { get; set; }
+        public int? AssignedToId { get; set; }
 
         public DateTime? Dateline { get; set; }
     }
 
     public class AssignTicketDto
     {
-        public int? UserId { get; set; }
+        public int? AssignedToId { get; set; }
     }
 
     public class UpdateTicketStatusDto
     {
         [Required]
-        public int Status { get; set; }
+        public string Status { get; set; } = string.Empty;
     }
 
     public class CreateTicketLogDto
@@ -116,11 +114,11 @@ namespace erp_backend.Models.DTOs
         public int CustomerId { get; set; }
         public string CustomerName { get; set; } = string.Empty;
         public string Priority { get; set; } = string.Empty;
-        public int Status { get; set; }
+        public string Status { get; set; } = string.Empty;
         public int CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
         public int UrgencyLevel { get; set; }
-        public int? UserId { get; set; }
+        public int? AssignedToId { get; set; }
         public string? AssignedToName { get; set; }
         public int? CreatedById { get; set; }
         public string? CreatedByName { get; set; }

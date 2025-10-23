@@ -57,6 +57,9 @@ builder.Services.AddAuthentication(options =>
 // Register JwtService
 builder.Services.AddScoped<JwtService>();
 
+// Add Email Service
+builder.Services.AddScoped<IEmailService, EmailService>();
+
 // Add Authorization
 builder.Services.AddAuthorization();
 

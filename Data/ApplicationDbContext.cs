@@ -226,7 +226,7 @@ namespace erp_backend.Data
 
                 entity.HasOne(e => e.AssignedTo)
                       .WithMany()
-                      .HasForeignKey(e => e.UserId)
+                      .HasForeignKey(e => e.AssignedToId)
                       .OnDelete(DeleteBehavior.SetNull);
 
                 entity.HasOne(e => e.CreatedBy)
@@ -237,7 +237,7 @@ namespace erp_backend.Data
                 // Indexes
                 entity.HasIndex(e => e.CustomerId);
                 entity.HasIndex(e => e.CategoryId);
-                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.AssignedToId);
                 entity.HasIndex(e => e.CreatedById);
                 entity.HasIndex(e => e.Priority);
                 entity.HasIndex(e => e.Status);

@@ -275,4 +275,9 @@ D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Microsoft.IdentityMod
 D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
 D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Ticket_System_API_Collection.postman_collection.json
 D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\Ticket_System_Environment.postman_environment.json
+D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\BouncyCastle.Cryptography.dll
+D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\MailKit.dll
+D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\MimeKit.dll
+D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\System.Security.Cryptography.Pkcs.dll
+D:\.Net\.Net Core\erp_backend\erp_backend\bin\Debug\net8.0\runtimes\win\lib\net8.0\System.Security.Cryptography.Pkcs.dll
 D:\.Net\.Net Core\erp_backend\erp_backend\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
