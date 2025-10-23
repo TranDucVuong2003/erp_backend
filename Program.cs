@@ -1,10 +1,10 @@
-﻿
-using System.Text;
+﻿using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using erp_backend.Data;
+using erp_backend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +15,7 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 	options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Add JWT Authentication
+// Add JWT Authentication services
 var jwtKey = builder.Configuration["Jwt:Key"];
 var key = Encoding.UTF8.GetBytes(jwtKey);
 
@@ -26,20 +26,39 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-	options.RequireHttpsMetadata = false; // Set to true in production
-	options.SaveToken = true;
 	options.TokenValidationParameters = new TokenValidationParameters
 	{
-		ValidateIssuerSigningKey = true,
-		IssuerSigningKey = new SymmetricSecurityKey(key),
 		ValidateIssuer = true,
-		ValidIssuer = builder.Configuration["Jwt:Issuer"],
 		ValidateAudience = true,
-		ValidAudience = builder.Configuration["Jwt:Audience"],
 		ValidateLifetime = true,
-		ClockSkew = TimeSpan.Zero
+		ValidateIssuerSigningKey = true,
+		ValidIssuer = builder.Configuration["Jwt:Issuer"],
+		ValidAudience = builder.Configuration["Jwt:Audience"],
+		IssuerSigningKey = new SymmetricSecurityKey(
+			Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "YourSecureKeyWithAtLeast32Characters"))
+	};
+
+	options.Events = new JwtBearerEvents
+	{
+		OnMessageReceived = context =>
+		{
+			// Allow authentication from query string for SignalR
+			var accessToken = context.Request.Query["access_token"];
+			var path = context.HttpContext.Request.Path;
+			if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+			{
+				context.Token = accessToken;
+			}
+			return Task.CompletedTask;
+		}
 	};
 });
+
+// Register JwtService
+builder.Services.AddScoped<JwtService>();
+
+// Add Email Service
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Add Authorization
 builder.Services.AddAuthorization();

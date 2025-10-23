@@ -1,0 +1,314 @@
+# H??ng d?n s? d?ng SecondaryEmail trong User API
+
+## T?ng quan
+Tr??ng `SecondaryEmail` ?ã ???c c?p nh?t ?? optional (có th? có ho?c không) khi t?o và c?p nh?t User.
+
+## Thay ??i ?ã th?c hi?n
+
+### 1. Model User
+```csharp
+[EmailAddress]
+[StringLength(150)]
+public string? SecondaryEmail { get; set; }  // ?ã thay ??i t? string thành string?
+```
+
+### 2. Validation Rules cho SecondaryEmail
+- **Optional**: Không b?t bu?c, có th? là `null`
+- **Format**: N?u có giá tr?, ph?i là email h?p l?
+- **Unique**: Không ???c trùng v?i:
+  - Email chính c?a b?t k? user nào khác
+  - Email ph? c?a b?t k? user nào khác  
+  - Email chính c?a chính user ?ó
+- **Max Length**: 150 ký t?
+
+## API Endpoints và Cách s? d?ng
+
+### 1. POST - T?o User m?i
+
+#### T?o User KHÔNG có SecondaryEmail
+```json
+POST /api/users
+Authorization: Bearer YOUR_JWT_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Nguy?n V?n A",
+  "email": "nguyenvana@company.com",
+  "password": "123456",
+  "position": "Developer",
+  "role": "User"
+  // SecondaryEmail không c?n có
+}
+```
+
+#### T?o User CÓ SecondaryEmail
+```json
+POST /api/users
+Authorization: Bearer YOUR_JWT_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Nguy?n V?n B",
+  "email": "nguyenvanb@company.com",
+  "password": "123456",
+  "position": "Manager",
+  "role": "User",
+  "secondaryEmail": "nguyenvanb.personal@gmail.com"
+}
+```
+
+#### T?o User v?i SecondaryEmail là empty string (s? ???c set thành null)
+```json
+POST /api/users
+Authorization: Bearer YOUR_JWT_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Nguy?n V?n C",
+  "email": "nguyenvanc@company.com", 
+  "password": "123456",
+  "position": "Intern",
+  "role": "User",
+  "secondaryEmail": ""  // S? ???c set thành null
+}
+```
+
+### 2. PUT - C?p nh?t User
+
+#### Thêm SecondaryEmail cho User ch?a có
+```json
+PUT /api/users/1
+Authorization: Bearer YOUR_JWT_TOKEN
+Content-Type: application/json
+
+{
+  "secondaryEmail": "newemail@gmail.com"
+}
+```
+
+#### C?p nh?t SecondaryEmail hi?n có
+```json
+PUT /api/users/1
+Authorization: Bearer YOUR_JWT_TOKEN
+Content-Type: application/json
+
+{
+  "secondaryEmail": "updated.email@gmail.com"
+}
+```
+
+#### Xóa SecondaryEmail (set v? null)
+```json
+PUT /api/users/1
+Authorization: Bearer YOUR_JWT_TOKEN
+Content-Type: application/json
+
+{
+  "secondaryEmail": ""  // ho?c null
+}
+```
+
+## Validation Errors
+
+### 1. Format không h?p l?
+**Request:**
+```json
+{
+  "secondaryEmail": "invalid-email"
+}
+```
+**Response:**
+```json
+{
+  "message": "??nh d?ng email ph? không h?p l?"
+}
+```
+
+### 2. Trùng v?i email chính c?a user khác
+**Request:**
+```json
+{
+  "secondaryEmail": "existing.user@company.com"
+}
+```
+**Response:**
+```json
+{
+  "message": "Email ph? không ???c trùng v?i email chính c?a ng??i dùng khác"
+}
+```
+
+### 3. Trùng v?i email ph? c?a user khác
+**Request:**
+```json
+{
+  "secondaryEmail": "someone.secondary@gmail.com"
+}
+```
+**Response:**
+```json
+{
+  "message": "Email ph? ?ã ???c s? d?ng b?i ng??i dùng khác"
+}
+```
+
+### 4. Trùng v?i email chính c?a chính user ?ó
+**Request:**
+```json
+{
+  "secondaryEmail": "nguyenvana@company.com"  // Trùng v?i email chính
+}
+```
+**Response:**
+```json
+{
+  "message": "Email ph? không ???c trùng v?i email chính"
+}
+```
+
+### 5. Quá dài
+**Request:**
+```json
+{
+  "secondaryEmail": "very.long.email.address.that.exceeds.one.hundred.fifty.characters.limit.and.should.cause.validation.error@domain.com"
+}
+```
+**Response:**
+```json
+{
+  "message": "Email ph? không ???c v??t quá 150 ký t?"
+}
+```
+
+## Test Cases cho Postman
+
+### Test Case 1: T?o user không có SecondaryEmail
+```http
+POST {{baseUrl}}/api/users
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Test User 1",
+  "email": "testuser1@company.com",
+  "password": "123456",
+  "position": "Tester",
+  "role": "User"
+}
+```
+
+### Test Case 2: T?o user có SecondaryEmail
+```http
+POST {{baseUrl}}/api/users
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Test User 2",
+  "email": "testuser2@company.com",
+  "password": "123456", 
+  "position": "Tester",
+  "role": "User",
+  "secondaryEmail": "testuser2.personal@gmail.com"
+}
+```
+
+### Test Case 3: Validation - Email ph? không h?p l?
+```http
+POST {{baseUrl}}/api/users
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Test User 3",
+  "email": "testuser3@company.com",
+  "password": "123456",
+  "position": "Tester", 
+  "role": "User",
+  "secondaryEmail": "invalid-email-format"
+}
+```
+
+### Test Case 4: C?p nh?t - Thêm SecondaryEmail
+```http
+PUT {{baseUrl}}/api/users/{{userId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "secondaryEmail": "added.secondary@gmail.com"
+}
+```
+
+### Test Case 5: C?p nh?t - Xóa SecondaryEmail
+```http
+PUT {{baseUrl}}/api/users/{{userId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "secondaryEmail": ""
+}
+```
+
+## Database Schema
+
+Sau khi ch?y migration, c?u trúc b?ng Users:
+```sql
+CREATE TABLE "Users" (
+    "Id" integer GENERATED BY DEFAULT AS IDENTITY,
+    "Name" character varying(100) NOT NULL,
+    "Email" character varying(150) NOT NULL,
+    "Password" character varying(255) NOT NULL,
+    "Position" character varying(100) NOT NULL,
+    "PhoneNumber" character varying(20) NOT NULL,
+    "Address" character varying(500) NOT NULL,
+    "Role" character varying(50) NOT NULL,
+    "SecondaryEmail" character varying(150), -- NULLABLE
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone,
+    CONSTRAINT "PK_Users" PRIMARY KEY ("Id")
+);
+```
+
+## Best Practices
+
+1. **Ki?m tra null tr??c khi s? d?ng:**
+```csharp
+if (!string.IsNullOrWhiteSpace(user.SecondaryEmail))
+{
+    // S? d?ng SecondaryEmail
+}
+```
+
+2. **Frontend handling:**
+```javascript
+// Khi g?i request, có th? b? qua field n?u không có giá tr?
+const userData = {
+    name: "User Name",
+    email: "user@company.com",
+    password: "123456"
+    // Không c?n secondaryEmail n?u không có
+};
+
+// Ho?c set null/undefined n?u mu?n xóa
+if (shouldRemoveSecondaryEmail) {
+    userData.secondaryEmail = "";
+}
+```
+
+3. **Response handling:**
+```javascript
+// SecondaryEmail có th? là null trong response
+const secondaryEmail = user.secondaryEmail || "Ch?a có email ph?";
+```
+
+## Summary
+
+Tr??ng `SecondaryEmail` bây gi?:
+- ? **Optional** khi t?o user m?i
+- ? **Nullable** trong database  
+- ? **Validation ??y ??** khi có giá tr?
+- ? **Unique constraints** ?? tránh trùng l?p
+- ? **Có th? thêm/s?a/xóa** thông qua PUT API
+- ? **Migration** ?ã ???c áp d?ng thành công
