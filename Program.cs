@@ -5,8 +5,16 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using erp_backend.Data;
 using erp_backend.Services;
+using IronPdf;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Cấu hình IronPDF License Key từ appsettings.json
+var ironPdfLicenseKey = builder.Configuration["IronPdf:LicenseKey"];
+if (!string.IsNullOrEmpty(ironPdfLicenseKey))
+{
+	IronPdf.License.LicenseKey = ironPdfLicenseKey;
+}
 
 // Add services to the container.
 builder.Services.AddControllers();

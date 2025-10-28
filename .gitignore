@@ -1,0 +1,64 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/erp_backend.csproj
+# Build results
+bin/
+obj/
+out/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build artifacts
+*.dll
+*.exe
+*.log
+*.pdb
+
+# Configs
+*.env
+*.local.json
+
+# ASP.NET
+wwwroot/lib/
+wwwroot/dist/
+
+# Visual Studio
+.vs/
+.idea/
+*.dbmdl
+
+# Others
+node_modules/
+Thumbs.db
+# Ignore temp build and cache files
+*.cache
+*.zip
+*.tar
+*.gz
+
+# Ignore CefSharp & native runtimes (thường gây lỗi file quá lớn)
+runtimes/
+libcef.dll
+libEGL.dll
+libGLESv2.dll
+icudtl.dat
+snapshot_blob.bin
+v8_context_snapshot.bin
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.so
+*.dylib
+*.cache
+*.log
+*.user
+*.vs/
+*.vscode/
