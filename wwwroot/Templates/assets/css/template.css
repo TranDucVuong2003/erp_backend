@@ -1,0 +1,184 @@
+/* Custom styles for the header */
+.navbar-custom {
+    background-color: #007bff;
+    color: white;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+}
+
+.navbar-custom .navbar-brand {
+    color: white;
+    font-weight: bold;
+}
+
+.navbar-custom .navbar-brand img {
+    max-height: 40px;
+}
+
+.navbar-custom .navbar-nav .nav-link {
+    color: white;
+    font-weight: 600;
+}
+
+.navbar-custom .navbar-nav .nav-link:hover {
+    color: #e0e0e0;
+}
+
+.navbar-custom .form-inline {
+    margin-left: auto;
+}
+
+.navbar-custom .form-inline input {
+    width: 200px;
+}
+
+/* Styles for mobile responsiveness */
+@media (max-width: 768px) {
+    .navbar-custom .form-inline input {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+}
+
+/* Page styles */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 20px;
+}
+
+.search-container {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.search-container input[type="text"] {
+    padding: 10px;
+    width: 100%; /* Full width trên mobile */
+    max-width: 300px;
+    font-size: 16px;
+}
+
+.search-container button {
+    padding: 10px;
+    font-size: 16px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    cursor: pointer;
+    width: 100%; /* Full width trên mobile */
+    max-width: 150px;
+}
+
+.search-container button:hover {
+    background-color: #2980b9;
+}
+
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* Linh hoạt số cột dựa trên kích thước màn hình */
+    gap: 20px;
+    padding: 20px;
+    margin-top: 50px;
+}
+
+.grid-item {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    cursor: pointer;
+}
+
+.grid-item:hover {
+    transform: translateY(-10px); /* Hiệu ứng nhấc lên khi hover */
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+.grid-item img {
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    margin-bottom: 15px;
+    border-radius: 10px;
+}
+
+.grid-item h3 {
+    font-size: 1.5em;
+    margin: 10px 0;
+    position: relative;
+    z-index: 1;
+}
+
+/* Ẩn nút Xem Website mặc định */
+.grid-item a {
+    display: none;
+    text-decoration: none;
+    background-color: #3498db;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.grid-item a:hover {
+    background-color: #2980b9;
+}
+
+/* Hiển thị nút khi người dùng click vào grid-item */
+.grid-item.clicked h3 {
+    display: none;
+}
+
+.grid-item.clicked a {
+    display: inline-block;
+}
+
+/* Phân trang */
+.pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.pagination a {
+    padding: 8px 16px;
+    margin: 0 5px;
+    background-color: #3498db;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.pagination a:hover {
+    background-color: #2980b9;
+}
+
+.pagination a.active {
+    background-color: #2980b9;
+}
+
+/* Responsive Design cho Mobile */
+@media (max-width: 600px) {
+    .grid-container {
+        grid-template-columns: 1fr; /* Chỉ hiển thị 1 cột trên mobile */
+    }
+
+    .search-container input[type="text"], 
+    .search-container button {
+        max-width: 100%; /* Đảm bảo các phần tử tìm kiếm chiếm hết chiều rộng trên mobile */
+        width: 100%;
+    }
+
+    .grid-item img {
+        max-height: 150px; /* Giảm chiều cao ảnh trên mobile */
+    }
+}

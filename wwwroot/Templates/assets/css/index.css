@@ -1,0 +1,60 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 0;
+}
+.navbar-custom {
+    background-color: #007bff;
+    color: white;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+}
+.navbar-custom .navbar-brand,
+.navbar-custom .nav-link {
+    color: white;
+}
+.container {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 80%; /* Make the form container wider */
+    margin: 100px auto; /* Adjusted margin to accommodate fixed navbar */
+}
+h2 {
+    margin-bottom: 20px;
+}
+.result-table {
+    margin-top: 20px;
+    text-align: left;
+    font-weight: bold;
+    color: #333;
+    width: 100%;
+}
+.result-table td, .result-table th {
+    padding: 10px;
+    border: 1px solid #ddd;
+}
+.result-table th {
+    background-color: #f2f2f2;
+}
+
+.custom-navbar-link {
+    color: white;
+    font-weight: bold;
+    font-size: 1.5em; /* Kích thước chữ */
+    text-transform: uppercase; /* Chuyển chữ thành in hoa */
+    letter-spacing: 2px; /* Khoảng cách giữa các chữ cái */
+    text-decoration: none; /* Bỏ gạch chân */
+    transition: color 0.3s ease, transform 0.3s ease; /* Hiệu ứng chuyển màu và zoom khi hover */
+}
+
+.custom-navbar-link:hover {
+    color: #f0f0f0; /* Màu nhạt hơn khi hover */
+    text-shadow: 0px 4px 5px rgba(0, 0, 0, 0.3); /* Đổ bóng cho chữ */
+    transform: scale(1.05); /* Hiệu ứng zoom nhẹ khi hover */
+}

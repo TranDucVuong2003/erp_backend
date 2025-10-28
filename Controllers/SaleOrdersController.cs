@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using IronPdf;
 
 namespace erp_backend.Controllers
 {
@@ -13,7 +14,7 @@ namespace erp_backend.Controllers
 	{
 		private readonly ApplicationDbContext _context;
 		private readonly ILogger<SaleOrdersController> _logger;
-
+		
 		public SaleOrdersController(ApplicationDbContext context, ILogger<SaleOrdersController> logger)
 		{
 			_context = context;
@@ -409,6 +410,286 @@ namespace erp_backend.Controllers
 				_logger.LogError(ex, "Lỗi khi xóa sale order với ID: {SaleOrderId}", id);
 				return StatusCode(500, new { message = "Lỗi server khi xóa sale order", error = ex.Message });
 			}
+		}
+
+		// Xuất hợp đồng PDF
+		[HttpGet("{id}/export-contract")]
+		public async Task<IActionResult> ExportContract(int id)
+		{
+			try
+			{
+				// Bước 1: Lấy dữ liệu SaleOrder
+				var saleOrder = await _context.SaleOrders.FindAsync(id);
+
+				if (saleOrder == null)
+				{
+					return NotFound(new { message = "Không tìm thấy sale order" });
+				}
+
+				// Load Customer
+				var customer = await _context.Customers.FindAsync(saleOrder.CustomerId);
+				if (customer == null)
+				{
+					return NotFound(new { message = "Không tìm thấy thông tin customer" });
+				}
+
+				// Load Service nếu có
+				Service? service = null;
+				if (saleOrder.ServiceId.HasValue)
+				{
+					service = await _context.Services.FindAsync(saleOrder.ServiceId.Value);
+				}
+
+				// Load Addon nếu có
+				Addon? addon = null;
+				if (saleOrder.AddonId.HasValue)
+				{
+					addon = await _context.Addons.FindAsync(saleOrder.AddonId.Value);
+				}
+
+				// Bước 2: Đọc HTML template dựa vào loại khách hàng
+				var templateFileName = customer.CustomerType?.ToLower() == "individual" 
+					? "generate_contract_individual.html" 
+					: "generate_contract_business.html";
+				
+				var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Templates", templateFileName);
+				
+				if (!System.IO.File.Exists(templatePath))
+				{
+					return NotFound(new { message = $"Không tìm thấy template hợp đồng: {templateFileName}" });
+				}
+
+				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
+
+				// Bước 3: Bind dữ liệu vào template
+				var htmlContent = BindDataToTemplate(htmlTemplate, saleOrder, customer, service, addon);
+
+				// Bước 4: Sử dụng IronPDF để convert HTML sang PDF
+				var renderer = new ChromePdfRenderer();
+				
+				// Cấu hình renderer - loại bỏ header/footer
+				renderer.RenderingOptions.PaperSize = IronPdf.Rendering.PdfPaperSize.A4;
+				renderer.RenderingOptions.MarginTop = 0;
+				renderer.RenderingOptions.MarginBottom = 0;
+				renderer.RenderingOptions.MarginLeft = 0;
+				renderer.RenderingOptions.MarginRight = 0;
+				renderer.RenderingOptions.CssMediaType = IronPdf.Rendering.PdfCssMediaType.Print;
+				renderer.RenderingOptions.PrintHtmlBackgrounds = true;
+				renderer.RenderingOptions.CreatePdfFormsFromHtml = false;
+				renderer.RenderingOptions.EnableJavaScript = false;
+
+				// Render HTML thành PDF
+				var pdf = await Task.Run(() => renderer.RenderHtmlAsPdf(htmlContent));
+
+				// Bước 5: Lấy PDF bytes
+				var pdfBytes = pdf.BinaryData;
+
+				// Bước 6: Trả về file PDF
+				var fileName = $"HopDong_{saleOrder.Id}_{DateTime.Now:yyyyMMdd}.pdf";
+				return File(pdfBytes, "application/pdf", fileName);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi xuất hợp đồng PDF cho SaleOrder ID: {SaleOrderId}", id);
+				return StatusCode(500, new { message = "Lỗi server khi xuất hợp đồng", error = ex.Message });
+			}
+		}
+
+		// Helper method: Bind dữ liệu vào template
+		private string BindDataToTemplate(string template, SaleOrder saleOrder, Customer customer, Service? service, Addon? addon)
+		{
+			var now = DateTime.Now;
+
+			// Convert ảnh thành Base64
+			var backgroundImageBase64 = GetImageAsBase64("wwwroot/Templates/assets/img/File_mau003.png");
+			var logoImageBase64 = GetImageAsBase64("wwwroot/Templates/assets/img/logo.webp");
+
+			// Thay thế đường dẫn ảnh bằng Base64
+			template = template
+				.Replace("./assets/img/File_mau003.png", $"data:image/png;base64,{backgroundImageBase64}")
+				.Replace("./assets/img/logo.webp", $"data:image/webp;base64,{logoImageBase64}");
+
+			// Thông tin hợp đồng cơ bản
+			template = template
+				.Replace("{{ContractNumber}}", saleOrder.Id.ToString())
+				.Replace("{{ContractYear}}", now.Year.ToString())
+				.Replace("{{Day}}", now.Day.ToString())
+				.Replace("{{Month}}", now.Month.ToString())
+				.Replace("{{Year}}", now.Year.ToString())
+				.Replace("{{Location}}", "Hà Nội");
+
+			// Thông tin Bên B (Khách hàng)
+			template = template
+				.Replace("{{CompanyBName}}", customer.CompanyName ?? customer.Name ?? "")
+				.Replace("{{CompanyBAddress}}", customer.CompanyAddress ?? customer.Address ?? "")
+				.Replace("{{CompanyBTaxCode}}", customer.TaxCode ?? "")
+				.Replace("{{CompanyBRepName}}", customer.RepresentativeName ?? customer.Name ?? "")
+				.Replace("{{CompanyBRepPosition}}", customer.RepresentativePosition ?? "")
+				.Replace("{{CompanyBRepID}}", customer.RepresentativeIdNumber ?? customer.IdNumber ?? "")
+				.Replace("{{CompanyBPhone}}", customer.RepresentativePhone ?? customer.PhoneNumber ?? "")
+				.Replace("{{CompanyBEmail}}", customer.RepresentativeEmail ?? customer.Email ?? "");
+
+			// Thông tin giá trị
+			var totalValue = saleOrder.Value;
+			var vatRate = 10; // 10% VAT
+			var vatAmount = totalValue * vatRate / 100;
+			var netAmount = totalValue + vatAmount;
+
+			template = template
+				.Replace("{{SubTotal}}", totalValue.ToString("N0"))
+				.Replace("{{Discount}}", "0")
+				.Replace("{{VATRate}}", vatRate.ToString())
+				.Replace("{{VATAmount}}", vatAmount.ToString("N0"))
+				.Replace("{{NetAmount}}", netAmount.ToString("N0"))
+				.Replace("{{AmountInWords}}", ConvertNumberToWords(netAmount))
+				.Replace("{{PaymentMethod}}", "Chuyển khoản");
+
+			// Tạo bảng items
+			var itemsHtml = GenerateItemsTable(saleOrder, service, addon);
+			template = template.Replace("{{Items}}", itemsHtml);
+
+			return template;
+		}
+
+		// Helper method: Convert ảnh thành Base64
+		private string GetImageAsBase64(string relativePath)
+		{
+			try
+			{
+				var imagePath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
+				if (System.IO.File.Exists(imagePath))
+				{
+					var imageBytes = System.IO.File.ReadAllBytes(imagePath);
+					return Convert.ToBase64String(imageBytes);
+				}
+				_logger.LogWarning($"Không tìm thấy ảnh tại: {imagePath}");
+				return string.Empty;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, $"Lỗi khi đọc ảnh: {relativePath}");
+				return string.Empty;
+			}
+		}
+
+		// Helper method: Tạo bảng danh sách dịch vụ
+		private string GenerateItemsTable(SaleOrder saleOrder, Service? service, Addon? addon)
+		{
+			var items = new System.Text.StringBuilder();
+			var index = 1;
+
+			// Thêm Service nếu có
+			if (service != null)
+			{
+				items.AppendLine($@"
+					<tr>
+						<td style='text-align: center;'>{index++}</td>
+						<td>{service.Name}</td>
+						<td>{service.Description ?? ""}</td>
+						<td style='text-align: center;'>1</td>
+						<td style='text-align: right;'>{service.Price:N0}</td>
+						<td style='text-align: right;'>{service.Price:N0}</td>
+					</tr>");
+			}
+
+			// Thêm Addon nếu có
+			if (addon != null)
+			{
+				items.AppendLine($@"
+					<tr>
+						<td style='text-align: center;'>{index++}</td>
+						<td>{addon.Name}</td>
+						<td>{addon.Description ?? ""}</td>
+						<td style='text-align: center;'>1</td>
+						<td style='text-align: right;'>{addon.Price:N0}</td>
+						<td style='text-align: right;'>{addon.Price:N0}</td>
+					</tr>");
+			}
+
+			// Nếu không có service/addon, hiển thị title
+			if (service == null && addon == null)
+			{
+				items.AppendLine($@"
+					<tr>
+						<td style='text-align: center;'>1</td>
+						<td>{saleOrder.Title}</td>
+						<td>{saleOrder.Notes ?? ""}</td>
+						<td style='text-align: center;'>1</td>
+						<td style='text-align: right;'>{saleOrder.Value:N0}</td>
+						<td style='text-align: right;'>{saleOrder.Value:N0}</td>
+					</tr>");
+			}
+
+			return items.ToString();
+		}
+
+		// Helper method: Convert số thành chữ (tiếng Việt)
+		private string ConvertNumberToWords(decimal number)
+		{
+			if (number == 0) return "Không đồng";
+
+			var units = new[] { "", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín" };
+			var scales = new[] { "", "nghìn", "triệu", "tỷ" };
+
+			var numStr = ((long)number).ToString();
+			var result = new System.Text.StringBuilder();
+			var scaleIndex = 0;
+
+			while (numStr.Length > 0)
+			{
+				var groupSize = Math.Min(3, numStr.Length);
+				var group = numStr.Substring(numStr.Length - groupSize);
+				numStr = numStr.Substring(0, numStr.Length - groupSize);
+
+				if (int.Parse(group) > 0)
+				{
+					var groupWords = ConvertGroupToWords(int.Parse(group), units);
+					if (result.Length > 0)
+						result.Insert(0, " ");
+					result.Insert(0, scales[scaleIndex]);
+					result.Insert(0, " ");
+					result.Insert(0, groupWords);
+				}
+
+				scaleIndex++;
+			}
+
+			return char.ToUpper(result[0]) + result.ToString().Substring(1).Trim() + " đồng chẵn";
+		}
+
+		private string ConvertGroupToWords(int number, string[] units)
+		{
+			var hundred = number / 100;
+			var ten = (number % 100) / 10;
+			var unit = number % 10;
+
+			var result = new System.Text.StringBuilder();
+
+			if (hundred > 0)
+			{
+				result.Append(units[hundred]);
+				result.Append(" trăm");
+			}
+
+			if (ten > 1)
+			{
+				if (result.Length > 0) result.Append(" ");
+				result.Append(units[ten]);
+				result.Append(" mươi");
+			}
+			else if (ten == 1)
+			{
+				if (result.Length > 0) result.Append(" ");
+				result.Append("mười");
+			}
+
+			if (unit > 0)
+			{
+				if (result.Length > 0) result.Append(" ");
+				result.Append(units[unit]);
+			}
+
+			return result.ToString();
 		}
 
 		private bool SaleOrderExists(int id)
