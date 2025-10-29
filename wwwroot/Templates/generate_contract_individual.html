@@ -1365,7 +1365,7 @@
             white-space: nowrap;
           "
                class="ft010">
-                Hợp đồng này được lập tại Hà Nội, ngày ... tháng ... năm ....., giữa
+                Hợp đồng này được lập tại Hà Nội, ngày {{Day}} tháng {{Month}} năm {{Year}}, giữa
                 các bên sau đây:
             </p>
             <!-- Bên A -->
@@ -1376,7 +1376,7 @@
             white-space: nowrap;
           "
                 class="ft07">
-                BÊN A: ...
+                BÊN A: {{CompanyBName}}
             </h2>
             <!-- Địa chỉ -->
             <p style="
@@ -1386,7 +1386,7 @@
             white-space: nowrap;
           "
                class="ft010">
-                Địa chỉ: <span>...</span>
+                Địa chỉ: <span>{{CompanyBAddress}}</span>
             </p>
             <!-- individual -->
             <!-- Điện thoại -->
@@ -1398,14 +1398,14 @@
             line-height: 1.6;
           ">
                 <div class="col-6">
-                    <p class="ft010">Điện thoại: <span>...</span></p>
+                    <p class="ft010">Điện thoại: <span>{{CompanyBPhone}}</span></p>
                     <!-- Email -->
-                    <p class="ft010">Email: <span>...</span></p>
+                    <p class="ft010">Email: <span>{{CompanyBEmail}}</span></p>
                 </div>
                 <div class="col-6" style="left: 500px">
-                    <p class="ft010">Số CMND/CCCD: <span>...</span></p>
+                    <p class="ft010">Số CMND/CCCD: <span>{{CompanyBRepID}}</span></p>
                     <!-- Ngày sinh -->
-                    <p class="ft010">Ngày sinh: <span>.../.../.....</span></p>
+                    <p class="ft010">Ngày sinh: <span>{{CustomerBirthDay}}/{{CustomerBirthMonth}}/{{CustomerBirthYear}}</span></p>
                 </div>
             </div>
             <!-- Bên B -->

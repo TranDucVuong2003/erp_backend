@@ -20,7 +20,10 @@ namespace erp_backend.Data
         public DbSet<Ticket> Tickets { get; set; }
         public DbSet<TicketCategory> TicketCategories { get; set; }
         public DbSet<TicketLog> TicketLogs { get; set; }
-
+        public DbSet<Tax> Taxes { get; set; }
+        public DbSet<Contract> Contracts { get; set; }
+        public DbSet<SaleOrderService> SaleOrderServices { get; set; }
+        public DbSet<SaleOrderAddon> SaleOrderAddons { get; set; }
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -113,17 +116,23 @@ namespace erp_backend.Data
 				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
 				entity.Property(e => e.Description).HasMaxLength(1000);
 				entity.Property(e => e.Price).HasColumnType("decimal(15,2)").IsRequired();
-				entity.Property(e => e.Quantity).IsRequired().HasDefaultValue(1);
 				entity.Property(e => e.Category).HasMaxLength(50);
 				entity.Property(e => e.IsActive).HasDefaultValue(true);
 				entity.Property(e => e.Notes).HasMaxLength(2000);
-				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
-				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				// Foreign Key relationship with Tax
+				entity.HasOne(e => e.Tax)
+					  .WithMany()
+					  .HasForeignKey(e => e.TaxId)
+					  .OnDelete(DeleteBehavior.Restrict);
 
 				// Indexes
 				entity.HasIndex(e => e.Name);
 				entity.HasIndex(e => e.Category);
 				entity.HasIndex(e => e.IsActive);
+				entity.HasIndex(e => e.TaxId);
 			});
 
 			// Configure Addon entity
@@ -134,17 +143,23 @@ namespace erp_backend.Data
 				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
 				entity.Property(e => e.Description).HasMaxLength(1000);
 				entity.Property(e => e.Price).HasColumnType("decimal(15,2)").IsRequired();
-				entity.Property(e => e.Quantity).IsRequired().HasDefaultValue(1);
 				entity.Property(e => e.Type).HasMaxLength(50);
 				entity.Property(e => e.IsActive).HasDefaultValue(true);
 				entity.Property(e => e.Notes).HasMaxLength(2000);
 				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
 				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
 
+				// Foreign Key relationship with Tax
+				entity.HasOne(e => e.Tax)
+					  .WithMany()
+					  .HasForeignKey(e => e.TaxId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
 				// Indexes
 				entity.HasIndex(e => e.Name);
 				entity.HasIndex(e => e.Type);
 				entity.HasIndex(e => e.IsActive);
+				entity.HasIndex(e => e.TaxId); // ✅ THÊM index cho TaxId
 			});
 
 			// Configure SaleOrder entity
@@ -156,33 +171,101 @@ namespace erp_backend.Data
                 entity.Property(e => e.Value).HasColumnType("decimal(15,2)").IsRequired();
                 entity.Property(e => e.Probability).HasDefaultValue(0);
                 entity.Property(e => e.Notes).HasMaxLength(2000);
-                entity.Property(e => e.ServiceId);
-                entity.Property(e => e.AddonId);
                 entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
                 entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
 
                 // Foreign Key relationships
-                entity.HasOne<Customer>()
+                entity.HasOne(e => e.Customer)
                       .WithMany()
-                      .HasForeignKey(d => d.CustomerId)
+                      .HasForeignKey(e => e.CustomerId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-				entity.HasOne<Service>()
+				entity.HasOne(e => e.Service)
 					  .WithMany()
-					  .HasForeignKey(d => d.ServiceId)
+					  .HasForeignKey(e => e.ServiceId)
 					  .OnDelete(DeleteBehavior.SetNull);
 
-				entity.HasOne<Addon>()
+				entity.HasOne(e => e.Addon)
 					  .WithMany()
-					  .HasForeignKey(d => d.AddonId)
+					  .HasForeignKey(e => e.AddonId)
 					  .OnDelete(DeleteBehavior.SetNull);
+
+				entity.HasOne(e => e.Tax)
+					  .WithMany()
+					  .HasForeignKey(e => e.TaxId)
+					  .OnDelete(DeleteBehavior.Restrict);
 
                 // Indexes
                 entity.HasIndex(e => e.CustomerId);
                 entity.HasIndex(e => e.ServiceId);
                 entity.HasIndex(e => e.AddonId);
+                entity.HasIndex(e => e.TaxId);
                 entity.HasIndex(e => e.Value);
                 entity.HasIndex(e => e.Probability);
+            });
+
+            // Configure Tax entity
+            modelBuilder.Entity<Tax>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.Rate).HasColumnType("decimal(5,2)").IsRequired();
+                entity.Property(e => e.Notes).HasMaxLength(2000);
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+            });
+
+            // Configure Contract entity
+            modelBuilder.Entity<Contract>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("Draft");
+                entity.Property(e => e.PaymentMethod).HasMaxLength(50);
+                entity.Property(e => e.SubTotal).HasColumnType("decimal(15,2)").IsRequired();
+                entity.Property(e => e.TaxAmount).HasColumnType("decimal(15,2)").IsRequired();
+                entity.Property(e => e.TotalAmount).HasColumnType("decimal(15,2)").IsRequired();
+                entity.Property(e => e.Notes).HasMaxLength(2000);
+                entity.Property(e => e.Expiration).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Foreign Key relationships
+                entity.HasOne(e => e.Customer)
+                      .WithMany()
+                      .HasForeignKey(e => e.CustomerId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Service)
+                      .WithMany()
+                      .HasForeignKey(e => e.ServiceId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.Addon)
+                      .WithMany()
+                      .HasForeignKey(e => e.AddonsId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.Tax)
+                      .WithMany()
+					  .HasForeignKey(e => e.TaxId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+                // Indexes
+                entity.HasIndex(e => e.CustomerId);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.ServiceId);
+                entity.HasIndex(e => e.AddonsId);
+                entity.HasIndex(e => e.TaxId);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.Expiration);
+                entity.HasIndex(e => e.CreatedAt);
             });
 
             // Configure TicketCategory entity
@@ -269,6 +352,60 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.TicketId);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.CreatedAt);
+            });
+
+            // Configure SaleOrderService entity (junction table)
+            modelBuilder.Entity<SaleOrderService>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.UnitPrice).HasColumnType("decimal(15,2)").IsRequired();
+                entity.Property(e => e.Notes).HasMaxLength(500);
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Foreign Key relationships
+                entity.HasOne(e => e.SaleOrder)
+                      .WithMany(s => s.SaleOrderServices)
+                      .HasForeignKey(e => e.SaleOrderId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Service)
+                      .WithMany()
+                      .HasForeignKey(e => e.ServiceId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Indexes
+                entity.HasIndex(e => e.SaleOrderId);
+                entity.HasIndex(e => e.ServiceId);
+                entity.HasIndex(e => new { e.SaleOrderId, e.ServiceId }).IsUnique();
+            });
+
+            // Configure SaleOrderAddon entity (junction table)
+            modelBuilder.Entity<SaleOrderAddon>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.UnitPrice).HasColumnType("decimal(15,2)").IsRequired();
+                entity.Property(e => e.Notes).HasMaxLength(500);
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Foreign Key relationships
+                entity.HasOne(e => e.SaleOrder)
+                      .WithMany(s => s.SaleOrderAddons)
+                      .HasForeignKey(e => e.SaleOrderId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Addon)
+                      .WithMany()
+                      .HasForeignKey(e => e.AddonId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Indexes
+                entity.HasIndex(e => e.SaleOrderId);
+                entity.HasIndex(e => e.AddonId);
+                entity.HasIndex(e => new { e.SaleOrderId, e.AddonId }).IsUnique();
             });
         }
     }

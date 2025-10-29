@@ -80,7 +80,7 @@ namespace erp_backend.Controllers
                 }
 
                 // Validate quantity
-                if (service.Quantity < 1)
+                if (service.Quantity.HasValue && service.Quantity.Value < 1)
                 {
                     return BadRequest(new { message = "S? l??ng ph?i l?n h?n 0" });
                 }

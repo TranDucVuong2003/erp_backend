@@ -80,7 +80,7 @@ namespace erp_backend.Controllers
 				}
 
 				// Validate quantity
-				if (addon.Quantity < 1)
+				if (addon.Quantity.HasValue && addon.Quantity.Value < 1)
 				{
 					return BadRequest(new { message = "Số lượng phải lớn hơn 0" });
 				}

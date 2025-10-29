@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251029082601_MakeServiceIdRequiredInSaleOrder")]
+    partial class MakeServiceIdRequiredInSaleOrder
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,8 +59,10 @@ namespace erp_backend.Migrations
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(15,2)");
 
-                    b.Property<int?>("Quantity")
-                        .HasColumnType("integer");
+                    b.Property<int>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<int?>("TaxId")
                         .HasColumnType("integer");
@@ -375,7 +380,7 @@ namespace erp_backend.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
-                    b.Property<int?>("ServiceId")
+                    b.Property<int>("ServiceId")
                         .HasColumnType("integer");
 
                     b.Property<int?>("TaxId")
@@ -407,94 +412,6 @@ namespace erp_backend.Migrations
                     b.HasIndex("Value");
 
                     b.ToTable("SaleOrders");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleOrderAddon", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AddonId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int?>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SaleOrderId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("decimal(15,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AddonId");
-
-                    b.HasIndex("SaleOrderId");
-
-                    b.HasIndex("SaleOrderId", "AddonId")
-                        .IsUnique();
-
-                    b.ToTable("SaleOrderAddons");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleOrderService", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int?>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SaleOrderId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("decimal(15,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SaleOrderId");
-
-                    b.HasIndex("ServiceId");
-
-                    b.HasIndex("SaleOrderId", "ServiceId")
-                        .IsUnique();
-
-                    b.ToTable("SaleOrderServices");
                 });
 
             modelBuilder.Entity("erp_backend.Models.Service", b =>
@@ -535,8 +452,10 @@ namespace erp_backend.Migrations
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(15,2)");
 
-                    b.Property<int?>("Quantity")
-                        .HasColumnType("integer");
+                    b.Property<int>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<int?>("TaxId")
                         .HasColumnType("integer");
@@ -871,7 +790,8 @@ namespace erp_backend.Migrations
                     b.HasOne("erp_backend.Models.Service", "Service")
                         .WithMany()
                         .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .IsRequired();
 
                     b.HasOne("erp_backend.Models.Tax", "Tax")
                         .WithMany()
@@ -885,44 +805,6 @@ namespace erp_backend.Migrations
                     b.Navigation("Service");
 
                     b.Navigation("Tax");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleOrderAddon", b =>
-                {
-                    b.HasOne("erp_backend.Models.Addon", "Addon")
-                        .WithMany()
-                        .HasForeignKey("AddonId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("erp_backend.Models.SaleOrder", "SaleOrder")
-                        .WithMany("SaleOrderAddons")
-                        .HasForeignKey("SaleOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Addon");
-
-                    b.Navigation("SaleOrder");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleOrderService", b =>
-                {
-                    b.HasOne("erp_backend.Models.SaleOrder", "SaleOrder")
-                        .WithMany("SaleOrderServices")
-                        .HasForeignKey("SaleOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("erp_backend.Models.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("SaleOrder");
-
-                    b.Navigation("Service");
                 });
 
             modelBuilder.Entity("erp_backend.Models.Service", b =>
@@ -985,13 +867,6 @@ namespace erp_backend.Migrations
                     b.Navigation("Ticket");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleOrder", b =>
-                {
-                    b.Navigation("SaleOrderAddons");
-
-                    b.Navigation("SaleOrderServices");
                 });
 #pragma warning restore 612, 618
         }

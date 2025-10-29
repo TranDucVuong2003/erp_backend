@@ -17,14 +17,15 @@ namespace erp_backend.Models
         [Range(0, double.MaxValue, ErrorMessage = "Giá phải lớn hơn hoặc bằng 0")]
         public decimal Price { get; set; }
 
-        [Required]
-        [Range(1, int.MaxValue, ErrorMessage = "Số lượng phải lớn hơn 0")]
-        public int Quantity { get; set; } = 1;
+		[Range(1, int.MaxValue, ErrorMessage = "Số lượng phải lớn hơn 0")]
+		public int? Quantity { get; set; }
 
-        [StringLength(50)]
+		[StringLength(50)]
         public string? Category { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        public int? TaxId { get; set; } 
 
         [StringLength(2000)]
         public string? Notes { get; set; }
@@ -32,5 +33,8 @@ namespace erp_backend.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
+
+        // Navigation property
+        public Tax? Tax { get; set; } 
     }
 }
