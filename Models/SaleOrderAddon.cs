@@ -23,8 +23,13 @@ namespace erp_backend.Models
 
         [StringLength(500)]
         public string? Notes { get; set; }
+		
+		public int duration { get; set; }
+		[StringLength(200)]
+		public string template { get; set; } = string.Empty;
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
 

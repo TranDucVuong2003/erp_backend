@@ -220,7 +220,6 @@ namespace erp_backend.Data
             {
                 entity.HasKey(e => e.Id);
                 
-                entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
                 entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("Draft");
                 entity.Property(e => e.PaymentMethod).HasMaxLength(50);
                 entity.Property(e => e.SubTotal).HasColumnType("decimal(15,2)").IsRequired();
@@ -232,9 +231,9 @@ namespace erp_backend.Data
                 entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
 
                 // Foreign Key relationships
-                entity.HasOne(e => e.Customer)
+                entity.HasOne(e => e.SaleOrder)
                       .WithMany()
-                      .HasForeignKey(e => e.CustomerId)
+                      .HasForeignKey(e => e.SaleOrderId)
                       .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasOne(e => e.User)
@@ -242,27 +241,9 @@ namespace erp_backend.Data
                       .HasForeignKey(e => e.UserId)
                       .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasOne(e => e.Service)
-                      .WithMany()
-                      .HasForeignKey(e => e.ServiceId)
-                      .OnDelete(DeleteBehavior.SetNull);
-
-                entity.HasOne(e => e.Addon)
-                      .WithMany()
-                      .HasForeignKey(e => e.AddonsId)
-                      .OnDelete(DeleteBehavior.SetNull);
-
-                entity.HasOne(e => e.Tax)
-                      .WithMany()
-					  .HasForeignKey(e => e.TaxId)
-					  .OnDelete(DeleteBehavior.Restrict);
-
                 // Indexes
-                entity.HasIndex(e => e.CustomerId);
+                entity.HasIndex(e => e.SaleOrderId);
                 entity.HasIndex(e => e.UserId);
-                entity.HasIndex(e => e.ServiceId);
-                entity.HasIndex(e => e.AddonsId);
-                entity.HasIndex(e => e.TaxId);
                 entity.HasIndex(e => e.Status);
                 entity.HasIndex(e => e.Expiration);
                 entity.HasIndex(e => e.CreatedAt);

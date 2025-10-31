@@ -44,7 +44,6 @@ namespace erp_backend.Controllers
 				Customer = so.Customer != null ? new { so.Customer.Id, so.Customer.Name } : null,
 				so.Value,
 				so.Probability,
-				so.Notes,
 				so.TaxId,
 				Tax = so.Tax != null ? new { so.Tax.Id, so.Tax.Rate } : null,
 				so.CreatedAt,
@@ -54,14 +53,16 @@ namespace erp_backend.Controllers
 					sos.ServiceId,
 					ServiceName = sos.Service?.Name,
 					sos.UnitPrice,
-					sos.Notes
+					sos.duration,
+					sos.template
 				}).ToList(),
 				SaleOrderAddons = so.SaleOrderAddons.Select(soa => new
 				{
 					soa.AddonId,
 					AddonName = soa.Addon?.Name,
 					soa.UnitPrice,
-					soa.Notes
+					soa.duration,
+					soa.template
 				}).ToList()
 			});
 
@@ -92,7 +93,6 @@ namespace erp_backend.Controllers
 				Customer = so.Customer != null ? new { so.Customer.Id, so.Customer.Name } : null,
 				so.Value,
 				so.Probability,
-				so.Notes,
 				so.TaxId,
 				Tax = so.Tax != null ? new { so.Tax.Id, so.Tax.Rate } : null,
 				so.CreatedAt,
@@ -102,14 +102,16 @@ namespace erp_backend.Controllers
 					sos.ServiceId,
 					ServiceName = sos.Service?.Name,
 					sos.UnitPrice,
-					sos.Notes
+					sos.duration,
+					sos.template
 				}).ToList(),
 				SaleOrderAddons = so.SaleOrderAddons.Select(soa => new
 				{
 					soa.AddonId,
 					AddonName = soa.Addon?.Name,
 					soa.UnitPrice,
-					soa.Notes
+					soa.duration,
+					soa.template
 				}).ToList()
 			});
 
@@ -180,7 +182,6 @@ namespace erp_backend.Controllers
 				Customer = saleOrder.Customer != null ? new { saleOrder.Customer.Id, saleOrder.Customer.Name } : null,
 				saleOrder.Value,
 				saleOrder.Probability,
-				saleOrder.Notes,
 				saleOrder.TaxId,
 				Tax = saleOrder.Tax != null ? new { saleOrder.Tax.Id, saleOrder.Tax.Rate } : null,
 				saleOrder.CreatedAt,
@@ -190,14 +191,16 @@ namespace erp_backend.Controllers
 					sos.ServiceId,
 					ServiceName = sos.Service?.Name,
 					sos.UnitPrice,
-					sos.Notes
+					sos.duration,
+					sos.template
 				}).ToList(),
 				SaleOrderAddons = saleOrder.SaleOrderAddons.Select(soa => new
 				{
 					soa.AddonId,
 					AddonName = soa.Addon?.Name,
 					soa.UnitPrice,
-					soa.Notes
+					soa.duration,
+					soa.template
 				}).ToList()
 			};
 
@@ -310,6 +313,8 @@ namespace erp_backend.Controllers
 						Quantity = service.Quantity, // Luôn lấy từ Service
 						UnitPrice = serviceDto.UnitPrice ?? service.Price,
 						Notes = serviceDto.Notes ?? service.Notes,
+						duration = serviceDto.Duration ?? 0,
+						template = serviceDto.Template ?? string.Empty,
 						CreatedAt = DateTime.UtcNow
 					};
 					saleOrderServices.Add(saleOrderService);
@@ -328,6 +333,8 @@ namespace erp_backend.Controllers
 						Quantity = addon.Quantity, // Luôn lấy từ Addon
 						UnitPrice = addonDto.UnitPrice ?? addon.Price,
 						Notes = addonDto.Notes ?? addon.Notes,
+						duration = addonDto.Duration ?? 0,
+						template = addonDto.Template ?? string.Empty,
 						CreatedAt = DateTime.UtcNow
 					};
 					saleOrderAddons.Add(saleOrderAddon);
@@ -345,7 +352,6 @@ namespace erp_backend.Controllers
 					CustomerId = saleOrder.CustomerId,
 					Value = saleOrder.Value,
 					Probability = saleOrder.Probability,
-					Notes = saleOrder.Notes,
 					TaxId = saleOrder.TaxId,
 					CreatedAt = saleOrder.CreatedAt,
 					Services = saleOrderServices.Select(sos => new SaleOrderServiceDetailDto
@@ -353,14 +359,16 @@ namespace erp_backend.Controllers
 						ServiceId = sos.ServiceId,
 						ServiceName = services.First(s => s.Id == sos.ServiceId).Name,
 						UnitPrice = sos.UnitPrice,
-						Notes = sos.Notes
+						Duration = sos.duration,
+						Template = sos.template
 					}).ToList(),
 					Addons = saleOrderAddons.Select(soa => new SaleOrderAddonDetailDto
 					{
 						AddonId = soa.AddonId,
 						AddonName = addons.First(a => a.Id == soa.AddonId).Name,
 						UnitPrice = soa.UnitPrice,
-						Notes = soa.Notes
+						Duration = soa.duration,
+						Template = soa.template
 					}).ToList()
 				};
 

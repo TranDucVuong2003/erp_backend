@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
+using erp_backend.Models.DTOs;
 
 namespace erp_backend.Controllers
 {
@@ -22,28 +23,44 @@ namespace erp_backend.Controllers
         // GET: api/Contracts
         [HttpGet]
         //[Authorize]
-        public async Task<ActionResult<IEnumerable<Contract>>> GetContracts()
+        public async Task<ActionResult<IEnumerable<ContractResponse>>> GetContracts()
         {
-            return await _context.Contracts
-                .Include(c => c.Customer)
+            var contracts = await _context.Contracts
                 .Include(c => c.User)
-                .Include(c => c.Service)
-                .Include(c => c.Addon)
-                .Include(c => c.Tax)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.Customer)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.Tax)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.SaleOrderServices)
+                        .ThenInclude(sos => sos.Service)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.SaleOrderAddons)
+                        .ThenInclude(soa => soa.Addon)
                 .ToListAsync();
+
+            var response = contracts.Select(c => MapToContractResponse(c));
+
+            return Ok(response);
         }
 
         // GET: api/Contracts/5
         [HttpGet("{id}")]
         //[Authorize]
-        public async Task<ActionResult<Contract>> GetContract(int id)
+        public async Task<ActionResult<ContractResponse>> GetContract(int id)
         {
             var contract = await _context.Contracts
-                .Include(c => c.Customer)
                 .Include(c => c.User)
-                .Include(c => c.Service)
-                .Include(c => c.Addon)
-                .Include(c => c.Tax)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.Customer)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.Tax)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.SaleOrderServices)
+                        .ThenInclude(sos => sos.Service)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.SaleOrderAddons)
+                        .ThenInclude(soa => soa.Addon)
                 .FirstOrDefaultAsync(c => c.Id == id);
 
             if (contract == null)
@@ -51,13 +68,14 @@ namespace erp_backend.Controllers
                 return NotFound(new { message = "Không tìm thấy hợp đồng" });
             }
 
-            return contract;
+            var response = MapToContractResponse(contract);
+            return Ok(response);
         }
 
         // POST: api/Contracts
         [HttpPost]
         //[Authorize]
-        public async Task<ActionResult<Contract>> CreateContract(Contract contract)
+        public async Task<ActionResult<ContractResponse>> CreateContract([FromBody] CreateContractRequest request)
         {
             try
             {
@@ -66,90 +84,75 @@ namespace erp_backend.Controllers
                     return BadRequest(ModelState);
                 }
 
-                // Kiểm tra customer tồn tại
-                var customerExists = await _context.Customers.AnyAsync(c => c.Id == contract.CustomerId);
-                if (!customerExists)
+                // Kiểm tra SaleOrder tồn tại
+                var saleOrder = await _context.SaleOrders
+                    .Include(so => so.Tax)
+                    .Include(so => so.SaleOrderServices)
+                        .ThenInclude(sos => sos.Service)
+                    .Include(so => so.SaleOrderAddons)
+                        .ThenInclude(soa => soa.Addon)
+                    .FirstOrDefaultAsync(so => so.Id == request.SaleOrderId);
+
+                if (saleOrder == null)
                 {
-                    return BadRequest(new { message = "Customer không tồn tại" });
+                    return BadRequest(new { message = "SaleOrder không tồn tại" });
                 }
 
                 // Kiểm tra user tồn tại
-                var userExists = await _context.Users.AnyAsync(u => u.Id == contract.UserId);
+                var userExists = await _context.Users.AnyAsync(u => u.Id == request.UserId);
                 if (!userExists)
                 {
                     return BadRequest(new { message = "User không tồn tại" });
                 }
 
-                // Kiểm tra service tồn tại (nếu có)
-                if (contract.ServiceId.HasValue)
+                // Tính toán tự động SubTotal, TaxAmount, TotalAmount từ SaleOrder
+                decimal subTotal = saleOrder.Value;
+                decimal taxAmount = 0;
+
+                // Tính thuế từ SaleOrder
+                if (saleOrder.TaxId.HasValue && saleOrder.Tax != null)
                 {
-                    var serviceExists = await _context.Services.AnyAsync(s => s.Id == contract.ServiceId.Value);
-                    if (!serviceExists)
-                    {
-                        return BadRequest(new { message = "Service không tồn tại" });
-                    }
+                    taxAmount = subTotal * saleOrder.Tax.Rate / 100;
                 }
 
-                // Kiểm tra addon tồn tại (nếu có)
-                if (contract.AddonsId.HasValue)
+                decimal totalAmount = subTotal + taxAmount;
+
+                // Tạo Contract
+                var contract = new Contract
                 {
-                    var addonExists = await _context.Addons.AnyAsync(a => a.Id == contract.AddonsId.Value);
-                    if (!addonExists)
-                    {
-                        return BadRequest(new { message = "Addon không tồn tại" });
-                    }
-                }
-
-                // Kiểm tra tax tồn tại (nếu có)
-                if (contract.TaxId.HasValue)
-                {
-                    var taxExists = await _context.Taxes.AnyAsync(t => t.Id == contract.TaxId.Value);
-                    if (!taxExists)
-                    {
-                        return BadRequest(new { message = "Tax không tồn tại" });
-                    }
-                }
-
-                // Tính toán tự động SubTotal, TaxAmount, TotalAmount
-                decimal subTotal = 0;
-
-                if (contract.ServiceId.HasValue)
-                {
-                    var service = await _context.Services.FindAsync(contract.ServiceId.Value);
-                    if (service != null)
-                    {
-                        subTotal += service.Price * (service.Quantity ?? 1);
-                    }
-                }
-
-                if (contract.AddonsId.HasValue)
-                {
-                    var addon = await _context.Addons.FindAsync(contract.AddonsId.Value);
-                    if (addon != null)
-                    {
-                        subTotal += addon.Price * (addon.Quantity ?? 1);
-                    }
-                }
-
-                contract.SubTotal = subTotal;
-
-                // Tính thuế
-                if (contract.TaxId.HasValue)
-                {
-                    var tax = await _context.Taxes.FindAsync(contract.TaxId.Value);
-                    if (tax != null)
-                    {
-                        contract.TaxAmount = subTotal * tax.Rate / 100;
-                    }
-                }
-
-                contract.TotalAmount = contract.SubTotal + contract.TaxAmount;
-                contract.CreatedAt = DateTime.UtcNow;
+                    SaleOrderId = request.SaleOrderId,
+                    UserId = request.UserId,
+                    Status = request.Status,
+                    PaymentMethod = request.PaymentMethod,
+                    SubTotal = subTotal,
+                    TaxAmount = taxAmount,
+                    TotalAmount = totalAmount,
+                    Expiration = request.Expiration,
+                    Notes = request.Notes,
+                    CreatedAt = DateTime.UtcNow
+                };
 
                 _context.Contracts.Add(contract);
                 await _context.SaveChangesAsync();
 
-                return CreatedAtAction(nameof(GetContract), new { id = contract.Id }, contract);
+                // Load lại contract với đầy đủ navigation properties
+                contract = await _context.Contracts
+                    .Include(c => c.User)
+                    .Include(c => c.SaleOrder)
+                        .ThenInclude(so => so!.Customer)
+                    .Include(c => c.SaleOrder)
+                        .ThenInclude(so => so!.Tax)
+                    .Include(c => c.SaleOrder)
+                        .ThenInclude(so => so!.SaleOrderServices)
+                            .ThenInclude(sos => sos.Service)
+                    .Include(c => c.SaleOrder)
+                        .ThenInclude(so => so!.SaleOrderAddons)
+                            .ThenInclude(soa => soa.Addon)
+                    .FirstAsync(c => c.Id == contract.Id);
+
+                var response = MapToContractResponse(contract);
+
+                return CreatedAtAction(nameof(GetContract), new { id = contract.Id }, response);
             }
             catch (Exception ex)
             {
@@ -161,15 +164,10 @@ namespace erp_backend.Controllers
         // PUT: api/Contracts/5
         [HttpPut("{id}")]
         //[Authorize]
-        public async Task<ActionResult<Contract>> UpdateContract(int id, Contract contract)
+        public async Task<ActionResult<ContractResponse>> UpdateContract(int id, [FromBody] CreateContractRequest request)
         {
             try
             {
-                if (id != contract.Id)
-                {
-                    return BadRequest(new { message = "ID không khớp" });
-                }
-
                 // Kiểm tra contract có tồn tại không
                 var existingContract = await _context.Contracts.FindAsync(id);
                 if (existingContract == null)
@@ -177,93 +175,69 @@ namespace erp_backend.Controllers
                     return NotFound(new { message = "Không tìm thấy hợp đồng" });
                 }
 
-                // Kiểm tra customer tồn tại
-                if (contract.CustomerId != existingContract.CustomerId)
+                // Kiểm tra SaleOrder tồn tại (nếu thay đổi)
+                if (request.SaleOrderId != existingContract.SaleOrderId)
                 {
-                    var customerExists = await _context.Customers.AnyAsync(c => c.Id == contract.CustomerId);
-                    if (!customerExists)
+                    var saleOrderExists = await _context.SaleOrders.AnyAsync(so => so.Id == request.SaleOrderId);
+                    if (!saleOrderExists)
                     {
-                        return BadRequest(new { message = "Customer không tồn tại" });
+                        return BadRequest(new { message = "SaleOrder không tồn tại" });
                     }
                 }
 
-                // Kiểm tra user tồn tại
-                if (contract.UserId != existingContract.UserId)
+                // Kiểm tra user tồn tại (nếu thay đổi)
+                if (request.UserId != existingContract.UserId)
                 {
-                    var userExists = await _context.Users.AnyAsync(u => u.Id == contract.UserId);
+                    var userExists = await _context.Users.AnyAsync(u => u.Id == request.UserId);
                     if (!userExists)
                     {
                         return BadRequest(new { message = "User không tồn tại" });
                     }
                 }
 
-                // Kiểm tra service tồn tại (nếu có)
-                if (contract.ServiceId.HasValue)
-                {
-                    var serviceExists = await _context.Services.AnyAsync(s => s.Id == contract.ServiceId.Value);
-                    if (!serviceExists)
-                    {
-                        return BadRequest(new { message = "Service không tồn tại" });
-                    }
-                }
-
-                // Kiểm tra addon tồn tại (nếu có)
-                if (contract.AddonsId.HasValue)
-                {
-                    var addonExists = await _context.Addons.AnyAsync(a => a.Id == contract.AddonsId.Value);
-                    if (!addonExists)
-                    {
-                        return BadRequest(new { message = "Addon không tồn tại" });
-                    }
-                }
-
-                // Kiểm tra tax tồn tại (nếu có)
-                if (contract.TaxId.HasValue)
-                {
-                    var taxExists = await _context.Taxes.AnyAsync(t => t.Id == contract.TaxId.Value);
-                    if (!taxExists)
-                    {
-                        return BadRequest(new { message = "Tax không tồn tại" });
-                    }
-                }
-
                 // Cập nhật các trường
-                existingContract.Name = contract.Name;
-                existingContract.CustomerId = contract.CustomerId;
-                existingContract.UserId = contract.UserId;
-                existingContract.ServiceId = contract.ServiceId;
-                existingContract.AddonsId = contract.AddonsId;
-                existingContract.TaxId = contract.TaxId;
-                existingContract.Status = contract.Status;
-                existingContract.PaymentMethod = contract.PaymentMethod;
-                existingContract.SubTotal = contract.SubTotal;
-                existingContract.TaxAmount = contract.TaxAmount;
-                existingContract.TotalAmount = contract.TotalAmount;
-                existingContract.Expiration = contract.Expiration;
-                existingContract.Notes = contract.Notes;
+                existingContract.SaleOrderId = request.SaleOrderId;
+                existingContract.UserId = request.UserId;
+                existingContract.Status = request.Status;
+                existingContract.PaymentMethod = request.PaymentMethod;
+                existingContract.Expiration = request.Expiration;
+                existingContract.Notes = request.Notes;
                 existingContract.UpdatedAt = DateTime.UtcNow;
+
+                // Tính lại SubTotal, TaxAmount, TotalAmount nếu SaleOrder thay đổi
+                if (request.SaleOrderId != existingContract.SaleOrderId)
+                {
+                    var saleOrder = await _context.SaleOrders
+                        .Include(so => so.Tax)
+                        .FirstAsync(so => so.Id == request.SaleOrderId);
+
+                    existingContract.SubTotal = saleOrder.Value;
+                    existingContract.TaxAmount = saleOrder.TaxId.HasValue && saleOrder.Tax != null
+                        ? saleOrder.Value * saleOrder.Tax.Rate / 100
+                        : 0;
+                    existingContract.TotalAmount = existingContract.SubTotal + existingContract.TaxAmount;
+                }
 
                 await _context.SaveChangesAsync();
 
-                // Load navigation properties để trả về
-                await _context.Entry(existingContract)
-                    .Reference(c => c.Customer)
-                    .LoadAsync();
-                await _context.Entry(existingContract)
-                    .Reference(c => c.User)
-                    .LoadAsync();
-                await _context.Entry(existingContract)
-                    .Reference(c => c.Service)
-                    .LoadAsync();
-                await _context.Entry(existingContract)
-                    .Reference(c => c.Addon)
-                    .LoadAsync();
-                await _context.Entry(existingContract)
-                    .Reference(c => c.Tax)
-                    .LoadAsync();
+                // Load lại contract với đầy đủ navigation properties
+                var contract = await _context.Contracts
+                    .Include(c => c.User)
+                    .Include(c => c.SaleOrder)
+                        .ThenInclude(so => so!.Customer)
+                    .Include(c => c.SaleOrder)
+                        .ThenInclude(so => so!.Tax)
+                    .Include(c => c.SaleOrder)
+                        .ThenInclude(so => so!.SaleOrderServices)
+                            .ThenInclude(sos => sos.Service)
+                    .Include(c => c.SaleOrder)
+                        .ThenInclude(so => so!.SaleOrderAddons)
+                            .ThenInclude(soa => soa.Addon)
+                    .FirstAsync(c => c.Id == id);
 
-                // Trả về contract sau khi đã cập nhật
-                return Ok(existingContract);
+                var response = MapToContractResponse(contract);
+
+                return Ok(response);
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -297,17 +271,97 @@ namespace erp_backend.Controllers
             return NoContent();
         }
 
-        // GET: api/Contracts/customer/5
-        [HttpGet("customer/{customerId}")]
+        // GET: api/Contracts/saleorder/5
+        [HttpGet("saleorder/{saleOrderId}")]
         //[Authorize]
-        public async Task<ActionResult<IEnumerable<Contract>>> GetContractsByCustomer(int customerId)
+        public async Task<ActionResult<IEnumerable<ContractListItemDto>>> GetContractsBySaleOrder(int saleOrderId)
         {
-            return await _context.Contracts
-                .Where(c => c.CustomerId == customerId)
-                .Include(c => c.Service)
-                .Include(c => c.Addon)
-                .Include(c => c.Tax)
+            var contracts = await _context.Contracts
+                .Where(c => c.SaleOrderId == saleOrderId)
+                .Include(c => c.User)
+                .Include(c => c.SaleOrder)
+                    .ThenInclude(so => so!.Customer)
                 .ToListAsync();
+
+            var response = contracts.Select(c => new ContractListItemDto
+            {
+                Id = c.Id,
+                SaleOrderId = c.SaleOrderId,
+                SaleOrderTitle = c.SaleOrder?.Title ?? "",
+                CustomerId = c.SaleOrder?.CustomerId ?? 0,
+                CustomerName = c.SaleOrder?.Customer?.Name ?? c.SaleOrder?.Customer?.CompanyName ?? "",
+                UserId = c.UserId,
+                UserName = c.User?.Name ?? "",
+                Status = c.Status,
+                PaymentMethod = c.PaymentMethod,
+                TotalAmount = c.TotalAmount,
+                Expiration = c.Expiration,
+                CreatedAt = c.CreatedAt
+            });
+
+            return Ok(response);
+        }
+
+        // Helper method: Map Contract entity to ContractResponse DTO
+        private ContractResponse MapToContractResponse(Contract contract)
+        {
+            return new ContractResponse
+            {
+                Id = contract.Id,
+                SaleOrderId = contract.SaleOrderId,
+                SaleOrder = contract.SaleOrder != null ? new SaleOrderBasicDto
+                {
+                    Id = contract.SaleOrder.Id,
+                    Title = contract.SaleOrder.Title,
+                    CustomerId = contract.SaleOrder.CustomerId,
+                    Customer = contract.SaleOrder.Customer != null ? new CustomerBasicDto
+                    {
+                        Id = contract.SaleOrder.Customer.Id,
+                        Name = contract.SaleOrder.Customer.Name,
+                        CompanyName = contract.SaleOrder.Customer.CompanyName,
+                        Email = contract.SaleOrder.Customer.Email,
+                        PhoneNumber = contract.SaleOrder.Customer.PhoneNumber
+                    } : null,
+                    Value = contract.SaleOrder.Value,
+                    Probability = contract.SaleOrder.Probability,
+                    TaxId = contract.SaleOrder.TaxId,
+                    Tax = contract.SaleOrder.Tax != null ? new TaxBasicDto
+                    {
+                        Id = contract.SaleOrder.Tax.Id,
+                        Rate = contract.SaleOrder.Tax.Rate
+                    } : null,
+                    Services = contract.SaleOrder.SaleOrderServices?.Select(sos => new ServiceItemDto
+                    {
+                        ServiceId = sos.ServiceId,
+                        ServiceName = sos.Service?.Name ?? "",
+                        UnitPrice = sos.UnitPrice,
+                        Quantity = sos.Quantity
+                    }).ToList() ?? new(),
+                    Addons = contract.SaleOrder.SaleOrderAddons?.Select(soa => new AddonItemDto
+                    {
+                        AddonId = soa.AddonId,
+                        AddonName = soa.Addon?.Name ?? "",
+                        UnitPrice = soa.UnitPrice,
+                        Quantity = soa.Quantity
+                    }).ToList() ?? new()
+                } : null,
+                UserId = contract.UserId,
+                User = contract.User != null ? new UserBasicDto
+                {
+                    Id = contract.User.Id,
+                    Name = contract.User.Name,
+                    Email = contract.User.Email
+                } : null,
+                Status = contract.Status,
+                PaymentMethod = contract.PaymentMethod,
+                SubTotal = contract.SubTotal,
+                TaxAmount = contract.TaxAmount,
+                TotalAmount = contract.TotalAmount,
+                Expiration = contract.Expiration,
+                Notes = contract.Notes,
+                CreatedAt = contract.CreatedAt,
+                UpdatedAt = contract.UpdatedAt
+            };
         }
 
         private bool ContractExists(int id)

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace erp_backend.Models
 {
@@ -23,13 +24,15 @@ namespace erp_backend.Models
 
         [StringLength(500)]
         public string? Notes { get; set; }
-
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+		public int duration { get; set; }
+		[StringLength(200)]
+		public string template { get; set; } = string.Empty;
+		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
 
-        // Navigation properties
-        public SaleOrder SaleOrder { get; set; } = null!;
-        public Service Service { get; set; } = null!;
+        // Navigation properties (NO JsonIgnore - we handle it in DTOs)
+        public SaleOrder? SaleOrder { get; set; }
+        public Service? Service { get; set; }
     }
 }

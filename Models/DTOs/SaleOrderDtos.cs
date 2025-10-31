@@ -41,6 +41,13 @@ namespace erp_backend.Models.DTOs
         // Không bắt buộc - sẽ lấy từ Service.Notes nếu không cung cấp
         [StringLength(500, ErrorMessage = "Ghi chú không được vượt quá 500 ký tự")]
         public string? Notes { get; set; }
+
+        // Thời gian (duration) - không bắt buộc
+        public int? Duration { get; set; }
+
+        // Template - không bắt buộc
+        [StringLength(200, ErrorMessage = "Template không được vượt quá 200 ký tự")]
+        public string? Template { get; set; }
     }
 
     public class SaleOrderAddonItemDto
@@ -61,6 +68,13 @@ namespace erp_backend.Models.DTOs
         // Không bắt buộc - sẽ lấy từ Addon.Notes nếu không cung cấp
         [StringLength(500, ErrorMessage = "Ghi chú không được vượt quá 500 ký tự")]
         public string? Notes { get; set; }
+
+        // Thời gian (duration) - không bắt buộc
+        public int? Duration { get; set; }
+
+        // Template - không bắt buộc
+        [StringLength(200, ErrorMessage = "Template không được vượt quá 200 ký tự")]
+        public string? Template { get; set; }
     }
 
     public class SaleOrderWithItemsResponse
@@ -88,7 +102,9 @@ namespace erp_backend.Models.DTOs
         //public int? Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         //public decimal TotalPrice { get; set; }
-        public string? Notes { get; set; }
+        //public string? Notes { get; set; }
+        public int Duration { get; set; }
+        public string Template { get; set; } = string.Empty;
     }
 
     public class SaleOrderAddonDetailDto
@@ -99,6 +115,8 @@ namespace erp_backend.Models.DTOs
         //public int? Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         //public decimal TotalPrice { get; set; }
-        public string? Notes { get; set; }
+        //public string? Notes { get; set; }
+        public int Duration { get; set; }
+        public string Template { get; set; } = string.Empty;
     }
 }

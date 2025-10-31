@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251030072512_AddDurationAndTemplateToSaleOrderItems")]
+    partial class AddDurationAndTemplateToSaleOrderItems
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -90,13 +93,24 @@ namespace erp_backend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AddonsId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("Expiration")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
@@ -106,7 +120,7 @@ namespace erp_backend.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<int>("SaleOrderId")
+                    b.Property<int?>("ServiceId")
                         .HasColumnType("integer");
 
                     b.Property<string>("Status")
@@ -122,6 +136,9 @@ namespace erp_backend.Migrations
                     b.Property<decimal>("TaxAmount")
                         .HasColumnType("decimal(15,2)");
 
+                    b.Property<int?>("TaxId")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(15,2)");
 
@@ -133,13 +150,19 @@ namespace erp_backend.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AddonsId");
+
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CustomerId");
 
                     b.HasIndex("Expiration");
 
-                    b.HasIndex("SaleOrderId");
+                    b.HasIndex("ServiceId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("TaxId");
 
                     b.HasIndex("UserId");
 
@@ -802,11 +825,26 @@ namespace erp_backend.Migrations
 
             modelBuilder.Entity("erp_backend.Models.Contract", b =>
                 {
-                    b.HasOne("erp_backend.Models.SaleOrder", "SaleOrder")
+                    b.HasOne("erp_backend.Models.Addon", "Addon")
                         .WithMany()
-                        .HasForeignKey("SaleOrderId")
+                        .HasForeignKey("AddonsId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("erp_backend.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("erp_backend.Models.Service", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("erp_backend.Models.Tax", "Tax")
+                        .WithMany()
+                        .HasForeignKey("TaxId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("erp_backend.Models.User", "User")
                         .WithMany()
@@ -814,7 +852,13 @@ namespace erp_backend.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("SaleOrder");
+                    b.Navigation("Addon");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Service");
+
+                    b.Navigation("Tax");
 
                     b.Navigation("User");
                 });
