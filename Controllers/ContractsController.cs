@@ -368,5 +368,369 @@ namespace erp_backend.Controllers
         {
             return _context.Contracts.Any(e => e.Id == id);
         }
-    }
+
+		// ==================== PREVIEW CONTRACT HTML ====================
+		
+		// GET: api/Contracts/5/preview
+		[HttpGet("{id}/preview")]
+		public async Task<IActionResult> PreviewContract(int id)
+		{
+			try
+			{
+				// Load Contract với đầy đủ relations
+				var contract = await _context.Contracts
+					.Include(c => c.User)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.Customer)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.Tax)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.SaleOrderServices)
+							.ThenInclude(sos => sos.Service)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.SaleOrderAddons)
+							.ThenInclude(soa => soa.Addon)
+					.FirstOrDefaultAsync(c => c.Id == id);
+
+				if (contract == null)
+					return NotFound(new { message = "Không tìm thấy hợp đồng" });
+
+				if (contract.SaleOrder == null)
+					return BadRequest(new { message = "SaleOrder không tồn tại" });
+
+				var customer = contract.SaleOrder.Customer;
+				if (customer == null)
+					return BadRequest(new { message = "Customer không tồn tại" });
+
+				// Chọn template dựa vào CustomerType
+				var templateFileName = customer.CustomerType?.ToLower() == "individual" 
+					? "generate_contract_individual.html" 
+					: "generate_contract_business.html";
+				
+				var templatePath = Path.Combine(
+					Directory.GetCurrentDirectory(), 
+					"wwwroot", 
+					"Templates", 
+					templateFileName
+				);
+				
+				if (!System.IO.File.Exists(templatePath))
+					return NotFound(new { message = $"Không tìm thấy template: {templateFileName}" });
+
+				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
+				
+				// Sử dụng cùng method BindContractDataToTemplate như export PDF
+				var htmlContent = BindContractDataToTemplate(htmlTemplate, contract);
+
+				// Trả về HTML content để preview trong browser
+				return Content(htmlContent, "text/html");
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi preview hợp đồng ID: {ContractId}", id);
+				return StatusCode(500, new { message = "Lỗi server", error = ex.Message });
+			}
+		}
+
+		// ==================== EXPORT CONTRACT PDF ====================
+
+		// Xuất hợp đồng PDF
+		[HttpGet("{id}/export-contract")]
+		public async Task<IActionResult> ExportContract(int id)
+		{
+			try
+			{
+				// Bước 1: Lấy dữ liệu Contract với đầy đủ relations
+				var contract = await _context.Contracts
+					.Include(c => c.User)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.Customer)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.Tax)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.SaleOrderServices)
+							.ThenInclude(sos => sos.Service)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.SaleOrderAddons)
+							.ThenInclude(soa => soa.Addon)
+					.FirstOrDefaultAsync(c => c.Id == id);
+
+				if (contract == null)
+				{
+					return NotFound(new { message = "Không tìm thấy hợp đồng" });
+				}
+
+				if (contract.SaleOrder == null)
+				{
+					return NotFound(new { message = "Không tìm thấy thông tin SaleOrder" });
+				}
+
+				var customer = contract.SaleOrder.Customer;
+				if (customer == null)
+				{
+					return NotFound(new { message = "Không tìm thấy thông tin khách hàng" });
+				}
+
+				// Bước 2: Đọc HTML template dựa vào loại khách hàng
+				var templateFileName = customer.CustomerType?.ToLower() == "individual"
+					? "generate_contract_individual.html"
+					: "generate_contract_business.html";
+
+				var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Templates", templateFileName);
+
+				if (!System.IO.File.Exists(templatePath))
+				{
+					return NotFound(new { message = $"Không tìm thấy template hợp đồng: {templateFileName}" });
+				}
+
+				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
+
+				// Bước 3: Bind dữ liệu vào template
+				var htmlContent = BindContractDataToTemplate(htmlTemplate, contract);
+
+				// Bước 4: Sử dụng IronPDF để convert HTML sang PDF
+				var renderer = new IronPdf.ChromePdfRenderer();
+
+				// Cấu hình renderer - loại bỏ header/footer
+				renderer.RenderingOptions.PaperSize = IronPdf.Rendering.PdfPaperSize.A4;
+				renderer.RenderingOptions.MarginTop = 0;
+				renderer.RenderingOptions.MarginBottom = 0;
+				renderer.RenderingOptions.MarginLeft = 0;
+				renderer.RenderingOptions.MarginRight = 0;
+				renderer.RenderingOptions.CssMediaType = IronPdf.Rendering.PdfCssMediaType.Print;
+				renderer.RenderingOptions.PrintHtmlBackgrounds = true;
+				renderer.RenderingOptions.CreatePdfFormsFromHtml = false;
+				renderer.RenderingOptions.EnableJavaScript = false;
+
+				// Render HTML thành PDF
+				var pdf = await Task.Run(() => renderer.RenderHtmlAsPdf(htmlContent));
+
+				// Bước 5: Lấy PDF bytes
+				var pdfBytes = pdf.BinaryData;
+
+				// Bước 6: Trả về file PDF
+				var fileName = $"HopDong_{contract.Id}_{DateTime.Now:yyyyMMdd}.pdf";
+				return File(pdfBytes, "application/pdf", fileName);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi xuất hợp đồng PDF cho Contract ID: {ContractId}", id);
+				return StatusCode(500, new { message = "Lỗi server khi xuất hợp đồng", error = ex.Message });
+			}
+		}
+
+		// Helper method: Bind dữ liệu Contract vào template
+		private string BindContractDataToTemplate(string template, Contract contract)
+		{
+			var customer = contract.SaleOrder!.Customer!;
+			var now = DateTime.Now;
+
+			// Thông tin hợp đồng cơ bản
+			template = template
+				.Replace("{{ContractNumber}}", contract.Id.ToString())
+				.Replace("{{ContractYear}}", contract.CreatedAt.Year.ToString())
+				.Replace("{{Day}}", now.Day.ToString())
+				.Replace("{{Month}}", now.Month.ToString())
+				.Replace("{{Year}}", now.Year.ToString())
+				.Replace("{{ContractDate}}", contract.CreatedAt.ToString("dd/MM/yyyy"))
+				.Replace("{{ExpirationDate}}", contract.Expiration.ToString("dd/MM/yyyy"))
+				.Replace("{{Location}}", "Hà Nội");
+
+			// Thông tin Bên A (Khách hàng)
+			template = template
+				.Replace("{{CompanyBName}}", customer.CompanyName ?? customer.Name ?? "")
+				.Replace("{{CompanyBAddress}}", customer.CompanyAddress ?? customer.Address ?? "")
+				.Replace("{{CompanyBTaxCode}}", customer.TaxCode ?? "")
+				.Replace("{{CompanyBRepName}}", customer.RepresentativeName ?? customer.Name ?? "")
+				.Replace("{{CompanyBRepPosition}}", customer.RepresentativePosition ?? "")
+				.Replace("{{CompanyBRepID}}", customer.RepresentativeIdNumber ?? customer.IdNumber ?? "")
+				.Replace("{{CompanyBPhone}}", customer.RepresentativePhone ?? customer.PhoneNumber ?? "")
+				.Replace("{{CompanyBEmail}}", customer.RepresentativeEmail ?? customer.Email ?? "");
+
+			// Ngày sinh (nếu là cá nhân)
+			if (customer.BirthDate.HasValue)
+			{
+				template = template
+					.Replace("{{CustomerBirthDay}}", customer.BirthDate.Value.Day.ToString())
+					.Replace("{{CustomerBirthMonth}}", customer.BirthDate.Value.Month.ToString())
+					.Replace("{{CustomerBirthYear}}", customer.BirthDate.Value.Year.ToString());
+			}
+
+			// Thông tin tài chính từ Contract
+			template = template
+				.Replace("{{SubTotal}}", contract.SubTotal.ToString("N0"))
+				.Replace("{{Discount}}", "0")
+				.Replace("{{TaxAmount}}", contract.TaxAmount.ToString("N0"))
+				.Replace("{{TotalAmount}}", contract.TotalAmount.ToString("N0"))
+				.Replace("{{NetAmount}}", contract.TotalAmount.ToString("N0"))
+				.Replace("{{AmountInWords}}", ConvertNumberToWords(contract.TotalAmount))
+				.Replace("{{PaymentMethod}}", contract.PaymentMethod ?? "Chuyển khoản")
+				.Replace("{{Status}}", contract.Status)
+				.Replace("{{Notes}}", contract.Notes ?? "");
+
+			// Thông tin VAT Rate từ SaleOrder.Tax
+			if (contract.SaleOrder.Tax != null)
+			{
+				template = template.Replace("{{VATRate}}", contract.SaleOrder.Tax.Rate.ToString("N0"));
+				template = template.Replace("{{VATAmount}}", contract.TaxAmount.ToString("N0"));
+			}
+			else
+			{
+				template = template.Replace("{{VATRate}}", "0");
+				template = template.Replace("{{VATAmount}}", "0");
+			}
+
+			// Thông tin nhân viên phụ trách
+			if (contract.User != null)
+			{
+				template = template
+					.Replace("{{UserName}}", contract.User.Name)
+					.Replace("{{UserEmail}}", contract.User.Email)
+					.Replace("{{UserPhone}}", contract.User.PhoneNumber ?? "")
+					.Replace("{{UserPosition}}", contract.User.Position ?? "");
+			}
+
+			// Tạo bảng dịch vụ từ SaleOrder
+			var itemsHtml = GenerateContractItemsTableFromContract(contract);
+			template = template.Replace("{{Items}}", itemsHtml);
+
+			return template;
+		}
+
+		// Helper method: Tạo bảng danh sách dịch vụ từ Contract
+		private string GenerateContractItemsTableFromContract(Contract contract)
+		{
+			var items = new System.Text.StringBuilder();
+			var index = 1;
+
+			// Thêm Services từ SaleOrder
+			if (contract.SaleOrder!.SaleOrderServices != null)
+			{
+				foreach (var sos in contract.SaleOrder.SaleOrderServices)
+				{
+					var service = sos.Service;
+					var quantity = sos.Quantity ?? service?.Quantity ?? 1;
+					var lineTotal = sos.UnitPrice * quantity;
+
+					items.AppendLine($@"
+					<tr>
+						<td style='text-align: center;'>{index++}</td>
+						<td>{service?.Name ?? ""}</td>
+						<td>{service?.Description ?? ""}</td>
+						<td style='text-align: center;'>{quantity}</td>
+						<td style='text-align: right;'>{sos.UnitPrice:N0}</td>
+						<td style='text-align: right;'>{lineTotal:N0}</td>
+					</tr>");
+				}
+			}
+
+			// Thêm Addons từ SaleOrder
+			if (contract.SaleOrder.SaleOrderAddons != null)
+			{
+				foreach (var soa in contract.SaleOrder.SaleOrderAddons)
+				{
+					var addon = soa.Addon;
+					var quantity = soa.Quantity ?? addon?.Quantity ?? 1;
+					var lineTotal = soa.UnitPrice * quantity;
+
+					items.AppendLine($@"
+					<tr>
+						<td style='text-align: center;'>{index++}</td>
+						<td>{addon?.Name ?? ""}</td>
+						<td>{addon?.Description ?? ""}</td>
+						<td style='text-align: center;'>{quantity}</td>
+						<td style='text-align: right;'>{soa.UnitPrice:N0}</td>
+						<td style='text-align: right;'>{lineTotal:N0}</td>
+					</tr>");
+				}
+			}
+
+			// Nếu không có services/addons, hiển thị title của SaleOrder
+			if ((contract.SaleOrder.SaleOrderServices == null || !contract.SaleOrder.SaleOrderServices.Any()) &&
+				(contract.SaleOrder.SaleOrderAddons == null || !contract.SaleOrder.SaleOrderAddons.Any()))
+			{
+				items.AppendLine($@"
+					<tr>
+						<td style='text-align: center;'>1</td>
+						<td>{contract.SaleOrder.Title}</td>
+						<td>{contract.Notes ?? ""}</td>
+						<td style='text-align: center;'>1</td>
+						<td style='text-align: right;'>{contract.SubTotal:N0}</td>
+						<td style='text-align: right;'>{contract.SubTotal:N0}</td>
+					</tr>");
+			}
+
+			return items.ToString();
+		}
+
+		// Helper method: Convert số thành chữ (tiếng Việt)
+		private string ConvertNumberToWords(decimal number)
+		{
+			if (number == 0) return "Không đồng";
+
+			var units = new[] { "", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín" };
+			var scales = new[] { "", "nghìn", "triệu", "tỷ" };
+
+			var numStr = ((long)number).ToString();
+			var result = new System.Text.StringBuilder();
+			var scaleIndex = 0;
+
+			while (numStr.Length > 0)
+			{
+				var groupSize = Math.Min(3, numStr.Length);
+				var group = numStr.Substring(numStr.Length - groupSize);
+				numStr = numStr.Substring(0, numStr.Length - groupSize);
+
+				if (int.Parse(group) > 0)
+				{
+					var groupWords = ConvertGroupToWords(int.Parse(group), units);
+					if (result.Length > 0)
+						result.Insert(0, " ");
+					result.Insert(0, scales[scaleIndex]);
+					result.Insert(0, " ");
+					result.Insert(0, groupWords);
+				}
+
+				scaleIndex++;
+			}
+
+			return char.ToUpper(result[0]) + result.ToString().Substring(1).Trim() + " đồng chẵn";
+		}
+
+		private string ConvertGroupToWords(int number, string[] units)
+		{
+			var hundred = number / 100;
+			var ten = (number % 100) / 10;
+			var unit = number % 10;
+
+			var result = new System.Text.StringBuilder();
+
+			if (hundred > 0)
+			{
+				result.Append(units[hundred]);
+				result.Append(" trăm");
+			}
+
+			if (ten > 1)
+			{
+				if (result.Length > 0) result.Append(" ");
+				result.Append(units[ten]);
+				result.Append(" mươi");
+			}
+			else if (ten == 1)
+			{
+				if (result.Length > 0) result.Append(" ");
+				result.Append("mười");
+			}
+
+			if (unit > 0)
+			{
+				if (result.Length > 0) result.Append(" ");
+				result.Append(units[unit]);
+			}
+
+			return result.ToString();
+		}
+
+	}
 }

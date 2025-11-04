@@ -6,6 +6,8 @@ using Microsoft.OpenApi.Models;
 using erp_backend.Data;
 using erp_backend.Services;
 using IronPdf;
+using Microsoft.AspNetCore.Http.Features;
+using System.Text.Json.Serialization; // ✅ THÊM
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,8 +18,20 @@ if (!string.IsNullOrEmpty(ironPdfLicenseKey))
 	IronPdf.License.LicenseKey = ironPdfLicenseKey;
 }
 
-// Add services to the container.
-builder.Services.AddControllers();
+// Add services to the container.	
+// ✅ CẤU HÌNH JSON SERIALIZER
+builder.Services.AddControllers()
+	.AddJsonOptions(options =>
+	{
+		// Bỏ qua navigation properties null để tránh circular reference
+		options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+		
+		// Hoặc dùng cách này để bỏ qua tất cả null values
+		// options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+		
+		// Format JSON cho dễ đọc (optional)
+		options.JsonSerializerOptions.WriteIndented = true;
+	});
 
 // Add Entity Framework and PostgreSQL
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -68,6 +82,9 @@ builder.Services.AddScoped<JwtService>();
 // Add Email Service
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+// Add FileService
+builder.Services.AddScoped<IFileService, FileService>();
+
 // Add Authorization
 builder.Services.AddAuthorization();
 
@@ -81,6 +98,12 @@ builder.Services.AddCors(options =>
 			  .AllowAnyHeader()
 			  .AllowCredentials();
 	});
+});
+
+// Config file upload size limit
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
 });
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -116,6 +139,9 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// Ensure static files middleware is included
+app.UseStaticFiles();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

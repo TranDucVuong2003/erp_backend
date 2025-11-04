@@ -16,16 +16,17 @@ namespace erp_backend.Data
         public DbSet<SaleOrder> SaleOrders { get; set; }
         public DbSet<Service> Services { get; set; }
         public DbSet<Addon> Addons { get; set; }
-		public DbSet<JwtToken> JwtTokens { get; set; }
+        public DbSet<JwtToken> JwtTokens { get; set; }
         public DbSet<Ticket> Tickets { get; set; }
         public DbSet<TicketCategory> TicketCategories { get; set; }
         public DbSet<TicketLog> TicketLogs { get; set; }
+        public DbSet<TicketLogAttachment> TicketLogAttachments { get; set; } // ✅ THÊM
         public DbSet<Tax> Taxes { get; set; }
         public DbSet<Contract> Contracts { get; set; }
         public DbSet<SaleOrderService> SaleOrderServices { get; set; }
         public DbSet<SaleOrderAddon> SaleOrderAddons { get; set; }
 
-		protected override void OnModelCreating(ModelBuilder modelBuilder)
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             
@@ -333,6 +334,28 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.TicketId);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.CreatedAt);
+            });
+
+            // Configure TicketLogAttachment entity
+            modelBuilder.Entity<TicketLogAttachment>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.FilePath).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.FileType).HasMaxLength(100);
+                entity.Property(e => e.Category).HasMaxLength(50);
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                // Foreign Key relationship
+                entity.HasOne(e => e.TicketLog)
+                      .WithMany(tl => tl.Attachments)
+                      .HasForeignKey(e => e.TicketLogId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Indexes
+                entity.HasIndex(e => e.TicketLogId);
+                entity.HasIndex(e => e.Category);
             });
 
             // Configure SaleOrderService entity (junction table)
