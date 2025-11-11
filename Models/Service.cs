@@ -27,6 +27,8 @@ namespace erp_backend.Models
 
         public int? TaxId { get; set; } 
 
+		public int? CategoryId { get; set; }
+
         [StringLength(2000)]
         public string? Notes { get; set; }
 
@@ -34,7 +36,9 @@ namespace erp_backend.Models
 
         public DateTime? UpdatedAt { get; set; }
 
-        // Navigation property
+        // Navigation properties
         public Tax? Tax { get; set; } 
+
+		public Category_service_addons? CategoryServiceAddons { get; set; }
     }
 }

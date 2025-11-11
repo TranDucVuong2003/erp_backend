@@ -1243,7 +1243,7 @@
             white-space: nowrap;
           "
                class="ft01">
-                <i>Nhân viên thực hiện hợp đồng: Nguyễn Văn A</i>
+                <i>Nhân viên thực hiện hợp đồng: {{UserName}}</i>
             </p>
             <!-- Địa chỉ -->
             <p style="
@@ -1848,11 +1848,11 @@
         "
              class="bsd">
             <!-- <img
-              width="892"
-              height="1263"
-              src="../assets/img/File_mau003.png"
-              alt="background image"
-            /> -->
+      width="892"
+      height="1263"
+      src="../assets/img/File_mau003.png"
+      alt="background image"
+    /> -->
             <p style="
             position: absolute;
             top: 1205px;
@@ -1860,7 +1860,7 @@
             white-space: nowrap;
           "
                class="ft01">
-                <i>Nhân viên thực hiện hợp đồng: Nguyễn Văn A</i>
+                <i>Nhân viên thực hiện hợp đồng: {{UserName}}</i>
             </p>
             <p style="
             position: absolute;
@@ -1898,109 +1898,37 @@
                 <table border="1"
                        cellpadding="8"
                        cellspacing="0"
-                       style="width: 100%; border-collapse: collapse; font-size: 12px">
+                       style="width: 100%; border-collapse: collapse; font-size: 12px; font-family: Arial, sans-serif;">
                     <thead>
                         <tr style="background-color: #f5f5f5">
-                            <th style="width: 5%; text-align: center; border: 1px solid #000">
-                                <b>STT</b>
-                            </th>
-                            <th style="width: 20%; text-align: center; border: 1px solid #000">
-                                <b>Khoản mục</b>
-                            </th>
-                            <th style="width: 25%; text-align: center; border: 1px solid #000">
-                                <b>Dịch Vụ</b>
-                            </th>
-                            <th style="width: 15%; text-align: center; border: 1px solid #000">
-                                <b>Thời hạn</b>
-                            </th>
-                            <th style="width: 10%; text-align: center; border: 1px solid #000">
-                                <b>Giảm</b>
-                            </th>
-                            <th style="width: 25%; text-align: center; border: 1px solid #000">
-                                <b>Thành tiền(VND)</b>
-                            </th>
+                            <th style="width: 5%; text-align: center; border: 1px solid #000">STT</th>
+                            <th style="width: 15%; text-align: center; border: 1px solid #000">Khoản mục</th>
+                            <th style="width: 10%; text-align: center; border: 1px solid #000">Mẫu</th>
+                            <th style="width: 30%; text-align: center; border: 1px solid #000">Dịch Vụ</th>
+                            <th style="width: 10%; text-align: center; border: 1px solid #000">Thời hạn</th>
+                            <th style="width: 10%; text-align: center; border: 1px solid #000">Giảm</th>
+                            <th style="width: 20%; text-align: center; border: 1px solid #000">Thành tiền(VND)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td style="text-align: center; border: 1px solid #000">1</td>
-                            <td style="border: 1px solid #000">...</td>
-                            <td style="border: 1px solid #000">...</td>
-                            <td style="text-align: center; border: 1px solid #000">...</td>
-                            <td style="text-align: center; border: 1px solid #000">...</td>
-                            <td style="text-align: right; border: 1px solid #000">...</td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: center; border: 1px solid #000">2</td>
-                            <td style="border: 1px solid #000">...</td>
-                            <td style="border: 1px solid #000">...</td>
-                            <td style="text-align: center; border: 1px solid #000">...</td>
-                            <td style="text-align: center; border: 1px solid #000">...</td>
-                            <td style="text-align: right; border: 1px solid #000">...</td>
-                        </tr>
-                        <tr style="background-color: #f9f9f9">
-                            <td colspan="5"
-                                style="
-                    text-align: right;
-                    border: 1px solid #000;
-                    font-weight: bold;
-                  ">
-                                Cộng
-                            </td>
-                            <td style="
-                    text-align: right;
-                    border: 1px solid #000;
-                    font-weight: bold;
-                  ">
-                                ...
-                            </td>
-                        </tr>
-                        <tr style="background-color: #f9f9f9">
-                            <td colspan="5"
-                                style="text-align: right; border: 1px solid #000">
-                                Giảm
-                            </td>
-                            <td style="text-align: right; border: 1px solid #000">...</td>
-                        </tr>
-                        <tr style="background-color: #f9f9f9">
-                            <td colspan="5"
-                                style="text-align: right; border: 1px solid #000">
-                                Còn
-                            </td>
-                            <td style="text-align: right; border: 1px solid #000">...</td>
-                        </tr>
-                        <tr style="background-color: #e8f4fd">
-                            <td colspan="5"
-                                style="
-                    text-align: right;
-                    border: 1px solid #000;
-                    font-weight: bold;
-                  ">
-                                Thanh Toán
-                            </td>
-                            <td style="
-                    text-align: right;
-                    border: 1px solid #000;
-                    font-weight: bold;
-                  ">
-                                ...
-                            </td>
-                        </tr>
+                        {{Items}}
                     </tbody>
                 </table>
+                <p style=" 
+                    margin-top: 14px; 
+                    text-align: right; 
+                    "
+                   class="ft06">
+                    ( Bằng chữ: {{AmountInWords}} )
+                </p>
             </div>
+            
+                
+   
+
             <p style="
             position: absolute;
-            top: 330px;
-            right: 40px;
-            white-space: nowrap;
-          "
-               class="ft06">
-                ( Bằng chữ: ... )
-            </p>
-            <p style="
-            position: absolute;
-            top: 376px;
+            top: 396px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2009,7 +1937,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 399px;
+            top: 419px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2019,7 +1947,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 423px;
+            top: 443px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2029,7 +1957,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 447px;
+            top: 467px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2039,7 +1967,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 469px;
+            top: 489px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2049,7 +1977,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 493px;
+            top: 513px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2060,7 +1988,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 514px;
+            top: 534px;
             left: 51px;
             white-space: nowrap;
           "
@@ -2069,7 +1997,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 538px;
+            top: 558px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2080,7 +2008,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 560px;
+            top: 580px;
             left: 51px;
             white-space: nowrap;
           "
@@ -2089,7 +2017,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 587px;
+            top: 607px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2100,7 +2028,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 609px;
+            top: 629px;
             left: 51px;
             white-space: nowrap;
           "
@@ -2109,7 +2037,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 643px;
+            top: 663px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2118,7 +2046,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 665px;
+            top: 685px;
             left: 61px;
             white-space: nowrap;
             line-height: 1.6;
@@ -2128,7 +2056,7 @@
             </p>
             <div style="
             position: absolute;
-            top: 689px;
+            top: 709px;
             left: 90px;
             white-space: nowrap;
             line-height: 1.6;
@@ -2150,7 +2078,7 @@
             </div>
             <p style="
             position: absolute;
-            top: 790px;
+            top: 810px;
             left: 61px;
             white-space: nowrap;
           "
@@ -2159,7 +2087,7 @@
             </p>
             <div style="
             position: absolute;
-            top: 814px;
+            top: 834px;
             left: 90px;
             white-space: nowrap;
             line-height: 1.6;
@@ -2194,7 +2122,7 @@
             </div>
             <p style="
             position: absolute;
-            top: 1005px;
+            top: 1025px;
             left: 50px;
             white-space: nowrap;
           "
@@ -2203,7 +2131,7 @@
             </p>
             <p style="
             position: absolute;
-            top: 1032px;
+            top: 1052px;
             left: 61px;
             white-space: nowrap;
           "
@@ -2212,7 +2140,7 @@
             </p>
             <div style="
             position: absolute;
-            top: 1058px;
+            top: 1078px;
             left: 90px;
             white-space: nowrap;
             line-height: 1.6;
@@ -2257,7 +2185,7 @@
             white-space: nowrap;
           "
                class="ft01">
-                <i>Nhân viên thực hiện hợp đồng: Nguyễn Văn A</i>
+                <i>Nhân viên thực hiện hợp đồng: {{UserName}}</i>
             </p>
             <p style="
             position: absolute;
@@ -2341,9 +2269,9 @@
             white-space: nowrap;
           "
                class="ft06">
-                <b>Thông tin 1</b>
+                <b>Thông tin</b>
             </p>
-            <p style="
+            <!--<p style="
             position: absolute;
             top: 304px;
             left: 457px;
@@ -2351,7 +2279,7 @@
           "
                class="ft06">
                 <b>Thông tin 2</b>
-            </p>
+            </p>-->
             <!-- Thông tin 1 -->
             <!-- individual -->
             <div style="
@@ -2362,15 +2290,15 @@
             line-height: 1.6;
           ">
                 <div class="col-6">
-                    <p class="ft08">Họ tên: ...</p>
-                    <p class="ft08">Số Điện thoại: <span id="phone_1">...</span></p>
-                    <p class="ft08">Email: <span>...</span></p>
+                    <p class="ft08">Họ tên: {{CompanyBName}}</p>
+                    <p class="ft08">Số Điện thoại: <span id="phone_1">{{CompanyBPhone}}</span></p>
+                    <p class="ft08">Email: <span>{{CompanyBEmail}}</span></p>
                 </div>
-                <div class="col-6" style="left: 400px">
+                <!--<div class="col-6" style="left: 400px">
                     <p class="ft08">Họ tên: <span id="name"> ... </span></p>
                     <p class="ft08">Số điện thoại: ...</p>
                     <p class="ft08">Email: <span>...</span></p>
-                </div>
+                </div>-->
             </div>
 
             <p style="
@@ -2448,7 +2376,7 @@
         </div>
     </div>
 
-    <script>
+    <!--<script>
         function printContract() {
             window.print();
         }
@@ -2481,10 +2409,10 @@
                     div3.style.paddingBottom = "0px";
                 });
         }
-    </script>
+    </script>-->
 
     <!-- Code injected by live-server -->
-    <script>
+    <!--<script>
         // <![CDATA[  <-- For SVG support
         if ("WebSocket" in window) {
             (function () {
@@ -2549,9 +2477,9 @@
     </div>
 
     <div style="all: initial !important"></div>
-    <div id="scrnli_recorder_root"></div>
+    <div id="scrnli_recorder_root"></div>-->
     <!-- Code injected by live-server -->
-    <script>
+    <!--<script>
         // <![CDATA[  <-- For SVG support
         if ("WebSocket" in window) {
             (function () {
@@ -2601,7 +2529,7 @@
             );
         }
         // ]]>
-    </script>
+    </script>-->
 
     <div id="scrnli_recorder_root"></div>
     <iframe src="chrome-extension://ijejnggjjphlenbhmjhhgcdpehhacaal/audio-devices.html"

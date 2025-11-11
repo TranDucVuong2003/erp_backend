@@ -22,36 +22,48 @@ namespace erp_backend.Controllers
 
 		// Lấy danh sách tất cả addons
 		[HttpGet]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<IEnumerable<Addon>>> GetAddons()
 		{
-			return await _context.Addons.ToListAsync();
+			return await _context.Addons
+				.Include(a => a.Tax)
+				.Include(a => a.CategoryServiceAddons)
+				.ToListAsync();
 		}
 
 		// Lấy addons đang hoạt động
 		[HttpGet("active")]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<IEnumerable<Addon>>> GetActiveAddons()
 		{
-			return await _context.Addons.Where(a => a.IsActive).ToListAsync();
+			return await _context.Addons
+				.Include(a => a.Tax)
+				.Include(a => a.CategoryServiceAddons)
+				.Where(a => a.IsActive)
+				.ToListAsync();
 		}
 
 		// Lấy addons theo type
 		[HttpGet("by-type/{type}")]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<IEnumerable<Addon>>> GetAddonsByType(string type)
 		{
 			return await _context.Addons
+				.Include(a => a.Tax)
+				.Include(a => a.CategoryServiceAddons)
 				.Where(a => a.Type == type)
 				.ToListAsync();
 		}
 
 		// Lấy addon theo ID
 		[HttpGet("{id}")]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<Addon>> GetAddon(int id)
 		{
-			var addon = await _context.Addons.FindAsync(id);
+			var addon = await _context.Addons
+				.Include(a => a.Tax)
+				.Include(a => a.CategoryServiceAddons)
+				.FirstOrDefaultAsync(a => a.Id == id);
 
 			if (addon == null)
 			{
@@ -63,7 +75,7 @@ namespace erp_backend.Controllers
 
 		// Tạo addon mới
 		[HttpPost]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<Addon>> CreateAddon(Addon addon)
 		{
 			try
@@ -100,7 +112,7 @@ namespace erp_backend.Controllers
 
 		// Cập nhật addon
 		[HttpPut("{id}")]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<UpdateAddonResponse>> UpdateAddon(int id, [FromBody] Dictionary<string, object?> updateData)
 		{
 			try
@@ -255,7 +267,7 @@ namespace erp_backend.Controllers
 
 		// Xóa addon
 		[HttpDelete("{id}")]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<DeleteAddonResponse>> DeleteAddon(int id)
 		{
 			try

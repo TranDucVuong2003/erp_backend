@@ -105,6 +105,8 @@ namespace erp_backend.Models.DTOs
         public string ServiceName { get; set; } = string.Empty;
         public decimal UnitPrice { get; set; }
         public int? Quantity { get; set; }
+        public int? Duration { get; set; }
+        public string? Template { get; set; }
     }
 
     public class AddonItemDto
@@ -113,5 +115,7 @@ namespace erp_backend.Models.DTOs
         public string AddonName { get; set; } = string.Empty;
         public decimal UnitPrice { get; set; }
         public int? Quantity { get; set; }
+        public int? Duration { get; set; }
+        public string? Template { get; set; }
     }
 }

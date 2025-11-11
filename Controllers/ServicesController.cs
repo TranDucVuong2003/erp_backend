@@ -22,36 +22,48 @@ namespace erp_backend.Controllers
 
         // L?y danh sách t?t c? services
         [HttpGet]
-        [Authorize]
+        //[Authorize]
         public async Task<ActionResult<IEnumerable<Service>>> GetServices()
         {
-            return await _context.Services.ToListAsync();
+            return await _context.Services
+                .Include(s => s.Tax)
+                .Include(s => s.CategoryServiceAddons)
+                .ToListAsync();
         }
 
         // L?y services ?ang ho?t ??ng
         [HttpGet("active")]
-        [Authorize]
+        //[Authorize]
         public async Task<ActionResult<IEnumerable<Service>>> GetActiveServices()
         {
-            return await _context.Services.Where(s => s.IsActive).ToListAsync();
+            return await _context.Services
+                .Include(s => s.Tax)
+                .Include(s => s.CategoryServiceAddons)
+                .Where(s => s.IsActive)
+                .ToListAsync();
         }
 
         // L?y services theo category
         [HttpGet("by-category/{category}")]
-        [Authorize]
+        //[Authorize]
         public async Task<ActionResult<IEnumerable<Service>>> GetServicesByCategory(string category)
         {
             return await _context.Services
+                .Include(s => s.Tax)
+                .Include(s => s.CategoryServiceAddons)
                 .Where(s => s.Category == category)
                 .ToListAsync();
         }
 
         // L?y service theo ID
         [HttpGet("{id}")]
-        [Authorize]
+        //[Authorize]
         public async Task<ActionResult<Service>> GetService(int id)
         {
-            var service = await _context.Services.FindAsync(id);
+            var service = await _context.Services
+                .Include(s => s.Tax)
+                .Include(s => s.CategoryServiceAddons)
+                .FirstOrDefaultAsync(s => s.Id == id);
 
             if (service == null)
             {
@@ -63,7 +75,7 @@ namespace erp_backend.Controllers
 
         // T?o service m?i
         [HttpPost]
-        [Authorize]
+        //[Authorize]
         public async Task<ActionResult<Service>> CreateService(Service service)
         {
             try
@@ -100,7 +112,7 @@ namespace erp_backend.Controllers
 
         // C?p nh?t service
         [HttpPut("{id}")]
-        [Authorize]
+        //[Authorize]
         public async Task<ActionResult<UpdateServiceResponse>> UpdateService(int id, [FromBody] Dictionary<string, object?> updateData)
         {
             try
@@ -255,7 +267,7 @@ namespace erp_backend.Controllers
 
         // Xóa service
         [HttpDelete("{id}")]
-        [Authorize]
+        //[Authorize]
         public async Task<ActionResult<DeleteServiceResponse>> DeleteService(int id)
         {
             try

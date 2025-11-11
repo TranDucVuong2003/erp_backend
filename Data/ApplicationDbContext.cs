@@ -20,11 +20,15 @@ namespace erp_backend.Data
         public DbSet<Ticket> Tickets { get; set; }
         public DbSet<TicketCategory> TicketCategories { get; set; }
         public DbSet<TicketLog> TicketLogs { get; set; }
-        public DbSet<TicketLogAttachment> TicketLogAttachments { get; set; } // ✅ THÊM
+        public DbSet<TicketLogAttachment> TicketLogAttachments { get; set; }
         public DbSet<Tax> Taxes { get; set; }
         public DbSet<Contract> Contracts { get; set; }
         public DbSet<SaleOrderService> SaleOrderServices { get; set; }
         public DbSet<SaleOrderAddon> SaleOrderAddons { get; set; }
+        public DbSet<Category_service_addons> CategoryServiceAddons { get; set; }
+        public DbSet<Quote> Quotes { get; set; }
+        public DbSet<QuoteService> QuoteServices { get; set; }
+        public DbSet<QuoteAddon> QuoteAddons { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -129,11 +133,18 @@ namespace erp_backend.Data
 					  .HasForeignKey(e => e.TaxId)
 					  .OnDelete(DeleteBehavior.Restrict);
 
+				// Foreign Key relationship with Category_service_addons
+				entity.HasOne(e => e.CategoryServiceAddons)
+					  .WithMany(c => c.Services)
+					  .HasForeignKey(e => e.CategoryId)
+					  .OnDelete(DeleteBehavior.SetNull);
+
 				// Indexes
 				entity.HasIndex(e => e.Name);
 				entity.HasIndex(e => e.Category);
 				entity.HasIndex(e => e.IsActive);
 				entity.HasIndex(e => e.TaxId);
+				entity.HasIndex(e => e.CategoryId);
 			});
 
 			// Configure Addon entity
@@ -156,11 +167,18 @@ namespace erp_backend.Data
 					  .HasForeignKey(e => e.TaxId)
 					  .OnDelete(DeleteBehavior.Restrict);
 
+				// Foreign Key relationship with Category_service_addons
+				entity.HasOne(e => e.CategoryServiceAddons)
+					  .WithMany(c => c.Addons)
+					  .HasForeignKey(e => e.CategoryId)
+					  .OnDelete(DeleteBehavior.SetNull);
+
 				// Indexes
 				entity.HasIndex(e => e.Name);
 				entity.HasIndex(e => e.Type);
 				entity.HasIndex(e => e.IsActive);
-				entity.HasIndex(e => e.TaxId); // ✅ THÊM index cho TaxId
+				entity.HasIndex(e => e.TaxId);
+				entity.HasIndex(e => e.CategoryId);
 			});
 
 			// Configure SaleOrder entity
@@ -410,6 +428,115 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.SaleOrderId);
                 entity.HasIndex(e => e.AddonId);
                 entity.HasIndex(e => new { e.SaleOrderId, e.AddonId }).IsUnique();
+            });
+
+            // Configure Category_service_addons entity
+            modelBuilder.Entity<Category_service_addons>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Indexes
+                entity.HasIndex(e => e.Name);
+            });
+
+            // Configure Quote entity
+            modelBuilder.Entity<Quote>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.CustomServiceJson).HasMaxLength(2000).HasColumnName("CustomService");
+                entity.Property(e => e.FilePath).HasMaxLength(1000);
+                entity.Property(e => e.Amount).HasColumnType("decimal(15,2)").IsRequired();
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Foreign Key relationships
+                entity.HasOne(e => e.Customer)
+                      .WithMany()
+                      .HasForeignKey(e => e.CustomerId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.Service)
+                      .WithMany()
+                      .HasForeignKey(e => e.ServiceId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.Addon)
+                      .WithMany()
+                      .HasForeignKey(e => e.AddonId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // ✅ THÊM: Foreign key relationship với User (CreatedByUser)
+                entity.HasOne(e => e.CreatedByUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.CreatedByUserId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // ✅ THÊM: Foreign key relationship với Category_service_addons
+                entity.HasOne(e => e.CategoryServiceAddon)
+                      .WithMany()
+                      .HasForeignKey(e => e.CategoryServiceAddonId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Indexes
+                entity.HasIndex(e => e.CustomerId);
+                entity.HasIndex(e => e.ServiceId);
+                entity.HasIndex(e => e.AddonId);
+                entity.HasIndex(e => e.CreatedByUserId); // ✅ THÊM index
+                entity.HasIndex(e => e.CategoryServiceAddonId); // ✅ THÊM index
+                entity.HasIndex(e => e.CreatedAt);
+            });
+
+            // Configure QuoteService entity (junction table)
+            modelBuilder.Entity<QuoteService>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Foreign Key relationships
+                entity.HasOne(e => e.Quote)
+                      .WithMany(q => q.QuoteServices)
+                      .HasForeignKey(e => e.QuoteId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Service)
+                      .WithMany()
+                      .HasForeignKey(e => e.ServiceId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Indexes
+                entity.HasIndex(e => e.QuoteId);
+                entity.HasIndex(e => e.ServiceId);
+            });
+
+            // Configure QuoteAddon entity (junction table)
+            modelBuilder.Entity<QuoteAddon>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Foreign Key relationships
+                entity.HasOne(e => e.Quote)
+                      .WithMany(q => q.QuoteAddons)
+                      .HasForeignKey(e => e.QuoteId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Addon)
+                      .WithMany()
+                      .HasForeignKey(e => e.AddonId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Indexes
+                entity.HasIndex(e => e.QuoteId);
+                entity.HasIndex(e => e.AddonId);
             });
         }
     }

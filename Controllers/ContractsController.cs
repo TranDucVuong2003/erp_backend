@@ -335,14 +335,18 @@ namespace erp_backend.Controllers
                         ServiceId = sos.ServiceId,
                         ServiceName = sos.Service?.Name ?? "",
                         UnitPrice = sos.UnitPrice,
-                        Quantity = sos.Quantity
+                        Quantity = sos.Quantity,
+                        Duration = sos.duration,
+                        Template = sos.template
                     }).ToList() ?? new(),
                     Addons = contract.SaleOrder.SaleOrderAddons?.Select(soa => new AddonItemDto
                     {
                         AddonId = soa.AddonId,
                         AddonName = soa.Addon?.Name ?? "",
                         UnitPrice = soa.UnitPrice,
-                        Quantity = soa.Quantity
+                        Quantity = soa.Quantity,
+                        Duration = soa.duration,
+                        Template = soa.template
                     }).ToList() ?? new()
                 } : null,
                 UserId = contract.UserId,
@@ -602,62 +606,143 @@ namespace erp_backend.Controllers
 		{
 			var items = new System.Text.StringBuilder();
 			var index = 1;
+			decimal subTotal = 0;
 
 			// Thêm Services từ SaleOrder
-			if (contract.SaleOrder!.SaleOrderServices != null)
+			if (contract.SaleOrder!.SaleOrderServices != null && contract.SaleOrder.SaleOrderServices.Any())
 			{
 				foreach (var sos in contract.SaleOrder.SaleOrderServices)
 				{
 					var service = sos.Service;
-					var quantity = sos.Quantity ?? service?.Quantity ?? 1;
+					var quantity = sos.Quantity ?? (service?.Quantity ?? 1);
 					var lineTotal = sos.UnitPrice * quantity;
+					subTotal += lineTotal;
 
 					items.AppendLine($@"
 					<tr>
-						<td style='text-align: center;'>{index++}</td>
-						<td>{service?.Name ?? ""}</td>
-						<td>{service?.Description ?? ""}</td>
-						<td style='text-align: center;'>{quantity}</td>
-						<td style='text-align: right;'>{sos.UnitPrice:N0}</td>
-						<td style='text-align: right;'>{lineTotal:N0}</td>
+						<td style='text-align: center; border: 1px solid #000'>{index++}</td>
+						<td style='border: 1px solid #000'>Service</td>
+						<td style='border: 1px solid #000'>{sos.template ?? ""}</td>
+						<td style='border: 1px solid #000'>{service?.Name ?? ""}</td>
+						<td style='text-align: center; border: 1px solid #000'>{sos.duration} tháng</td>
+						<td style='text-align: right; border: 1px solid #000'>0</td>
+						<td style='text-align: right; border: 1px solid #000'>{lineTotal:N0}</td>
 					</tr>");
 				}
 			}
 
 			// Thêm Addons từ SaleOrder
-			if (contract.SaleOrder.SaleOrderAddons != null)
+			if (contract.SaleOrder.SaleOrderAddons != null && contract.SaleOrder.SaleOrderAddons.Any())
 			{
 				foreach (var soa in contract.SaleOrder.SaleOrderAddons)
 				{
 					var addon = soa.Addon;
-					var quantity = soa.Quantity ?? addon?.Quantity ?? 1;
+					var quantity = soa.Quantity ?? (addon?.Quantity ?? 1);
 					var lineTotal = soa.UnitPrice * quantity;
+					subTotal += lineTotal;
 
 					items.AppendLine($@"
 					<tr>
-						<td style='text-align: center;'>{index++}</td>
-						<td>{addon?.Name ?? ""}</td>
-						<td>{addon?.Description ?? ""}</td>
-						<td style='text-align: center;'>{quantity}</td>
-						<td style='text-align: right;'>{soa.UnitPrice:N0}</td>
-						<td style='text-align: right;'>{lineTotal:N0}</td>
+						<td style='text-align: center; border: 1px solid #000'>{index++}</td>
+						<td style='border: 1px solid #000'>Addon</td>
+						<td style='border: 1px solid #000'>{soa.template ?? ""}</td>
+						<td style='border: 1px solid #000'>{addon?.Name ?? ""}</td>
+						<td style='text-align: center; border: 1px solid #000'>{soa.duration} tháng</td>
+						<td style='text-align: right; border: 1px solid #000'>0</td>
+						<td style='text-align: right; border: 1px solid #000'>{lineTotal:N0}</td>
 					</tr>");
-				}
+				}	
 			}
+
+			// Thêm các dòng tổng hợp
+			items.AppendLine($@"
+			<tr style='background-color: #f9f9f9'>
+				<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+					<b>Cộng</b>
+				</td>
+				<td style='text-align: right; border: 1px solid #000;'>
+					<b>{subTotal:N0}</b>
+				</td>
+			</tr>
+			<tr style='background-color: #f9f9f9'>
+				<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+					<b>Giảm</b>
+				</td>
+				<td style='text-align: right; border: 1px solid #000;'>
+					<b>0</b>
+				</td>
+			</tr>");
+
+			// Thêm dòng VAT nếu có
+			if (contract.TaxAmount > 0 && contract.SaleOrder.Tax != null)
+			{
+				items.AppendLine($@"
+			<tr style='background-color: #f9f9f9'>
+				<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+					<b>VAT ({contract.SaleOrder.Tax.Rate}%)</b>
+				</td>
+				<td style='text-align: right; border: 1px solid #000;'>
+					<b>{contract.TaxAmount:N0}</b>
+				</td>
+			</tr>");
+			}
+			
+			items.AppendLine($@"
+			<tr style='background-color: #e8f4fd'>
+				<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+					<b>Thanh Toán</b>
+				</td>
+				<td style='text-align: right; border: 1px solid #000;'>
+					<b>{contract.TotalAmount:N0}</b>
+				</td>
+		
+");
 
 			// Nếu không có services/addons, hiển thị title của SaleOrder
 			if ((contract.SaleOrder.SaleOrderServices == null || !contract.SaleOrder.SaleOrderServices.Any()) &&
 				(contract.SaleOrder.SaleOrderAddons == null || !contract.SaleOrder.SaleOrderAddons.Any()))
 			{
+				items.Clear();
 				items.AppendLine($@"
-					<tr>
-						<td style='text-align: center;'>1</td>
-						<td>{contract.SaleOrder.Title}</td>
-						<td>{contract.Notes ?? ""}</td>
-						<td style='text-align: center;'>1</td>
-						<td style='text-align: right;'>{contract.SubTotal:N0}</td>
-						<td style='text-align: right;'>{contract.SubTotal:N0}</td>
-					</tr>");
+				<tr>
+					<td style='text-align: center; border: 1px solid #000'>1</td>
+					<td style='border: 1px solid #000'>General</td>
+					<td style='border: 1px solid #000'>N/A</td>
+					<td style='border: 1px solid #000'>{contract.SaleOrder.Title}</td>
+					<td style='text-align: center; border: 1px solid #000'>N/A</td>
+					<td style='text-align: right; border: 1px solid #000'>0</td>
+					<td style='text-align: right; border: 1px solid #000'>{contract.SubTotal:N0}</td>
+				</tr>");
+
+				// Thêm dòng VAT nếu có
+				if (contract.TaxAmount > 0 && contract.SaleOrder.Tax != null)
+				{
+					items.AppendLine($@"
+				<tr style='background-color: #f9f9f9'>
+					<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+						<b>VAT ({contract.SaleOrder.Tax.Rate}%)</b>
+					</td>
+					<td style='text-align: right; border: 1px solid #000;'>
+						<b>{contract.TaxAmount:N0}</b>
+					</td>
+				</tr>");
+				}
+
+				items.AppendLine($@"
+				<tr style='background-color: #e8f4fd'>
+					<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+						<b>Thanh Toán</b>
+					</td>
+					<td style='text-align: right; border: 1px solid #000;'>
+						<b>{contract.TotalAmount:N0}</b>
+					</td>
+				</tr>
+				<tr style='border: none;'>
+					<td colspan='7' style='text-align: right; border: none;'>
+						<b>Bằng chữ: {ConvertNumberToWords(contract.TotalAmount)}</b>
+					</td>
+				</tr>
+");
 			}
 
 			return items.ToString();

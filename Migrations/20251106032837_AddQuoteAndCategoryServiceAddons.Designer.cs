@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251106032837_AddQuoteAndCategoryServiceAddons")]
+    partial class AddQuoteAndCategoryServiceAddons
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -374,16 +377,10 @@ namespace erp_backend.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(15,2)");
 
-                    b.Property<int?>("CategoryServiceAddonId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<int?>("CreatedByUserId")
-                        .HasColumnType("integer");
 
                     b.Property<string>("CustomServiceJson")
                         .HasMaxLength(2000)
@@ -407,97 +404,13 @@ namespace erp_backend.Migrations
 
                     b.HasIndex("AddonId");
 
-                    b.HasIndex("CategoryServiceAddonId");
-
                     b.HasIndex("CreatedAt");
-
-                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("ServiceId");
 
                     b.ToTable("Quotes");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.QuoteAddon", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AddonId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("QuoteId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AddonId");
-
-                    b.HasIndex("QuoteId");
-
-                    b.ToTable("QuoteAddons");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.QuoteService", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("QuoteId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("QuoteId");
-
-                    b.HasIndex("ServiceId");
-
-                    b.ToTable("QuoteServices");
                 });
 
             modelBuilder.Entity("erp_backend.Models.SaleOrder", b =>
@@ -1071,16 +984,6 @@ namespace erp_backend.Migrations
                         .HasForeignKey("AddonId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("erp_backend.Models.Category_service_addons", "CategoryServiceAddon")
-                        .WithMany()
-                        .HasForeignKey("CategoryServiceAddonId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("erp_backend.Models.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("erp_backend.Models.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
@@ -1093,49 +996,7 @@ namespace erp_backend.Migrations
 
                     b.Navigation("Addon");
 
-                    b.Navigation("CategoryServiceAddon");
-
-                    b.Navigation("CreatedByUser");
-
                     b.Navigation("Customer");
-
-                    b.Navigation("Service");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.QuoteAddon", b =>
-                {
-                    b.HasOne("erp_backend.Models.Addon", "Addon")
-                        .WithMany()
-                        .HasForeignKey("AddonId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("erp_backend.Models.Quote", "Quote")
-                        .WithMany("QuoteAddons")
-                        .HasForeignKey("QuoteId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Addon");
-
-                    b.Navigation("Quote");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.QuoteService", b =>
-                {
-                    b.HasOne("erp_backend.Models.Quote", "Quote")
-                        .WithMany("QuoteServices")
-                        .HasForeignKey("QuoteId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("erp_backend.Models.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Quote");
 
                     b.Navigation("Service");
                 });
@@ -1295,13 +1156,6 @@ namespace erp_backend.Migrations
                     b.Navigation("Addons");
 
                     b.Navigation("Services");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.Quote", b =>
-                {
-                    b.Navigation("QuoteAddons");
-
-                    b.Navigation("QuoteServices");
                 });
 
             modelBuilder.Entity("erp_backend.Models.SaleOrder", b =>
