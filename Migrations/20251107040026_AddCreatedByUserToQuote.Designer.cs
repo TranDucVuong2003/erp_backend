@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251107040026_AddCreatedByUserToQuote")]
+    partial class AddCreatedByUserToQuote
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -374,9 +377,6 @@ namespace erp_backend.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(15,2)");
 
-                    b.Property<int?>("CategoryServiceAddonId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -407,8 +407,6 @@ namespace erp_backend.Migrations
 
                     b.HasIndex("AddonId");
 
-                    b.HasIndex("CategoryServiceAddonId");
-
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("CreatedByUserId");
@@ -437,7 +435,8 @@ namespace erp_backend.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Notes")
-                        .HasColumnType("text");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
@@ -446,7 +445,7 @@ namespace erp_backend.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric");
+                        .HasColumnType("decimal(15,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -474,7 +473,8 @@ namespace erp_backend.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Notes")
-                        .HasColumnType("text");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
@@ -486,7 +486,7 @@ namespace erp_backend.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric");
+                        .HasColumnType("decimal(15,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1071,15 +1071,9 @@ namespace erp_backend.Migrations
                         .HasForeignKey("AddonId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("erp_backend.Models.Category_service_addons", "CategoryServiceAddon")
-                        .WithMany()
-                        .HasForeignKey("CategoryServiceAddonId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("erp_backend.Models.User", "CreatedByUser")
                         .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("CreatedByUserId");
 
                     b.HasOne("erp_backend.Models.Customer", "Customer")
                         .WithMany()
@@ -1092,8 +1086,6 @@ namespace erp_backend.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Addon");
-
-                    b.Navigation("CategoryServiceAddon");
 
                     b.Navigation("CreatedByUser");
 

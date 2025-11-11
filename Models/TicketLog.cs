@@ -19,5 +19,8 @@ namespace erp_backend.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
+
+        // ✅ THÊM navigation property
+        public virtual ICollection<TicketLogAttachment> Attachments { get; set; } = new List<TicketLogAttachment>();
     }
 }

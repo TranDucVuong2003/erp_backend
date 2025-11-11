@@ -5,6 +5,7 @@ using erp_backend.Models;
 using erp_backend.Models.DTOs;
 using erp_backend.Services;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization; // ✅ THÊM
 
 namespace erp_backend.Controllers
 {
@@ -21,6 +22,78 @@ namespace erp_backend.Controllers
             _context = context;
             _emailService = emailService;
             _logger = logger;
+        }
+
+        // GET: api/Tickets/my-tickets
+        /// <summary>
+        /// Lấy danh sách tickets theo role của user
+        /// - Admin: Thấy tất cả tickets
+        /// - User: Chỉ thấy tickets được phân công cho mình (AssignedToId = userId)
+        /// </summary>
+        [HttpGet("my-tickets")]
+        [Authorize]
+        public async Task<ActionResult<IEnumerable<Ticket>>> GetMyTickets(
+            [FromQuery] string? priority,
+            [FromQuery] string? status,
+            [FromQuery] int? urgencyLevel,
+            [FromQuery] int? categoryId)
+        {
+            try
+            {
+                // Lấy thông tin user hiện tại từ JWT token
+                var currentUserId = GetCurrentUserId();
+                if (currentUserId == 0)
+                {
+                    return Unauthorized(new { message = "Không tìm thấy thông tin user" });
+                }
+
+                // Build query
+                var query = _context.Tickets
+                    .Include(t => t.Customer)
+                    .Include(t => t.Category)
+                    .Include(t => t.AssignedTo)
+                    .Include(t => t.CreatedBy)
+                    .AsQueryable();
+
+                // ✅ PHÂN QUYỀN: Nếu không phải Admin, chỉ lấy tickets được phân công
+                var isAdmin = IsCurrentUserAdmin();
+                if (!isAdmin)
+                {
+                    query = query.Where(t => t.AssignedToId == currentUserId);
+                }
+
+                // Apply filters
+                if (!string.IsNullOrEmpty(priority))
+                    query = query.Where(t => t.Priority.ToLower() == priority.ToLower());
+
+                if (!string.IsNullOrEmpty(status))
+                    query = query.Where(t => t.Status.ToLower() == status.ToLower());
+
+                if (urgencyLevel.HasValue)
+                    query = query.Where(t => t.UrgencyLevel == urgencyLevel.Value);
+
+                if (categoryId.HasValue)
+                    query = query.Where(t => t.CategoryId == categoryId.Value);
+
+                var tickets = await query
+                    .OrderByDescending(t => t.CreatedAt)
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    message = "Lấy danh sách tickets thành công",
+                    role = GetCurrentUserRole() ?? "User",
+                    userId = currentUserId,
+                    isAdmin = isAdmin,
+                    totalTickets = tickets.Count,
+                    data = tickets
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting tickets for user {UserId}", GetCurrentUserId());
+                return StatusCode(500, new { message = "Lỗi server khi lấy danh sách tickets", error = ex.Message });
+            }
         }
 
         // GET: api/Tickets
@@ -454,6 +527,25 @@ namespace erp_backend.Controllers
                              ?? User.FindFirst("id")?.Value;
 
             return int.TryParse(userIdClaim, out var userId) ? userId : 0;
+        }
+
+        /// <summary>
+        /// Lấy role của user hiện tại từ JWT token
+        /// </summary>
+        private string? GetCurrentUserRole()
+        {
+            return User.FindFirst(ClaimTypes.Role)?.Value
+                   ?? User.FindFirst("role")?.Value
+                   ?? User.FindFirst("Role")?.Value;
+        }
+
+        /// <summary>
+        /// Kiểm tra xem user hiện tại có phải Admin không
+        /// </summary>
+        private bool IsCurrentUserAdmin()
+        {
+            var role = GetCurrentUserRole();
+            return role?.ToLower() == "admin";
         }
 
         /// <summary>
