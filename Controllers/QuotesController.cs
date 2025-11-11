@@ -44,6 +44,10 @@ namespace erp_backend.Controllers
 				.Include(q => q.CategoryServiceAddon)
 				.Include(q => q.QuoteServices)
 					.ThenInclude(qs => qs.Service)
+						.ThenInclude(s => s!.Tax)
+				.Include(q => q.QuoteServices)
+					.ThenInclude(qs => qs.Service)
+						.ThenInclude(s => s!.CategoryServiceAddons)
 				.Include(q => q.QuoteAddons)
 					.ThenInclude(qa => qa.Addon)
 				.ToListAsync();
@@ -73,14 +77,37 @@ namespace erp_backend.Controllers
 					qs.Id,
 					qs.ServiceId,
 					ServiceName = qs.Service?.Name,
-					UnitPrice = qs.Service?.Price ?? 0
+					UnitPrice = qs.UnitPrice,
+					qs.Quantity,
+					qs.Notes,
+					Service = qs.Service != null ? new
+					{
+						qs.Service.Id,
+						qs.Service.Name,
+						qs.Service.Description,
+						qs.Service.Price,
+						qs.Service.Category,
+						qs.Service.IsActive,
+						Tax = qs.Service.Tax != null ? new
+						{
+							qs.Service.Tax.Id,
+							qs.Service.Tax.Rate
+						} : null,
+						CategoryServiceAddon = qs.Service.CategoryServiceAddons != null ? new
+						{
+							qs.Service.CategoryServiceAddons.Id,
+							qs.Service.CategoryServiceAddons.Name
+						} : null
+					} : null
 				}).ToList(),
 				Addons = q.QuoteAddons.Select(qa => new
 				{
 					qa.Id,
 					qa.AddonId,
 					AddonName = qa.Addon?.Name,
-					UnitPrice = qa.Addon?.Price ?? 0
+					UnitPrice = qa.UnitPrice,
+					qa.Quantity,
+					qa.Notes
 				}).ToList(),
 				q.CustomService,
 				q.FilePath,
@@ -310,7 +337,8 @@ namespace erp_backend.Controllers
 						{
 							var unitPrice = svc.UnitPrice > 0 ? svc.UnitPrice : service.Price;
 							var lineTotal = unitPrice * svc.Quantity;
-							var vatRate = service.Tax?.Rate ?? 10;
+							// ✅ Get tax rate from Service.Tax, default to 0 if not set
+							var vatRate = service.Tax?.Rate ?? 0;
 							calculatedAmount += lineTotal * (1 + vatRate / 100);
 						}
 					}
@@ -331,7 +359,8 @@ namespace erp_backend.Controllers
 						{
 							var unitPrice = addonDto.UnitPrice > 0 ? addonDto.UnitPrice : addon.Price;
 							var lineTotal = unitPrice * addonDto.Quantity;
-							var vatRate = addon.Tax?.Rate ?? 10;
+							// ✅ Get tax rate from Addon.Tax, default to 0 if not set
+							var vatRate = addon.Tax?.Rate ?? 0;
 							calculatedAmount += lineTotal * (1 + vatRate / 100);
 						}
 					}
@@ -534,7 +563,8 @@ namespace erp_backend.Controllers
 						{
 							var unitPrice = svc.UnitPrice > 0 ? svc.UnitPrice : service.Price;
 							var lineTotal = unitPrice * svc.Quantity;
-							var vatRate = service.Tax?.Rate ?? 10;
+							// ✅ Get tax rate from Service.Tax, default to 0 if not set
+							var vatRate = service.Tax?.Rate ?? 0;
 							calculatedAmount += lineTotal * (1 + vatRate / 100);
 						}
 					}
@@ -555,7 +585,8 @@ namespace erp_backend.Controllers
 						{
 							var unitPrice = addonDto.UnitPrice > 0 ? addonDto.UnitPrice : addon.Price;
 							var lineTotal = unitPrice * addonDto.Quantity;
-							var vatRate = addon.Tax?.Rate ?? 10;
+							// ✅ Get tax rate from Addon.Tax, default to 0 if not set
+							var vatRate = addon.Tax?.Rate ?? 0;
 							calculatedAmount += lineTotal * (1 + vatRate / 100);
 						}
 					}
@@ -893,8 +924,9 @@ namespace erp_backend.Controllers
 				if (service == null) continue;
 
 				var lineTotal = qs.UnitPrice * qs.Quantity;
-				var vatRate = service.Tax?.Rate ?? 10;
-				var totalWithVat = lineTotal + (lineTotal * vatRate / 100);
+				// ✅ Get tax rate from Service.Tax, default to 0 if not set
+				var vatRate = service.Tax?.Rate ?? 0;
+				var totalWithVat = lineTotal * (1 + vatRate / 100);
 
 				items.AppendLine($@"
                 <tr>
@@ -926,8 +958,9 @@ namespace erp_backend.Controllers
 				if (addon == null) continue;
 
 				var lineTotal = qa.UnitPrice * qa.Quantity;
-				var vatRate = addon.Tax?.Rate ?? 10;
-				var totalWithVat = lineTotal + (lineTotal * vatRate / 100);
+				// ✅ Get tax rate from Addon.Tax, default to 0 if not set
+				var vatRate = addon.Tax?.Rate ?? 0;
+				var totalWithVat = lineTotal * (1 + vatRate / 100);
 
 				items.AppendLine($@"
                 <tr>
@@ -969,13 +1002,34 @@ namespace erp_backend.Controllers
 			// ✅ Process Custom Services ONLY - This is the ONLY section in Detail Table
 			if (quote.CustomService != null && quote.CustomService.Any())
 			{
+				// ✅ Create a lookup dictionary for services to get their tax rates
+				var serviceTaxLookup = quote.QuoteServices
+					.Where(qs => qs.Service != null)
+					.ToDictionary(
+						qs => qs.Service!.Name, 
+						qs => qs.Service!.Tax?.Rate ?? 0
+					);
+
 				foreach (var customService in quote.CustomService)
 				{
 					var categoryName = quote.CategoryServiceAddon?.Name ?? 
 						(!string.IsNullOrEmpty(customService.RelatedService) ? customService.RelatedService : "Dịch vụ tùy chỉnh");
 					
 					var lineTotal = customService.UnitPrice * customService.Quantity;
-					var totalWithVat = lineTotal * (1 + customService.Tax / 100);
+					
+					// ✅ Get tax rate from the custom service, or try to match with related service
+					decimal vatRate = customService.Tax;
+					
+					// If tax is 0 and there's a related service, try to get tax from that service
+					if (vatRate == 0 && !string.IsNullOrEmpty(customService.RelatedService))
+					{
+						if (serviceTaxLookup.TryGetValue(customService.RelatedService, out var relatedTax))
+						{
+							vatRate = relatedTax;
+						}
+					}
+					
+					var totalWithVat = lineTotal * (1 + vatRate / 100);
 
 					items.AppendLine($@"
                     <tr>
@@ -995,7 +1049,7 @@ namespace erp_backend.Controllers
                             {customService.Quantity}
                         </td>
                         <td style='border: 1px solid #ddd; padding: 8px; text-align: right; vertical-align: top; font-size: 11px;'>
-                            {customService.Tax:N2}
+                            {vatRate:N2}
                         </td>
                         <td style='border: 1px solid #ddd; padding: 8px; text-align: right; vertical-align: top; font-size: 11px;'>
                             {totalWithVat:N0}
@@ -1019,7 +1073,8 @@ namespace erp_backend.Controllers
 				if (service == null) continue;
 
 				var lineTotal = qs.UnitPrice * qs.Quantity;
-				var vatRate = service.Tax?.Rate ?? 10;
+				// ✅ Get tax rate from Service.Tax, default to 0 if not set
+				var vatRate = service.Tax?.Rate ?? 0;
 				total += lineTotal * (1 + vatRate / 100);
 			}
 
@@ -1030,7 +1085,8 @@ namespace erp_backend.Controllers
 				if (addon == null) continue;
 
 				var lineTotal = qa.UnitPrice * qa.Quantity;
-				var vatRate = addon.Tax?.Rate ?? 10;
+				// ✅ Get tax rate from Addon.Tax, default to 0 if not set
+				var vatRate = addon.Tax?.Rate ?? 0;
 				total += lineTotal * (1 + vatRate / 100);
 			}
 
