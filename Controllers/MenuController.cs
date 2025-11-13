@@ -139,6 +139,16 @@ namespace erp_backend.Controllers
 							},
 							new
 							{
+								name = "Sale",
+								icon = "ChartBarIcon",
+								children = new[]
+								{
+									new { name = "Sales order", path = "/sales" },
+									new { name = "Contract", path = "/contract" }
+								}
+							},
+							new
+							{
 								name = "Quote",
 								path = "/quotes",
 								icon = "DocumentTextIcon"
@@ -146,27 +156,10 @@ namespace erp_backend.Controllers
 							new
 							{
 								name = "My Tickets",
-								path = "/my-tickets",
+								path = "/helpdesk",
 								icon = "LifebuoyIcon"
-							},
-							new
-							{
-								name = "Tasks",
-								path = "/tasks",
-								icon = "CalendarIcon"
-							},
-							new
-							{
-								name = "Support",
-								path = "/sessions",
-								icon = "LifebuoyIcon"
-							},
-							new
-							{
-								name = "Profile",
-								path = "/profile",
-								icon = "CogIcon"
 							}
+							
 						}
 					});
 				}

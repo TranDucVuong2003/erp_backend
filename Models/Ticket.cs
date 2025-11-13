@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace erp_backend.Models
 {
@@ -19,14 +19,13 @@ namespace erp_backend.Models
 		public virtual Customer? Customer { get; set; }
 
 		// Ticket Classification
-		public string Priority { get; set; } = string.Empty;
 		public string Status { get; set; } = string.Empty;
 
 		[Required]
 		public int CategoryId { get; set; }
 		public virtual TicketCategory? Category { get; set; }
 
-		// Urgency level (1-5 stars như trong UI React)
+		// Urgency level (1-5 stars nhu trong UI React)
 		[Range(1, 5)]
 		public int UrgencyLevel { get; set; } = 1;
 
@@ -38,9 +37,7 @@ namespace erp_backend.Models
 		public virtual User? CreatedBy { get; set; }
 
 		// Timing
-		public DateTime? Deadline { get; set; }
 		public DateTime? ClosedAt { get; set; }
-
 
 		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 		public DateTime? UpdatedAt { get; set; }

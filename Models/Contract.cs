@@ -22,7 +22,11 @@ namespace erp_backend.Models
 		//public int CustomerId { get; set; } 
 
 		[Required]
-		public int UserId { get; set; } 
+		public int UserId { get; set; }
+
+		// ✅ THÊM: Số hợp đồng
+		[StringLength(100)]
+		public string? NumberContract { get; set; }
 
 		[StringLength(50)]
 		public string Status { get; set; } = "Draft"; // Default status
@@ -44,6 +48,14 @@ namespace erp_backend.Models
 
 		[StringLength(2000)]
 		public string? Notes { get; set; } // ✅ THÊM: Ghi chú
+
+		// ✅ PDF Storage Fields
+		[StringLength(500)]
+		public string? ContractPdfPath { get; set; } // Đường dẫn file PDF
+
+		public DateTime? PdfGeneratedAt { get; set; } // Thời điểm tạo PDF
+
+		public long? PdfFileSize { get; set; } // Kích thước file (bytes)
 
 		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

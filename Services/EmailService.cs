@@ -200,7 +200,6 @@ namespace erp_backend.Services
 
         private string FormatEmailBody(Ticket ticket, User actingUser, string actionType, string content, string emailType)
         {
-            var priorityColor = GetPriorityColor(ticket.Priority);
             var statusColor = GetStatusColor(ticket.Status);
             var actionIcon = GetActionIcon(emailType);
 
@@ -217,12 +216,12 @@ namespace erp_backend.Services
         .ticket-info {{ background-color: #f0f7ff; padding: 15px; border-left: 4px solid #0066cc; margin: 15px 0; border-radius: 4px; }}
         .action-content {{ border-left: 3px solid #28a745; padding-left: 15px; margin: 20px 0; background-color: #f8fff9; padding: 15px; border-radius: 4px; }}
         .highlight {{ color: #0066cc; font-weight: bold; }}
-        .priority {{ padding: 3px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: bold; }}
         .status {{ padding: 3px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: bold; }}
         .action-icon {{ font-size: 20px; margin-right: 10px; }}
         .user-info {{ background-color: #e9ecef; padding: 10px; border-radius: 4px; margin: 10px 0; }}
         .btn {{ display: inline-block; padding: 10px 20px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 4px; }}
         .recipients-info {{ background-color: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 4px solid #ffc107; }}
+        .urgency {{ padding: 3px 8px; border-radius: 3px; background-color: #ffc107; color: white; font-size: 12px; font-weight: bold; }}
     </style>
 </head>
 <body>
@@ -237,7 +236,7 @@ namespace erp_backend.Services
                 <p><strong>Ticket ID:</strong> #{ticket.Id}</p>
                 <p><strong>Tiêu đề:</strong> {ticket.Title}</p>
                 <p><strong>Trạng thái:</strong> <span class='status' style='background-color: {statusColor};'>{ticket.Status}</span></p>
-                <p><strong>Mức độ ưu tiên:</strong> <span class='priority' style='background-color: {priorityColor};'>{ticket.Priority}</span></p>
+                <p><strong>Mức độ khẩn cấp:</strong> <span class='urgency'>{ticket.UrgencyLevel} ⭐</span></p>
                 <p><strong>Danh mục:</strong> {ticket.Category?.Name ?? "N/A"}</p>
                 <p><strong>Người tạo:</strong> {ticket.CreatedBy?.Name ?? "N/A"} ({ticket.CreatedBy?.Email ?? "N/A"})</p>
                 <p><strong>Người được phân công:</strong> {ticket.AssignedTo?.Name ?? "Chưa phân công"} {(ticket.AssignedTo != null ? $"({ticket.AssignedTo.Email})" : "")}</p>
@@ -266,18 +265,6 @@ namespace erp_backend.Services
     </div>
 </body>
 </html>";
-        }
-
-        private string GetPriorityColor(string? priority)
-        {
-            return priority?.ToLower() switch
-            {
-                "low" => "#28a745",
-                "medium" => "#ffc107",
-                "high" => "#fd7e14",
-                "critical" => "#dc3545",
-                _ => "#6c757d"
-            };
         }
 
         private string GetStatusColor(string? status)

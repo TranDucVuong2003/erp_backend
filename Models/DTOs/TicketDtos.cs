@@ -15,9 +15,6 @@ namespace erp_backend.Models.DTOs
         public int CustomerId { get; set; }
 
         [Required]
-        public string Priority { get; set; } = string.Empty;
-
-        [Required]
         public string Status { get; set; } = string.Empty;
 
         [Required]
@@ -27,8 +24,6 @@ namespace erp_backend.Models.DTOs
         public int UrgencyLevel { get; set; } = 1;
 
         public int? CreatedById { get; set; }
-
-        public DateTime? Dateline { get; set; }
     }
 
     public class UpdateTicketDto
@@ -41,9 +36,6 @@ namespace erp_backend.Models.DTOs
         public string Description { get; set; } = string.Empty;
 
         [Required]
-        public string Priority { get; set; } = string.Empty;
-
-        [Required]
         public string Status { get; set; } = string.Empty;
 
         [Required]
@@ -53,8 +45,6 @@ namespace erp_backend.Models.DTOs
         public int UrgencyLevel { get; set; } = 1;
 
         public int? AssignedToId { get; set; }
-
-        public DateTime? Dateline { get; set; }
     }
 
     public class AssignTicketDto
@@ -113,7 +103,6 @@ namespace erp_backend.Models.DTOs
         public string Description { get; set; } = string.Empty;
         public int CustomerId { get; set; }
         public string CustomerName { get; set; } = string.Empty;
-        public string Priority { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public int CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
@@ -122,7 +111,6 @@ namespace erp_backend.Models.DTOs
         public string? AssignedToName { get; set; }
         public int? CreatedById { get; set; }
         public string? CreatedByName { get; set; }
-        public DateTime? Dateline { get; set; }
         public DateTime? ClosedAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }

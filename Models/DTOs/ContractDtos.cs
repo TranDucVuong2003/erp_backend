@@ -12,6 +12,9 @@ namespace erp_backend.Models.DTOs
         [Required(ErrorMessage = "UserId là b?t bu?c")]
         public int UserId { get; set; }
 
+        [StringLength(100, ErrorMessage = "NumberContract không ???c v??t quá 100 ký t?")]
+        public string? NumberContract { get; set; }
+
         [StringLength(50, ErrorMessage = "Status không ???c v??t quá 50 ký t?")]
         public string Status { get; set; } = "Draft";
 
@@ -34,6 +37,7 @@ namespace erp_backend.Models.DTOs
         public SaleOrderBasicDto? SaleOrder { get; set; }
         public int UserId { get; set; }
         public UserBasicDto? User { get; set; }
+        public string? NumberContract { get; set; }
         public string Status { get; set; } = string.Empty;
         public string? PaymentMethod { get; set; }
         public decimal SubTotal { get; set; }
@@ -54,6 +58,7 @@ namespace erp_backend.Models.DTOs
         public string CustomerName { get; set; } = string.Empty;
         public int UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
+        public string? NumberContract { get; set; }
         public string Status { get; set; } = string.Empty;
         public string? PaymentMethod { get; set; }
         public decimal TotalAmount { get; set; }

@@ -27,8 +27,10 @@ namespace erp_backend.Models
         // Giữ lại để backward compatibility (optional)
         public int? ServiceId { get; set; }
         public int? AddonId { get; set; }
-        
-		public int? TaxId { get; set; }
+
+		// ✅ Trường Status mới
+		[StringLength(50)]
+		public string Status { get; set; } = "Draft"; // Mặc định: Draft
 
 		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -38,7 +40,6 @@ namespace erp_backend.Models
 		public Customer? Customer { get; set; }
 		public Service? Service { get; set; }
 		public Addon? Addon { get; set; }
-		public Tax? Tax { get; set; }
 
         // Navigation properties (new - many-to-many relationship)
         public ICollection<SaleOrderService> SaleOrderServices { get; set; } = new List<SaleOrderService>();

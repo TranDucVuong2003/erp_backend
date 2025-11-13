@@ -8,6 +8,7 @@ namespace erp_backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    //[Authorize(Roles = "Admin")]
     public class TaxController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

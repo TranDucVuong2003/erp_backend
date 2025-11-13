@@ -78,8 +78,8 @@ namespace erp_backend.Controllers
 			{
 				if (string.IsNullOrWhiteSpace(customer.Name))
 					return BadRequest("Tên là bắt buộc cho khách hàng cá nhân");
-				if (string.IsNullOrWhiteSpace(customer.Email))
-					return BadRequest("Email là bắt buộc cho khách hàng cá nhân");
+				//if (string.IsNullOrWhiteSpace(customer.Email))
+				//	return BadRequest("Email là bắt buộc cho khách hàng cá nhân");
 				if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
 					return BadRequest("Số điện thoại là bắt buộc cho khách hàng cá nhân");
 			}
@@ -89,8 +89,8 @@ namespace erp_backend.Controllers
 					return BadRequest("Tên công ty là bắt buộc");
 				if (string.IsNullOrWhiteSpace(customer.RepresentativeName))
 					return BadRequest("Tên người đại diện là bắt buộc");
-				if (string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
-					return BadRequest("Email người đại diện là bắt buộc");
+				//if (string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
+				//	return BadRequest("Email người đại diện là bắt buộc");
 				if (string.IsNullOrWhiteSpace(customer.RepresentativePhone))
 					return BadRequest("Số điện thoại người đại diện là bắt buộc");
 			}

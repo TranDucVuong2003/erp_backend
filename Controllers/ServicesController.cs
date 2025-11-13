@@ -1,14 +1,15 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace erp_backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    //[Authorize(Roles = "Admin")]
     public class ServicesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -22,7 +23,6 @@ namespace erp_backend.Controllers
 
         // L?y danh sách t?t c? services
         [HttpGet]
-        //[Authorize]
         public async Task<ActionResult<IEnumerable<Service>>> GetServices()
         {
             return await _context.Services
@@ -33,7 +33,6 @@ namespace erp_backend.Controllers
 
         // L?y services ?ang ho?t ??ng
         [HttpGet("active")]
-        //[Authorize]
         public async Task<ActionResult<IEnumerable<Service>>> GetActiveServices()
         {
             return await _context.Services
@@ -45,7 +44,6 @@ namespace erp_backend.Controllers
 
         // L?y services theo category
         [HttpGet("by-category/{category}")]
-        //[Authorize]
         public async Task<ActionResult<IEnumerable<Service>>> GetServicesByCategory(string category)
         {
             return await _context.Services
@@ -57,7 +55,6 @@ namespace erp_backend.Controllers
 
         // L?y service theo ID
         [HttpGet("{id}")]
-        //[Authorize]
         public async Task<ActionResult<Service>> GetService(int id)
         {
             var service = await _context.Services
@@ -75,7 +72,6 @@ namespace erp_backend.Controllers
 
         // T?o service m?i
         [HttpPost]
-        //[Authorize]
         public async Task<ActionResult<Service>> CreateService(Service service)
         {
             try
@@ -112,7 +108,6 @@ namespace erp_backend.Controllers
 
         // C?p nh?t service
         [HttpPut("{id}")]
-        //[Authorize]
         public async Task<ActionResult<UpdateServiceResponse>> UpdateService(int id, [FromBody] Dictionary<string, object?> updateData)
         {
             try
@@ -267,7 +262,6 @@ namespace erp_backend.Controllers
 
         // Xóa service
         [HttpDelete("{id}")]
-        //[Authorize]
         public async Task<ActionResult<DeleteServiceResponse>> DeleteService(int id)
         {
             try

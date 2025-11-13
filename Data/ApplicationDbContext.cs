@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using erp_backend.Models;
 
 namespace erp_backend.Data
@@ -209,16 +209,10 @@ namespace erp_backend.Data
 					  .HasForeignKey(e => e.AddonId)
 					  .OnDelete(DeleteBehavior.SetNull);
 
-				entity.HasOne(e => e.Tax)
-					  .WithMany()
-					  .HasForeignKey(e => e.TaxId)
-					  .OnDelete(DeleteBehavior.Restrict);
-
                 // Indexes
                 entity.HasIndex(e => e.CustomerId);
                 entity.HasIndex(e => e.ServiceId);
                 entity.HasIndex(e => e.AddonId);
-                entity.HasIndex(e => e.TaxId);
                 entity.HasIndex(e => e.Value);
                 entity.HasIndex(e => e.Probability);
             });
@@ -288,10 +282,8 @@ namespace erp_backend.Data
                 
                 entity.Property(e => e.Title).IsRequired().HasMaxLength(500);
                 entity.Property(e => e.Description).IsRequired();
-                entity.Property(e => e.Priority).IsRequired().HasMaxLength(20);
                 entity.Property(e => e.Status).HasMaxLength(20);
                 entity.Property(e => e.UrgencyLevel).HasDefaultValue(1);
-                entity.Property(e => e.Deadline).HasColumnType("timestamp with time zone");
                 entity.Property(e => e.ClosedAt).HasColumnType("timestamp with time zone");
                 entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
                 entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
@@ -322,7 +314,6 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.CategoryId);
                 entity.HasIndex(e => e.AssignedToId);
                 entity.HasIndex(e => e.CreatedById);
-                entity.HasIndex(e => e.Priority);
                 entity.HasIndex(e => e.Status);
                 entity.HasIndex(e => e.UrgencyLevel);
                 entity.HasIndex(e => e.CreatedAt);
@@ -470,13 +461,13 @@ namespace erp_backend.Data
                       .HasForeignKey(e => e.AddonId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // ✅ THÊM: Foreign key relationship với User (CreatedByUser)
+                // ? TH�M: Foreign key relationship v?i User (CreatedByUser)
                 entity.HasOne(e => e.CreatedByUser)
                       .WithMany()
                       .HasForeignKey(e => e.CreatedByUserId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // ✅ THÊM: Foreign key relationship với Category_service_addons
+                // ? TH�M: Foreign key relationship v?i Category_service_addons
                 entity.HasOne(e => e.CategoryServiceAddon)
                       .WithMany()
                       .HasForeignKey(e => e.CategoryServiceAddonId)
@@ -486,8 +477,8 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.CustomerId);
                 entity.HasIndex(e => e.ServiceId);
                 entity.HasIndex(e => e.AddonId);
-                entity.HasIndex(e => e.CreatedByUserId); // ✅ THÊM index
-                entity.HasIndex(e => e.CategoryServiceAddonId); // ✅ THÊM index
+                entity.HasIndex(e => e.CreatedByUserId); // ? TH�M index
+                entity.HasIndex(e => e.CategoryServiceAddonId); // ? TH�M index
                 entity.HasIndex(e => e.CreatedAt);
             });
 

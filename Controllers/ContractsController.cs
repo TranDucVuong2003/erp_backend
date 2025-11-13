@@ -9,7 +9,8 @@ namespace erp_backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ContractsController : ControllerBase
+    [Authorize]
+	public class ContractsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<ContractsController> _logger;
@@ -22,15 +23,13 @@ namespace erp_backend.Controllers
 
         // GET: api/Contracts
         [HttpGet]
-        //[Authorize]
+        [Authorize]
         public async Task<ActionResult<IEnumerable<ContractResponse>>> GetContracts()
         {
             var contracts = await _context.Contracts
                 .Include(c => c.User)
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.Customer)
-                .Include(c => c.SaleOrder)
-                    .ThenInclude(so => so!.Tax)
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.SaleOrderServices)
                         .ThenInclude(sos => sos.Service)
@@ -46,15 +45,13 @@ namespace erp_backend.Controllers
 
         // GET: api/Contracts/5
         [HttpGet("{id}")]
-        //[Authorize]
+        [Authorize]
         public async Task<ActionResult<ContractResponse>> GetContract(int id)
         {
             var contract = await _context.Contracts
                 .Include(c => c.User)
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.Customer)
-                .Include(c => c.SaleOrder)
-                    .ThenInclude(so => so!.Tax)
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.SaleOrderServices)
                         .ThenInclude(sos => sos.Service)
@@ -74,8 +71,8 @@ namespace erp_backend.Controllers
 
         // POST: api/Contracts
         [HttpPost]
-        //[Authorize]
-        public async Task<ActionResult<ContractResponse>> CreateContract([FromBody] CreateContractRequest request)
+        [Authorize]
+		public async Task<ActionResult<ContractResponse>> CreateContract([FromBody] CreateContractRequest request)
         {
             try
             {
@@ -86,7 +83,6 @@ namespace erp_backend.Controllers
 
                 // Kiểm tra SaleOrder tồn tại
                 var saleOrder = await _context.SaleOrders
-                    .Include(so => so.Tax)
                     .Include(so => so.SaleOrderServices)
                         .ThenInclude(sos => sos.Service)
                     .Include(so => so.SaleOrderAddons)
@@ -109,11 +105,7 @@ namespace erp_backend.Controllers
                 decimal subTotal = saleOrder.Value;
                 decimal taxAmount = 0;
 
-                // Tính thuế từ SaleOrder
-                if (saleOrder.TaxId.HasValue && saleOrder.Tax != null)
-                {
-                    taxAmount = subTotal * saleOrder.Tax.Rate / 100;
-                }
+                // Không còn tính thuế từ SaleOrder nữa vì đã xóa TaxId
 
                 decimal totalAmount = subTotal + taxAmount;
 
@@ -122,6 +114,7 @@ namespace erp_backend.Controllers
                 {
                     SaleOrderId = request.SaleOrderId,
                     UserId = request.UserId,
+                    NumberContract = request.NumberContract,
                     Status = request.Status,
                     PaymentMethod = request.PaymentMethod,
                     SubTotal = subTotal,
@@ -140,8 +133,6 @@ namespace erp_backend.Controllers
                     .Include(c => c.User)
                     .Include(c => c.SaleOrder)
                         .ThenInclude(so => so!.Customer)
-                    .Include(c => c.SaleOrder)
-                        .ThenInclude(so => so!.Tax)
                     .Include(c => c.SaleOrder)
                         .ThenInclude(so => so!.SaleOrderServices)
                             .ThenInclude(sos => sos.Service)
@@ -163,8 +154,8 @@ namespace erp_backend.Controllers
 
         // PUT: api/Contracts/5
         [HttpPut("{id}")]
-        //[Authorize]
-        public async Task<ActionResult<ContractResponse>> UpdateContract(int id, [FromBody] CreateContractRequest request)
+        [Authorize]
+		public async Task<ActionResult<ContractResponse>> UpdateContract(int id, [FromBody] CreateContractRequest request)
         {
             try
             {
@@ -195,9 +186,35 @@ namespace erp_backend.Controllers
                     }
                 }
 
+                // ✅ Invalidate PDF cache nếu có thay đổi quan trọng
+                bool needsRegenerate = request.SaleOrderId != existingContract.SaleOrderId ||
+                                      request.UserId != existingContract.UserId ||
+                                      request.NumberContract != existingContract.NumberContract ||
+                                      request.Status != existingContract.Status ||
+                                      request.PaymentMethod != existingContract.PaymentMethod ||
+                                      request.Expiration != existingContract.Expiration;
+
+                if (needsRegenerate && !string.IsNullOrEmpty(existingContract.ContractPdfPath))
+                {
+                    // Xóa file PDF cũ
+                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", existingContract.ContractPdfPath);
+                    
+                    if (System.IO.File.Exists(oldFilePath))
+                    {
+                        System.IO.File.Delete(oldFilePath);
+                        _logger.LogInformation("Đã xóa file PDF cũ do cập nhật Contract: {FilePath}", existingContract.ContractPdfPath);
+                    }
+
+                    // Reset thông tin PDF
+                    existingContract.ContractPdfPath = null;
+                    existingContract.PdfGeneratedAt = null;
+                    existingContract.PdfFileSize = null;
+                }
+
                 // Cập nhật các trường
                 existingContract.SaleOrderId = request.SaleOrderId;
                 existingContract.UserId = request.UserId;
+                existingContract.NumberContract = request.NumberContract;
                 existingContract.Status = request.Status;
                 existingContract.PaymentMethod = request.PaymentMethod;
                 existingContract.Expiration = request.Expiration;
@@ -208,13 +225,10 @@ namespace erp_backend.Controllers
                 if (request.SaleOrderId != existingContract.SaleOrderId)
                 {
                     var saleOrder = await _context.SaleOrders
-                        .Include(so => so.Tax)
                         .FirstAsync(so => so.Id == request.SaleOrderId);
 
                     existingContract.SubTotal = saleOrder.Value;
-                    existingContract.TaxAmount = saleOrder.TaxId.HasValue && saleOrder.Tax != null
-                        ? saleOrder.Value * saleOrder.Tax.Rate / 100
-                        : 0;
+                    existingContract.TaxAmount = 0; // Không còn thuế từ SaleOrder
                     existingContract.TotalAmount = existingContract.SubTotal + existingContract.TaxAmount;
                 }
 
@@ -225,8 +239,6 @@ namespace erp_backend.Controllers
                     .Include(c => c.User)
                     .Include(c => c.SaleOrder)
                         .ThenInclude(so => so!.Customer)
-                    .Include(c => c.SaleOrder)
-                        .ThenInclude(so => so!.Tax)
                     .Include(c => c.SaleOrder)
                         .ThenInclude(so => so!.SaleOrderServices)
                             .ThenInclude(sos => sos.Service)
@@ -256,25 +268,45 @@ namespace erp_backend.Controllers
 
         // DELETE: api/Contracts/5
         [HttpDelete("{id}")]
-        //[Authorize]
-        public async Task<IActionResult> DeleteContract(int id)
-        {
-            var contract = await _context.Contracts.FindAsync(id);
-            if (contract == null)
-            {
-                return NotFound(new { message = "Không tìm thấy hợp đồng" });
-            }
+        [Authorize]
+		public async Task<IActionResult> DeleteContract(int id)
+		{
+			var contract = await _context.Contracts.FindAsync(id);
+			if (contract == null)
+			{
+				return NotFound(new { message = "Không tìm thấy hợp đồng" });
+			}
 
-            _context.Contracts.Remove(contract);
-            await _context.SaveChangesAsync();
+			// ✅ Xóa file PDF nếu tồn tại
+			if (!string.IsNullOrEmpty(contract.ContractPdfPath))
+			{
+				var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", contract.ContractPdfPath);
+				
+				if (System.IO.File.Exists(filePath))
+				{
+					try
+					{
+						System.IO.File.Delete(filePath);
+						_logger.LogInformation("Đã xóa file PDF: {FilePath}", contract.ContractPdfPath);
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Không thể xóa file PDF: {FilePath}", contract.ContractPdfPath);
+						// Tiếp tục xóa record trong database dù file không xóa được
+					}
+				}
+			}
 
-            return NoContent();
-        }
+			_context.Contracts.Remove(contract);
+			await _context.SaveChangesAsync();
+
+			return NoContent();
+		}
 
         // GET: api/Contracts/saleorder/5
         [HttpGet("saleorder/{saleOrderId}")]
-        //[Authorize]
-        public async Task<ActionResult<IEnumerable<ContractListItemDto>>> GetContractsBySaleOrder(int saleOrderId)
+        [Authorize]
+		public async Task<ActionResult<IEnumerable<ContractListItemDto>>> GetContractsBySaleOrder(int saleOrderId)
         {
             var contracts = await _context.Contracts
                 .Where(c => c.SaleOrderId == saleOrderId)
@@ -292,6 +324,7 @@ namespace erp_backend.Controllers
                 CustomerName = c.SaleOrder?.Customer?.Name ?? c.SaleOrder?.Customer?.CompanyName ?? "",
                 UserId = c.UserId,
                 UserName = c.User?.Name ?? "",
+                NumberContract = c.NumberContract,
                 Status = c.Status,
                 PaymentMethod = c.PaymentMethod,
                 TotalAmount = c.TotalAmount,
@@ -324,12 +357,6 @@ namespace erp_backend.Controllers
                     } : null,
                     Value = contract.SaleOrder.Value,
                     Probability = contract.SaleOrder.Probability,
-                    TaxId = contract.SaleOrder.TaxId,
-                    Tax = contract.SaleOrder.Tax != null ? new TaxBasicDto
-                    {
-                        Id = contract.SaleOrder.Tax.Id,
-                        Rate = contract.SaleOrder.Tax.Rate
-                    } : null,
                     Services = contract.SaleOrder.SaleOrderServices?.Select(sos => new ServiceItemDto
                     {
                         ServiceId = sos.ServiceId,
@@ -356,6 +383,7 @@ namespace erp_backend.Controllers
                     Name = contract.User.Name,
                     Email = contract.User.Email
                 } : null,
+                NumberContract = contract.NumberContract,
                 Status = contract.Status,
                 PaymentMethod = contract.PaymentMethod,
                 SubTotal = contract.SubTotal,
@@ -377,6 +405,7 @@ namespace erp_backend.Controllers
 		
 		// GET: api/Contracts/5/preview
 		[HttpGet("{id}/preview")]
+		[Authorize]
 		public async Task<IActionResult> PreviewContract(int id)
 		{
 			try
@@ -386,8 +415,6 @@ namespace erp_backend.Controllers
 					.Include(c => c.User)
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.Customer)
-					.Include(c => c.SaleOrder)
-						.ThenInclude(so => so!.Tax)
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.SaleOrderServices)
 							.ThenInclude(sos => sos.Service)
@@ -440,6 +467,7 @@ namespace erp_backend.Controllers
 
 		// Xuất hợp đồng PDF
 		[HttpGet("{id}/export-contract")]
+		[Authorize]
 		public async Task<IActionResult> ExportContract(int id)
 		{
 			try
@@ -449,8 +477,6 @@ namespace erp_backend.Controllers
 					.Include(c => c.User)
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.Customer)
-					.Include(c => c.SaleOrder)
-						.ThenInclude(so => so!.Tax)
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.SaleOrderServices)
 							.ThenInclude(sos => sos.Service)
@@ -473,6 +499,26 @@ namespace erp_backend.Controllers
 				if (customer == null)
 				{
 					return NotFound(new { message = "Không tìm thấy thông tin khách hàng" });
+				}
+
+				// ✅ Kiểm tra file PDF đã tồn tại chưa
+				if (!string.IsNullOrEmpty(contract.ContractPdfPath))
+				{
+					var existingFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", contract.ContractPdfPath);
+					
+					if (System.IO.File.Exists(existingFilePath))
+					{
+						_logger.LogInformation("Sử dụng file PDF đã có sẵn: {FilePath}", contract.ContractPdfPath);
+						
+						var existingPdfBytes = await System.IO.File.ReadAllBytesAsync(existingFilePath);
+						var existingFileName = Path.GetFileName(existingFilePath);
+						
+						return File(existingPdfBytes, "application/pdf", existingFileName);
+					}
+					else
+					{
+						_logger.LogWarning("File PDF đã lưu không tồn tại, sẽ tạo mới: {FilePath}", contract.ContractPdfPath);
+					}
 				}
 
 				// Bước 2: Đọc HTML template dựa vào loại khách hàng
@@ -509,17 +555,88 @@ namespace erp_backend.Controllers
 				// Render HTML thành PDF
 				var pdf = await Task.Run(() => renderer.RenderHtmlAsPdf(htmlContent));
 
-				// Bước 5: Lấy PDF bytes
+				// Bước 5: Lưu file PDF vào thư mục
+				var fileName = $"HopDong_{contract.Id}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+				var yearMonth = $"{DateTime.Now:yyyy}/{DateTime.Now:MM}";
+				var relativeFolderPath = Path.Combine("Contracts", yearMonth);
+				var absoluteFolderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativeFolderPath);
+
+				// Tạo thư mục nếu chưa tồn tại
+				if (!Directory.Exists(absoluteFolderPath))
+				{
+					Directory.CreateDirectory(absoluteFolderPath);
+				}
+
+				var relativeFilePath = Path.Combine(relativeFolderPath, fileName);
+				var absoluteFilePath = Path.Combine(absoluteFolderPath, fileName);
+
+				// Lấy PDF bytes
 				var pdfBytes = pdf.BinaryData;
 
+				// Lưu file vào disk
+				await System.IO.File.WriteAllBytesAsync(absoluteFilePath, pdfBytes);
+
+				// ✅ Cập nhật thông tin trong database
+				contract.ContractPdfPath = relativeFilePath.Replace("\\", "/"); // Normalize path
+				contract.PdfGeneratedAt = DateTime.UtcNow;
+				contract.PdfFileSize = pdfBytes.Length;
+
+				await _context.SaveChangesAsync();
+
+				_logger.LogInformation("Đã lưu file PDF: {FilePath}, Size: {FileSize} bytes", relativeFilePath, pdfBytes.Length);
+
 				// Bước 6: Trả về file PDF
-				var fileName = $"HopDong_{contract.Id}_{DateTime.Now:yyyyMMdd}.pdf";
 				return File(pdfBytes, "application/pdf", fileName);
 			}
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Lỗi khi xuất hợp đồng PDF cho Contract ID: {ContractId}", id);
 				return StatusCode(500, new { message = "Lỗi server khi xuất hợp đồng", error = ex.Message });
+			}
+		}
+
+		// ==================== REGENERATE CONTRACT PDF ====================
+
+		// Tạo lại hợp đồng PDF (xóa file cũ và tạo file mới)
+		[HttpPost("{id}/regenerate-contract")]
+
+		public async Task<IActionResult> RegenerateContract(int id)
+		{
+			try
+			{
+				var contract = await _context.Contracts.FindAsync(id);
+				
+				if (contract == null)
+				{
+					return NotFound(new { message = "Không tìm thấy hợp đồng" });
+				}
+
+				// Xóa file PDF cũ nếu tồn tại
+				if (!string.IsNullOrEmpty(contract.ContractPdfPath))
+				{
+					var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", contract.ContractPdfPath);
+					
+					if (System.IO.File.Exists(oldFilePath))
+					{
+						System.IO.File.Delete(oldFilePath);
+						_logger.LogInformation("Đã xóa file PDF cũ: {FilePath}", contract.ContractPdfPath);
+					}
+				}
+
+				// Reset thông tin PDF trong database
+				contract.ContractPdfPath = null;
+				contract.PdfGeneratedAt = null;
+				contract.PdfFileSize = null;
+				
+				await _context.SaveChangesAsync();
+
+				// Redirect đến ExportContract để tạo file mới
+				return await ExportContract(id);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi tạo lại hợp đồng PDF cho Contract ID: {ContractId}", id);
+				return StatusCode(500, new { message = "Lỗi server khi tạo lại hợp đồng", error = ex.Message });
 			}
 		}
 
@@ -531,7 +648,8 @@ namespace erp_backend.Controllers
 
 			// Thông tin hợp đồng cơ bản
 			template = template
-				.Replace("{{ContractNumber}}", contract.Id.ToString())
+				.Replace("{{ContractNumber}}", contract.NumberContract ?? contract.Id.ToString())
+				.Replace("{{NumberContract}}", contract.NumberContract ?? contract.Id.ToString()) // ✅ THÊM MỚI
 				.Replace("{{ContractYear}}", contract.CreatedAt.Year.ToString())
 				.Replace("{{Day}}", now.Day.ToString())
 				.Replace("{{Month}}", now.Month.ToString())
@@ -551,13 +669,21 @@ namespace erp_backend.Controllers
 				.Replace("{{CompanyBPhone}}", customer.RepresentativePhone ?? customer.PhoneNumber ?? "")
 				.Replace("{{CompanyBEmail}}", customer.RepresentativeEmail ?? customer.Email ?? "");
 
-			// Ngày sinh (nếu là cá nhân)
+			// ✅ Ngày sinh (nếu là cá nhân) - Để trống nếu không có
 			if (customer.BirthDate.HasValue)
 			{
 				template = template
 					.Replace("{{CustomerBirthDay}}", customer.BirthDate.Value.Day.ToString())
 					.Replace("{{CustomerBirthMonth}}", customer.BirthDate.Value.Month.ToString())
 					.Replace("{{CustomerBirthYear}}", customer.BirthDate.Value.Year.ToString());
+			}
+			else
+			{
+				// ✅ Nếu không có ngày sinh, thay thế bằng chuỗi rỗng
+				template = template
+					.Replace("{{CustomerBirthDay}}", "")
+					.Replace("{{CustomerBirthMonth}}", "")
+					.Replace("{{CustomerBirthYear}}", "");
 			}
 
 			// Thông tin tài chính từ Contract
@@ -572,17 +698,9 @@ namespace erp_backend.Controllers
 				.Replace("{{Status}}", contract.Status)
 				.Replace("{{Notes}}", contract.Notes ?? "");
 
-			// Thông tin VAT Rate từ SaleOrder.Tax
-			if (contract.SaleOrder.Tax != null)
-			{
-				template = template.Replace("{{VATRate}}", contract.SaleOrder.Tax.Rate.ToString("N0"));
-				template = template.Replace("{{VATAmount}}", contract.TaxAmount.ToString("N0"));
-			}
-			else
-			{
-				template = template.Replace("{{VATRate}}", "0");
-				template = template.Replace("{{VATAmount}}", "0");
-			}
+			// Không còn thông tin VAT từ SaleOrder.Tax
+			template = template.Replace("{{VATRate}}", "0");
+			template = template.Replace("{{VATAmount}}", "0");
 
 			// Thông tin nhân viên phụ trách
 			if (contract.User != null)
@@ -673,19 +791,7 @@ namespace erp_backend.Controllers
 				</td>
 			</tr>");
 
-			// Thêm dòng VAT nếu có
-			if (contract.TaxAmount > 0 && contract.SaleOrder.Tax != null)
-			{
-				items.AppendLine($@"
-			<tr style='background-color: #f9f9f9'>
-				<td colspan='6' style='text-align: right; border: 1px solid #000;'>
-					<b>VAT ({contract.SaleOrder.Tax.Rate}%)</b>
-				</td>
-				<td style='text-align: right; border: 1px solid #000;'>
-					<b>{contract.TaxAmount:N0}</b>
-				</td>
-			</tr>");
-			}
+			// Không còn dòng VAT vì đã xóa Tax
 			
 			items.AppendLine($@"
 			<tr style='background-color: #e8f4fd'>
@@ -695,8 +801,7 @@ namespace erp_backend.Controllers
 				<td style='text-align: right; border: 1px solid #000;'>
 					<b>{contract.TotalAmount:N0}</b>
 				</td>
-		
-");
+			</tr>");
 
 			// Nếu không có services/addons, hiển thị title của SaleOrder
 			if ((contract.SaleOrder.SaleOrderServices == null || !contract.SaleOrder.SaleOrderServices.Any()) &&
@@ -714,19 +819,7 @@ namespace erp_backend.Controllers
 					<td style='text-align: right; border: 1px solid #000'>{contract.SubTotal:N0}</td>
 				</tr>");
 
-				// Thêm dòng VAT nếu có
-				if (contract.TaxAmount > 0 && contract.SaleOrder.Tax != null)
-				{
-					items.AppendLine($@"
-				<tr style='background-color: #f9f9f9'>
-					<td colspan='6' style='text-align: right; border: 1px solid #000;'>
-						<b>VAT ({contract.SaleOrder.Tax.Rate}%)</b>
-					</td>
-					<td style='text-align: right; border: 1px solid #000;'>
-						<b>{contract.TaxAmount:N0}</b>
-					</td>
-				</tr>");
-				}
+				// Không còn dòng VAT
 
 				items.AppendLine($@"
 				<tr style='background-color: #e8f4fd'>
@@ -741,8 +834,7 @@ namespace erp_backend.Controllers
 					<td colspan='7' style='text-align: right; border: none;'>
 						<b>Bằng chữ: {ConvertNumberToWords(contract.TotalAmount)}</b>
 					</td>
-				</tr>
-");
+				</tr>");
 			}
 
 			return items.ToString();

@@ -10,6 +10,7 @@ namespace erp_backend.Controllers
 {
 	[ApiController]
 	[Route("api/[controller]")]
+	[Authorize]
 	public class QuotesController : ControllerBase
 	{
 		private readonly ApplicationDbContext _context;
@@ -592,11 +593,41 @@ namespace erp_backend.Controllers
 					}
 				}
 
+				// ✅ Invalidate PDF cache nếu có thay đổi quan trọng
+				bool needsRegenerate = dto.CustomerId != existingQuote.CustomerId ||
+							  dto.CreatedByUserId != existingQuote.CreatedByUserId ||
+							  dto.CategoryServiceAddonId != existingQuote.CategoryServiceAddonId ||
+							  calculatedAmount != existingQuote.Amount ||
+							  (dto.Services?.Count ?? 0) != existingQuote.QuoteServices.Count ||
+							  (dto.Addons?.Count ?? 0) != existingQuote.QuoteAddons.Count;
+
+				if (needsRegenerate && !string.IsNullOrEmpty(existingQuote.FilePath))
+				{
+					// Xóa file PDF cũ
+					var relativePath = existingQuote.FilePath.TrimStart('/');
+					var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
+					
+					if (System.IO.File.Exists(oldFilePath))
+					{
+						try
+						{
+							System.IO.File.Delete(oldFilePath);
+							_logger.LogInformation("Đã xóa file PDF cũ do cập nhật Quote: {FilePath}", existingQuote.FilePath);
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Không thể xóa file PDF cũ: {FilePath}", existingQuote.FilePath);
+						}
+					}
+
+					// Reset thông tin PDF
+					existingQuote.FilePath = null;
+				}
+
 				existingQuote.CustomerId = dto.CustomerId;
 				existingQuote.CustomServiceJson = dto.CustomService != null 
 					? JsonSerializer.Serialize(dto.CustomService) 
 					: null;
-				existingQuote.FilePath = dto.FilePath;
 				existingQuote.Amount = calculatedAmount; // ✅ CHỈ tính từ Services + Addons (BAO GỒM VAT)
 				existingQuote.CreatedByUserId = dto.CreatedByUserId;
 				existingQuote.CategoryServiceAddonId = dto.CategoryServiceAddonId;
@@ -713,6 +744,28 @@ namespace erp_backend.Controllers
 				if (quote == null)
 				{
 					return NotFound(new { message = "Không tìm thấy báo giá" });
+				}
+
+				// ✅ Xóa file PDF nếu tồn tại
+				if (!string.IsNullOrEmpty(quote.FilePath))
+				{
+					// Remove leading slash if exists
+					var relativePath = quote.FilePath.TrimStart('/');
+					var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
+					
+					if (System.IO.File.Exists(filePath))
+					{
+						try
+						{
+							System.IO.File.Delete(filePath);
+							_logger.LogInformation("Đã xóa file PDF báo giá: {FilePath}", quote.FilePath);
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Không thể xóa file PDF báo giá: {FilePath}", quote.FilePath);
+							// Tiếp tục xóa record trong database dù file không xóa được
+						}
+					}
 				}
 
 				_context.Quotes.Remove(quote);

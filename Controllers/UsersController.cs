@@ -9,6 +9,7 @@ namespace erp_backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    //[Authorize(Roles = "Admin")]
     public class UsersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

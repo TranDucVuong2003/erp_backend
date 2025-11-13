@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251113071706_AddArchiveFieldsToTicket")]
+    partial class AddArchiveFieldsToTicket
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -138,10 +141,6 @@ namespace erp_backend.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("NumberContract")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("PaymentMethod")
                         .HasMaxLength(50)
@@ -781,6 +780,12 @@ namespace erp_backend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ArchivedById")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("AssignedToId")
                         .HasColumnType("integer");
 
@@ -805,6 +810,11 @@ namespace erp_backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -825,6 +835,8 @@ namespace erp_backend.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ArchivedById");
+
                     b.HasIndex("AssignedToId");
 
                     b.HasIndex("CategoryId");
@@ -834,6 +846,8 @@ namespace erp_backend.Migrations
                     b.HasIndex("CreatedById");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("IsArchived");
 
                     b.HasIndex("Status");
 
@@ -1226,6 +1240,11 @@ namespace erp_backend.Migrations
 
             modelBuilder.Entity("erp_backend.Models.Ticket", b =>
                 {
+                    b.HasOne("erp_backend.Models.User", "ArchivedBy")
+                        .WithMany()
+                        .HasForeignKey("ArchivedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("erp_backend.Models.User", "AssignedTo")
                         .WithMany()
                         .HasForeignKey("AssignedToId")
@@ -1247,6 +1266,8 @@ namespace erp_backend.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ArchivedBy");
 
                     b.Navigation("AssignedTo");
 

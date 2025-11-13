@@ -111,32 +111,6 @@ namespace erp_backend.Models.DTOs
 		public DateTime UpdatedAt { get; set; }
 	}
 
-	public class SaleOrderInfo
-	{
-		public int Id { get; set; }
-		public string Title { get; set; } = string.Empty;
-		public int CustomerId { get; set; }
-		public decimal Value { get; set; }
-		public int Probability { get; set; }
-		public string? Notes { get; set; }
-		public int? ServiceId { get; set; }
-		public int? AddonId { get; set; }
-	}
-
-	public class UpdateSaleOrderResponse
-	{
-		public string Message { get; set; } = string.Empty;
-		public SaleOrderInfo SaleOrder { get; set; } = null!;
-		public DateTime UpdatedAt { get; set; }
-	}
-
-	public class DeleteSaleOrderResponse
-	{
-		public string Message { get; set; } = string.Empty;
-		public SaleOrderInfo DeletedSaleOrder { get; set; } = null!;
-		public DateTime DeletedAt { get; set; }
-	}
-
 	public class ServiceInfo
 	{
 		public int Id { get; set; }

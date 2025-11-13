@@ -3,11 +3,13 @@ using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using Microsoft.AspNetCore.Authorization;
 
 namespace erp_backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin")]
     public class TicketCategoriesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
