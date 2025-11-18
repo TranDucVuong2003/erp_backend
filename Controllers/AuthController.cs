@@ -219,7 +219,7 @@ namespace erp_backend.Controllers
         {
             try
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var userId = User.FindFirstValue("userid");
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized(new { message = "User không xác định" });
@@ -259,7 +259,7 @@ namespace erp_backend.Controllers
         {
             try
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var userId = User.FindFirstValue("userid");
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized(new { message = "User không xác định" });
@@ -302,7 +302,7 @@ namespace erp_backend.Controllers
         {
             try
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var userId = User.FindFirstValue("userid");
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized(new { message = "User không xác định" });

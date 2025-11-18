@@ -36,10 +36,14 @@ namespace erp_backend.Models
 
         public DateTime? UpdatedAt { get; set; }
 
+		// Tracking user who created this sale order
+		public int? CreatedByUserId { get; set; }
+
 		// Navigation properties (old - single relationship)
 		public Customer? Customer { get; set; }
 		public Service? Service { get; set; }
 		public Addon? Addon { get; set; }
+		public User? CreatedByUser { get; set; }
 
         // Navigation properties (new - many-to-many relationship)
         public ICollection<SaleOrderService> SaleOrderServices { get; set; } = new List<SaleOrderService>();

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251114100359_ChangeNumberContractToInt")]
+    partial class ChangeNumberContractToInt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -190,67 +193,6 @@ namespace erp_backend.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Contracts");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.ContractPayment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(15,2)");
-
-                    b.Property<string>("BankBrandName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int>("ContractId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("MappedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<int>("MappedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ReferenceNumber")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("TransactionContent")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime>("TransactionDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TransactionId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ContractId");
-
-                    b.HasIndex("MappedByUserId");
-
-                    b.HasIndex("ReferenceNumber");
-
-                    b.HasIndex("TransactionDate");
-
-                    b.HasIndex("TransactionId")
-                        .IsUnique();
-
-                    b.ToTable("ContractPayments");
                 });
 
             modelBuilder.Entity("erp_backend.Models.Customer", b =>
@@ -832,7 +774,7 @@ namespace erp_backend.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
-                    b.Property<float>("Rate")
+                    b.Property<decimal>("Rate")
                         .HasColumnType("decimal(5,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -1125,21 +1067,6 @@ namespace erp_backend.Migrations
                     b.Navigation("SaleOrder");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.ContractPayment", b =>
-                {
-                    b.HasOne("erp_backend.Models.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("ContractId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("erp_backend.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("MappedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("erp_backend.Models.Customer", b =>

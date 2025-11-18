@@ -106,11 +106,18 @@ namespace erp_backend.Data
 				entity.Property(e => e.TechContactPhone).HasMaxLength(20);
 				entity.Property(e => e.TechContactEmail).HasMaxLength(150);
 
+				// Foreign key relationship with User (CreatedByUser)
+				entity.HasOne(e => e.CreatedByUser)
+					  .WithMany()
+					  .HasForeignKey(e => e.CreatedByUserId)
+					  .OnDelete(DeleteBehavior.SetNull);
+
 				// Indexes
 				entity.HasIndex(e => e.Email);
 				entity.HasIndex(e => e.CustomerType);
 				entity.HasIndex(e => e.Status);
 				entity.HasIndex(e => e.PhoneNumber);
+				entity.HasIndex(e => e.CreatedByUserId);
 			});
 
 			// Configure Service entity

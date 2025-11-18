@@ -513,7 +513,7 @@ namespace erp_backend.Controllers
 
         private int GetCurrentUserId()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            var userIdClaim = User.FindFirst("userid")?.Value
                              ?? User.FindFirst("sub")?.Value
                              ?? User.FindFirst("UserId")?.Value
                              ?? User.FindFirst("id")?.Value;

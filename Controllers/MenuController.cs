@@ -91,12 +91,7 @@ namespace erp_backend.Controllers
 								path = "/sessions",
 								icon = "LifebuoyIcon"
 							},
-                            //new
-                            //{
-                            //    name = "Report",
-                            //    path = "/reports",
-                            //    icon = "DocumentChartBarIcon"
-                            //},
+
                             new
 							{
 								name = "User management",

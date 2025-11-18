@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+Ôªøusing Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
@@ -22,20 +22,56 @@ namespace erp_backend.Controllers
 			_logger = logger;
 		}
 
-		// L?y danh s·ch t?t c? sale orders
+		// L?y danh s√°ch t?t c? sale orders
 		[HttpGet]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<IEnumerable<object>>> GetSaleOrders()
 		{
-			var saleOrders = await _context.SaleOrders
+			// L·∫•y role t·ª´ JWT token
+			var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role);
+			var role = roleClaim?.Value;
+
+			// L·∫•y UserId t·ª´ JWT token
+			var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == "userid");
+			
+			var query = _context.SaleOrders
 				.Include(so => so.SaleOrderServices)
 					.ThenInclude(sos => sos.Service)
 				.Include(so => so.SaleOrderAddons)
 					.ThenInclude(soa => soa.Addon)
 				.Include(so => so.Customer)
-				.ToListAsync();
+				.Include(so => so.CreatedByUser)
+				.AsQueryable();
 
-			// Map sang response cÛ ??y ?? thÙng tin
+			// N·∫øu role l√† "user" th√¨ ch·ªâ l·∫•y sale orders do user ƒë√≥ t·∫°o
+			if (role != null && role.ToLower() == "user")
+			{
+				if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+				{
+					query = query.Where(so => so.CreatedByUserId == userId);
+					_logger.LogInformation($"User role detected. Filtering sale orders for UserId: {userId}");
+				}
+				else
+				{
+					_logger.LogWarning("User role detected but UserId claim not found");
+					return Forbid();
+				}
+			}
+			else if (role != null && role.ToLower() == "admin")
+			{
+				// Admin c√≥ th·ªÉ xem t·∫•t c·∫£ sale orders
+				_logger.LogInformation("Admin role detected. Returning all sale orders");
+			}
+			else
+			{
+				// N·∫øu kh√¥ng c√≥ role ho·∫∑c role kh√¥ng h·ª£p l·ªá
+				_logger.LogWarning($"Invalid or missing role: {role}");
+				return Forbid();
+			}
+
+			var saleOrders = await query.ToListAsync();
+
+			// Map sang response c√≥ ƒë·∫ßy ƒë·ªß th√¥ng tin
 			var response = saleOrders.Select(so => new
 			{
 				so.Id,
@@ -47,6 +83,8 @@ namespace erp_backend.Controllers
 				so.Status,
 				so.CreatedAt,
 				so.UpdatedAt,
+				so.CreatedByUserId,
+				CreatedByUser = so.CreatedByUser != null ? new { so.CreatedByUser.Id, so.CreatedByUser.Name } : null,
 				SaleOrderServices = so.SaleOrderServices.Select(sos => new
 				{
 					sos.ServiceId,
@@ -82,7 +120,7 @@ namespace erp_backend.Controllers
 				.Where(d => d.CustomerId == customerId)
 				.ToListAsync();
 
-			// Map sang response cÛ ??y ?? thÙng tin
+			// Map sang response c√≥ ??y ?? th√¥ng tin
 			var response = saleOrders.Select(so => new
 			{
 				so.Id,
@@ -115,7 +153,7 @@ namespace erp_backend.Controllers
 			return Ok(response);
 		}
 
-		// Th?ng kÍ sale orders
+		// Th?ng k√™ sale orders
 		[HttpGet("statistics")]
 		//[Authorize]
 		public async Task<ActionResult<object>> GetSaleOrderStatistics()
@@ -129,10 +167,10 @@ namespace erp_backend.Controllers
 				.GroupBy(d => d.Probability switch
 				{
 					>= 0 and <= 25 => "Th?p (0-25%)",
-					> 25 and <= 50 => "Trung bÏnh (26-50%)",
+					> 25 and <= 50 => "Trung b√¨nh (26-50%)",
 					> 50 and <= 75 => "Cao (51-75%)",
 					> 75 and <= 100 => "R?t cao (76-100%)",
-					_ => "KhÙng x·c ??nh"
+					_ => "Kh√¥ng x√°c ??nh"
 				})
 				.Select(g => new
 				{
@@ -162,14 +200,15 @@ namespace erp_backend.Controllers
 				.Include(so => so.SaleOrderAddons)
 					.ThenInclude(soa => soa.Addon)
 				.Include(so => so.Customer)
+				.Include(so => so.CreatedByUser)
 				.FirstOrDefaultAsync(so => so.Id == id);
 
 			if (saleOrder == null)
 			{
-				return NotFound(new { message = "KhÙng tÏm th?y sale order" });
+				return NotFound(new { message = "Kh√¥ng t√¨m th·∫•y sale order" });
 			}
 
-			// Map sang response cÛ ??y ?? thÙng tin
+			// Map sang response c√≥ ƒë·∫ßy ƒë·ªß th√¥ng tin
 			var response = new
 			{
 				saleOrder.Id,
@@ -181,6 +220,8 @@ namespace erp_backend.Controllers
 				saleOrder.Status,
 				saleOrder.CreatedAt,
 				saleOrder.UpdatedAt,
+				saleOrder.CreatedByUserId,
+				CreatedByUser = saleOrder.CreatedByUser != null ? new { saleOrder.CreatedByUser.Id, saleOrder.CreatedByUser.Name } : null,
 				SaleOrderServices = saleOrder.SaleOrderServices.Select(sos => new
 				{
 					sos.ServiceId,
@@ -202,9 +243,9 @@ namespace erp_backend.Controllers
 			return Ok(response);
 		}
 
-		// T?o sale order m?i v?i nhi?u services v‡ addons
+		// T?o sale order m?i v?i nhi?u services v√† addons
 		[HttpPost]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<SaleOrderWithItemsResponse>> CreateSaleOrder([FromBody] CreateSaleOrderWithItemsRequest request)
 		{
 			using var transaction = await _context.Database.BeginTransactionAsync();
@@ -221,10 +262,10 @@ namespace erp_backend.Controllers
 				var customerExists = await _context.Customers.AnyAsync(c => c.Id == request.CustomerId);
 				if (!customerExists)
 				{
-					return BadRequest(new { message = "Customer khÙng t?n t?i" });
+					return BadRequest(new { message = "Customer kh√¥ng t?n t?i" });
 				}
 
-				// Ki?m tra v‡ load services
+				// Ki?m tra v√† load services
 				List<Service> services = new();
 				if (request.Services.Any())
 				{
@@ -236,11 +277,11 @@ namespace erp_backend.Controllers
 					var missingServiceIds = serviceIds.Except(services.Select(s => s.Id)).ToList();
 					if (missingServiceIds.Any())
 					{
-						return BadRequest(new { message = $"Service IDs khÙng t?n t?i: {string.Join(", ", missingServiceIds)}" });
+						return BadRequest(new { message = $"Service IDs kh√¥ng t?n t?i: {string.Join(", ", missingServiceIds)}" });
 					}
 				}
 
-				// Ki?m tra v‡ load addons
+				// Ki?m tra v√† load addons
 				List<Addon> addons = new();
 				if (request.Addons.Any())
 				{
@@ -252,23 +293,23 @@ namespace erp_backend.Controllers
 					var missingAddonIds = addonIds.Except(addons.Select(a => a.Id)).ToList();
 					if (missingAddonIds.Any())
 					{
-						return BadRequest(new { message = $"Addon IDs khÙng t?n t?i: {string.Join(", ", missingAddonIds)}" });
+						return BadRequest(new { message = $"Addon IDs kh√¥ng t?n t?i: {string.Join(", ", missingAddonIds)}" });
 					}
 				}
 
-				// Ki?m tra ph?i cÛ Ìt nh?t 1 service ho?c addon
+				// Ki?m tra ph?i c√≥ √≠t nh?t 1 service ho?c addon
 				if (!request.Services.Any() && !request.Addons.Any())
 				{
-					return BadRequest(new { message = "Ph?i cÛ Ìt nh?t 1 service ho?c addon" });
+					return BadRequest(new { message = "Ph?i c√≥ √≠t nh?t 1 service ho?c addon" });
 				}
 
-				// TÌnh t?ng gi· tr? - LuÙn l?y quantity t? Service/Addon
+				// T√≠nh t?ng gi√° tr? - Lu√¥n l?y quantity t? Service/Addon
 				decimal totalValue = 0;
 				
 				foreach (var serviceDto in request.Services)
 				{
 					var service = services.First(s => s.Id == serviceDto.ServiceId);
-					var quantity = service.Quantity ?? 1; // LuÙn l?y t? Service
+					var quantity = service.Quantity ?? 1; // Lu√¥n l?y t? Service
 					var unitPrice = serviceDto.UnitPrice ?? service.Price;
 					totalValue += unitPrice * quantity;
 				}
@@ -276,7 +317,7 @@ namespace erp_backend.Controllers
 				foreach (var addonDto in request.Addons)
 				{
 					var addon = addons.First(a => a.Id == addonDto.AddonId);
-					var quantity = addon.Quantity ?? 1; // LuÙn l?y t? Addon
+					var quantity = addon.Quantity ?? 1; // Lu√¥n l?y t? Addon
 					var unitPrice = addonDto.UnitPrice ?? addon.Price;
 					totalValue += unitPrice * quantity;
 				}
@@ -293,10 +334,31 @@ namespace erp_backend.Controllers
 					CreatedAt = DateTime.UtcNow
 				};
 
+				// L·∫•y UserId t·ª´ JWT token v√† g√°n v√†o CreatedByUserId
+				var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == "userid");
+				if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+				{
+					// Ki·ªÉm tra user c√≥ t·ªìn t·∫°i kh√¥ng
+					var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+					if (userExists)
+					{
+						saleOrder.CreatedByUserId = userId;
+						_logger.LogInformation($"Setting CreatedByUserId to {userId}");
+					}
+					else
+					{
+						_logger.LogWarning($"User with ID {userId} not found in database");
+					}
+				}
+				else
+				{
+					_logger.LogWarning("UserId claim not found in token");
+				}
+
 				_context.SaleOrders.Add(saleOrder);
 				await _context.SaveChangesAsync();
 
-				// T?o SaleOrderServices - LuÙn l?y quantity t? Service
+				// T?o SaleOrderServices - Lu√¥n l?y quantity t? Service
 				var saleOrderServices = new List<SaleOrderService>();
 				foreach (var serviceDto in request.Services)
 				{
@@ -305,7 +367,7 @@ namespace erp_backend.Controllers
 					{
 						SaleOrderId = saleOrder.Id,
 						ServiceId = serviceDto.ServiceId,
-						Quantity = service.Quantity, // LuÙn l?y t? Service
+						Quantity = service.Quantity, // Lu√¥n l?y t? Service
 						UnitPrice = serviceDto.UnitPrice ?? service.Price,
 						Notes = serviceDto.Notes ?? service.Notes,
 						duration = serviceDto.Duration ?? 0,
@@ -316,7 +378,7 @@ namespace erp_backend.Controllers
 					_context.SaleOrderServices.Add(saleOrderService);
 				}
 
-				// T?o SaleOrderAddons - LuÙn l?y quantity t? Addon
+				// T?o SaleOrderAddons - Lu√¥n l?y quantity t? Addon
 				var saleOrderAddons = new List<SaleOrderAddon>();
 				foreach (var addonDto in request.Addons)
 				{
@@ -325,7 +387,7 @@ namespace erp_backend.Controllers
 					{
 						SaleOrderId = saleOrder.Id,
 						AddonId = addonDto.AddonId,
-						Quantity = addon.Quantity, // LuÙn l?y t? Addon
+						Quantity = addon.Quantity, // Lu√¥n l?y t? Addon
 						UnitPrice = addonDto.UnitPrice ?? addon.Price,
 						Notes = addonDto.Notes ?? addon.Notes,
 						duration = addonDto.Duration ?? 0,
@@ -339,7 +401,17 @@ namespace erp_backend.Controllers
 				await _context.SaveChangesAsync();
 				await transaction.CommitAsync();
 
-				// T?o response
+				// Reload sale order with CreatedByUser navigation property
+				var savedSaleOrder = await _context.SaleOrders
+					.Include(so => so.CreatedByUser)
+					.FirstOrDefaultAsync(so => so.Id == saleOrder.Id);
+
+				if (savedSaleOrder?.CreatedByUser == null && savedSaleOrder?.CreatedByUserId != null)
+				{
+					_logger.LogWarning($"CreatedByUser is null even though CreatedByUserId is {savedSaleOrder.CreatedByUserId}");
+				}
+
+				// T·∫°o response
 				var response = new SaleOrderWithItemsResponse
 				{
 					Id = saleOrder.Id,
@@ -377,7 +449,7 @@ namespace erp_backend.Controllers
 			}
 		}
 
-		// C?p nh?t sale order v?i ??y ?? thÙng tin (bao g?m Services v‡ Addons)
+		// C?p nh?t sale order v?i ??y ?? th√¥ng tin (bao g?m Services v√† Addons)
 		[HttpPut("{id}")]
 		//[Authorize]
 		public async Task<ActionResult<SaleOrderWithItemsResponse>> UpdateSaleOrder(int id, [FromBody] UpdateSaleOrderWithItemsRequest request)
@@ -400,10 +472,10 @@ namespace erp_backend.Controllers
 
 				if (existingSaleOrder == null)
 				{
-					return NotFound(new { message = "KhÙng tÏm th?y sale order" });
+					return NotFound(new { message = "Kh√¥ng t√¨m th?y sale order" });
 				}
 
-				// C?p nh?t thÙng tin c? b?n
+				// C?p nh?t th√¥ng tin c? b?n
 				if (!string.IsNullOrEmpty(request.Title))
 				{
 					existingSaleOrder.Title = request.Title;
@@ -414,7 +486,7 @@ namespace erp_backend.Controllers
 					var customerExists = await _context.Customers.AnyAsync(c => c.Id == request.CustomerId.Value);
 					if (!customerExists)
 					{
-						return BadRequest(new { message = "Customer khÙng t?n t?i" });
+						return BadRequest(new { message = "Customer kh√¥ng t?n t?i" });
 					}
 					existingSaleOrder.CustomerId = request.CustomerId.Value;
 				}
@@ -434,14 +506,14 @@ namespace erp_backend.Controllers
 					existingSaleOrder.Status = request.Status;
 				}
 
-				// C?p nh?t Services n?u cÛ trong request
+				// C?p nh?t Services n?u c√≥ trong request
 				List<Service> services = new();
 				if (request.Services != null)
 				{
-					// XÛa c·c services c?
+					// X√≥a c√°c services c?
 					_context.SaleOrderServices.RemoveRange(existingSaleOrder.SaleOrderServices);
 
-					// ThÍm services m?i (n?u cÛ)
+					// Th√™m services m?i (n?u c√≥)
 					if (request.Services.Any())
 					{
 						var serviceIds = request.Services.Select(s => s.ServiceId).ToList();
@@ -453,7 +525,7 @@ namespace erp_backend.Controllers
 						if (missingServiceIds.Any())
 						{
 							await transaction.RollbackAsync();
-							return BadRequest(new { message = $"Service IDs khÙng t?n t?i: {string.Join(", ", missingServiceIds)}" });
+							return BadRequest(new { message = $"Service IDs kh√¥ng t?n t?i: {string.Join(", ", missingServiceIds)}" });
 						}
 
 						foreach (var serviceDto in request.Services)
@@ -476,8 +548,8 @@ namespace erp_backend.Controllers
 				}
 				else
 				{
-					// N?u request.Services == null, gi? nguyÍn services hi?n t?i
-					// Load l?i services ?? tÌnh to·n value
+					// N?u request.Services == null, gi? nguy√™n services hi?n t?i
+					// Load l?i services ?? t√≠nh to√°n value
 					var serviceIds = existingSaleOrder.SaleOrderServices.Select(s => s.ServiceId).ToList();
 					if (serviceIds.Any())
 					{
@@ -487,14 +559,14 @@ namespace erp_backend.Controllers
 					}
 				}
 
-				// C?p nh?t Addons n?u cÛ trong request
+				// C?p nh?t Addons n?u c√≥ trong request
 				List<Addon> addons = new();
 				if (request.Addons != null)
 				{
-					// XÛa c·c addons c?
+					// X√≥a c√°c addons c?
 					_context.SaleOrderAddons.RemoveRange(existingSaleOrder.SaleOrderAddons);
 
-					// ThÍm addons m?i (n?u cÛ)
+					// Th√™m addons m?i (n?u c√≥)
 					if (request.Addons.Any())
 					{
 						var addonIds = request.Addons.Select(a => a.AddonId).ToList();
@@ -506,7 +578,7 @@ namespace erp_backend.Controllers
 						if (missingAddonIds.Any())
 						{
 							await transaction.RollbackAsync();
-							return BadRequest(new { message = $"Addon IDs khÙng t?n t?i: {string.Join(", ", missingAddonIds)}" });
+							return BadRequest(new { message = $"Addon IDs kh√¥ng t?n t?i: {string.Join(", ", missingAddonIds)}" });
 						}
 
 						foreach (var addonDto in request.Addons)
@@ -529,8 +601,8 @@ namespace erp_backend.Controllers
 				}
 				else
 				{
-					// N?u request.Addons == null, gi? nguyÍn addons hi?n t?i
-					// Load l?i addons ?? tÌnh to·n value
+					// N?u request.Addons == null, gi? nguy√™n addons hi?n t?i
+					// Load l?i addons ?? t√≠nh to√°n value
 					var addonIds = existingSaleOrder.SaleOrderAddons.Select(a => a.AddonId).ToList();
 					if (addonIds.Any())
 					{
@@ -540,10 +612,10 @@ namespace erp_backend.Controllers
 					}
 				}
 
-				// TÌnh l?i gi· tr? t?ng
+				// T√≠nh l?i gi√° tr? t?ng
 				decimal totalValue = 0;
 
-				// TÌnh t? services
+				// T√≠nh t? services
 				if (request.Services != null && request.Services.Any())
 				{
 					foreach (var serviceDto in request.Services)
@@ -556,7 +628,7 @@ namespace erp_backend.Controllers
 				}
 				else if (request.Services == null)
 				{
-					// Gi? nguyÍn services c?
+					// Gi? nguy√™n services c?
 					foreach (var sos in existingSaleOrder.SaleOrderServices)
 					{
 						var service = services.FirstOrDefault(s => s.Id == sos.ServiceId);
@@ -565,7 +637,7 @@ namespace erp_backend.Controllers
 					}
 				}
 
-				// TÌnh t? addons
+				// T√≠nh t? addons
 				if (request.Addons != null && request.Addons.Any())
 				{
 					foreach (var addonDto in request.Addons)
@@ -578,7 +650,7 @@ namespace erp_backend.Controllers
 				}
 				else if (request.Addons == null)
 				{
-					// Gi? nguyÍn addons c?
+					// Gi? nguy√™n addons c?
 					foreach (var soa in existingSaleOrder.SaleOrderAddons)
 					{
 						var addon = addons.FirstOrDefault(a => a.Id == soa.AddonId);
@@ -593,7 +665,7 @@ namespace erp_backend.Controllers
 				await _context.SaveChangesAsync();
 				await transaction.CommitAsync();
 
-				// Load l?i ?? l?y ??y ?? thÙng tin
+				// Load l?i ?? l?y ??y ?? th√¥ng tin
 				var updatedSaleOrder = await _context.SaleOrders
 					.Include(so => so.SaleOrderServices)
 						.ThenInclude(sos => sos.Service)
@@ -628,7 +700,7 @@ namespace erp_backend.Controllers
 						Duration = soa.duration,
 						Template = soa.template
 					}).ToList(),
-					Message = "C?p nh?t sale order th‡nh cÙng"
+					Message = "C?p nh?t sale order th√†nh c√¥ng"
 				};
 
 				return Ok(response);
@@ -641,7 +713,7 @@ namespace erp_backend.Controllers
 			}
 		}
 
-		// C?p nh?t x·c su?t sale order
+		// C?p nh?t x√°c su?t sale order
 		[HttpPatch("{id}/probability")]
 		[Authorize]
 		public async Task<IActionResult> UpdateSaleOrderProbability(int id, [FromBody] Dictionary<string, int> request)
@@ -657,13 +729,13 @@ namespace erp_backend.Controllers
 
 				if (probability < 0 || probability > 100)
 				{
-					return BadRequest(new { message = "X·c su?t ph?i t? 0-100%" });
+					return BadRequest(new { message = "X√°c su?t ph?i t? 0-100%" });
 				}
 
 				var saleOrder = await _context.SaleOrders.FindAsync(id);
 				if (saleOrder == null)
 				{
-					return NotFound(new { message = "KhÙng tÏm th?y sale order" });
+					return NotFound(new { message = "Kh√¥ng t√¨m th?y sale order" });
 				}
 
 				saleOrder.Probability = probability;
@@ -672,7 +744,7 @@ namespace erp_backend.Controllers
 
 				return Ok(new
 				{
-					message = "C?p nh?t x·c su?t th‡nh cÙng",
+					message = "C?p nh?t x√°c su?t th√†nh c√¥ng",
 					id = saleOrder.Id,
 					probability = saleOrder.Probability,
 					updatedAt = saleOrder.UpdatedAt
@@ -680,12 +752,12 @@ namespace erp_backend.Controllers
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "L?i khi c?p nh?t x·c su?t sale order v?i ID: {SaleOrderId}", id);
-				return StatusCode(500, new { message = "L?i server khi c?p nh?t x·c su?t", error = ex.Message });
+				_logger.LogError(ex, "L?i khi c?p nh?t x√°c su?t sale order v?i ID: {SaleOrderId}", id);
+				return StatusCode(500, new { message = "L?i server khi c?p nh?t x√°c su?t", error = ex.Message });
 			}
 		}
 
-		// XÛa sale order
+		// X√≥a sale order
 		[HttpDelete("{id}")]
 		[Authorize]
 		public async Task<ActionResult<DeleteSaleOrderResponse>> DeleteSaleOrder(int id)
@@ -695,7 +767,7 @@ namespace erp_backend.Controllers
 				var saleOrder = await _context.SaleOrders.FindAsync(id);
 				if (saleOrder == null)
 				{
-					return NotFound(new { message = "KhÙng tÏm th?y sale order" });
+					return NotFound(new { message = "Kh√¥ng t√¨m th?y sale order" });
 				}
 
 				var deletedSaleOrderInfo = new SaleOrderInfo
@@ -716,7 +788,7 @@ namespace erp_backend.Controllers
 
 				var response = new DeleteSaleOrderResponse
 				{
-					Message = "XÛa sale order th‡nh cÙng",
+					Message = "X√≥a sale order th√†nh c√¥ng",
 					DeletedSaleOrder = deletedSaleOrderInfo,
 					DeletedAt = DateTime.UtcNow
 				};
@@ -725,8 +797,8 @@ namespace erp_backend.Controllers
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "L?i khi xÛa sale order v?i ID: {SaleOrderId}", id);
-				return StatusCode(500, new { message = "L?i server khi xÛa sale order", error = ex.Message });
+				_logger.LogError(ex, "L?i khi x√≥a sale order v?i ID: {SaleOrderId}", id);
+				return StatusCode(500, new { message = "L?i server khi x√≥a sale order", error = ex.Message });
 			}
 		}
 

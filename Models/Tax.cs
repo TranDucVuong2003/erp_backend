@@ -8,7 +8,7 @@ namespace erp_backend.Models
 
 		[Required]
 		[Range(0, 100, ErrorMessage = "Tỷ lệ thuế phải từ 0-100%")]
-		public decimal Rate { get; set; }
+		public float Rate { get; set; }
 
 		[StringLength(2000)]
 		public string? Notes { get; set; }

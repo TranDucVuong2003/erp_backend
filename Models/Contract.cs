@@ -24,9 +24,8 @@ namespace erp_backend.Models
 		[Required]
 		public int UserId { get; set; }
 
-		// ✅ THÊM: Số hợp đồng
-		[StringLength(100)]
-		public string? NumberContract { get; set; }
+		// ✅ THÊM: Số hợp đồng - Tự động tăng
+		public int NumberContract { get; set; }
 
 		[StringLength(50)]
 		public string Status { get; set; } = "Draft"; // Default status

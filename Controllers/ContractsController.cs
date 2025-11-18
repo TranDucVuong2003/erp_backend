@@ -26,17 +26,55 @@ namespace erp_backend.Controllers
         [Authorize]
         public async Task<ActionResult<IEnumerable<ContractResponse>>> GetContracts()
         {
-            var contracts = await _context.Contracts
+            // Lấy role từ JWT token
+            var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role);
+            var role = roleClaim?.Value;
+
+            // Lấy UserId từ JWT token
+            var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == "userid");
+            
+            var query = _context.Contracts
                 .Include(c => c.User)
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.Customer)
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.SaleOrderServices)
                         .ThenInclude(sos => sos.Service)
+                            .ThenInclude(s => s!.Tax)
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.SaleOrderAddons)
                         .ThenInclude(soa => soa.Addon)
-                .ToListAsync();
+                            .ThenInclude(a => a!.Tax)
+                .AsQueryable();
+
+            // Nếu role là "user" thì chỉ lấy hợp đồng có SaleOrder được tạo bởi user đó
+            if (role != null && role.ToLower() == "user")
+            {
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    // Lọc theo CreatedByUserId của SaleOrder
+                    query = query.Where(c => c.SaleOrder!.CreatedByUserId == userId);
+                    _logger.LogInformation($"User role detected. Filtering contracts for UserId: {userId}");
+                }
+                else
+                {
+                    _logger.LogWarning("User role detected but UserId claim not found");
+                    return Forbid();
+                }
+            }
+            else if (role != null && role.ToLower() == "admin")
+            {
+                // Admin có thể xem tất cả hợp đồng
+                _logger.LogInformation("Admin role detected. Returning all contracts");
+            }
+            else
+            {
+                // Nếu không có role hoặc role không hợp lệ
+                _logger.LogWarning($"Invalid or missing role: {role}");
+                return Forbid();
+            }
+
+            var contracts = await query.ToListAsync();
 
             var response = contracts.Select(c => MapToContractResponse(c));
 
@@ -55,9 +93,11 @@ namespace erp_backend.Controllers
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.SaleOrderServices)
                         .ThenInclude(sos => sos.Service)
+                            .ThenInclude(s => s!.Tax)
                 .Include(c => c.SaleOrder)
                     .ThenInclude(so => so!.SaleOrderAddons)
                         .ThenInclude(soa => soa.Addon)
+                            .ThenInclude(a => a!.Tax)
                 .FirstOrDefaultAsync(c => c.Id == id);
 
             if (contract == null)
@@ -101,6 +141,14 @@ namespace erp_backend.Controllers
                     return BadRequest(new { message = "User không tồn tại" });
                 }
 
+                // ✅ TỰ ĐỘNG TẠO SỐ HỢP ĐỒNG (bắt đầu từ 128)
+                var maxContractNumber = await _context.Contracts
+                    .OrderByDescending(c => c.NumberContract)
+                    .Select(c => c.NumberContract)
+                    .FirstOrDefaultAsync();
+
+                int nextNumber = maxContractNumber > 0 ? maxContractNumber + 1 : 128;
+
                 // Tính toán tự động SubTotal, TaxAmount, TotalAmount từ SaleOrder
                 decimal subTotal = saleOrder.Value;
                 decimal taxAmount = 0;
@@ -114,7 +162,7 @@ namespace erp_backend.Controllers
                 {
                     SaleOrderId = request.SaleOrderId,
                     UserId = request.UserId,
-                    NumberContract = request.NumberContract,
+                    NumberContract = nextNumber, // ✅ Tự động gán
                     Status = request.Status,
                     PaymentMethod = request.PaymentMethod,
                     SubTotal = subTotal,
@@ -136,9 +184,11 @@ namespace erp_backend.Controllers
                     .Include(c => c.SaleOrder)
                         .ThenInclude(so => so!.SaleOrderServices)
                             .ThenInclude(sos => sos.Service)
+                                .ThenInclude(s => s!.Tax)
                     .Include(c => c.SaleOrder)
                         .ThenInclude(so => so!.SaleOrderAddons)
                             .ThenInclude(soa => soa.Addon)
+                                .ThenInclude(a => a!.Tax)
                     .FirstAsync(c => c.Id == contract.Id);
 
                 var response = MapToContractResponse(contract);
@@ -189,7 +239,7 @@ namespace erp_backend.Controllers
                 // ✅ Invalidate PDF cache nếu có thay đổi quan trọng
                 bool needsRegenerate = request.SaleOrderId != existingContract.SaleOrderId ||
                                       request.UserId != existingContract.UserId ||
-                                      request.NumberContract != existingContract.NumberContract ||
+                                      // NumberContract không thể thay đổi khi update
                                       request.Status != existingContract.Status ||
                                       request.PaymentMethod != existingContract.PaymentMethod ||
                                       request.Expiration != existingContract.Expiration;
@@ -211,10 +261,10 @@ namespace erp_backend.Controllers
                     existingContract.PdfFileSize = null;
                 }
 
-                // Cập nhật các trường
+                // Cập nhật các trường (NumberContract KHÔNG được cập nhật)
                 existingContract.SaleOrderId = request.SaleOrderId;
                 existingContract.UserId = request.UserId;
-                existingContract.NumberContract = request.NumberContract;
+                // existingContract.NumberContract - KHÔNG thay đổi
                 existingContract.Status = request.Status;
                 existingContract.PaymentMethod = request.PaymentMethod;
                 existingContract.Expiration = request.Expiration;
@@ -242,9 +292,11 @@ namespace erp_backend.Controllers
                     .Include(c => c.SaleOrder)
                         .ThenInclude(so => so!.SaleOrderServices)
                             .ThenInclude(sos => sos.Service)
+                                .ThenInclude(s => s!.Tax)
                     .Include(c => c.SaleOrder)
                         .ThenInclude(so => so!.SaleOrderAddons)
                             .ThenInclude(soa => soa.Addon)
+                                .ThenInclude(a => a!.Tax)
                     .FirstAsync(c => c.Id == id);
 
                 var response = MapToContractResponse(contract);
@@ -364,7 +416,13 @@ namespace erp_backend.Controllers
                         UnitPrice = sos.UnitPrice,
                         Quantity = sos.Quantity,
                         Duration = sos.duration,
-                        Template = sos.template
+                        Template = sos.template,
+                        TaxId = sos.Service?.TaxId,
+                        Tax = sos.Service?.Tax != null ? new TaxBasicDto
+                        {
+                            Id = sos.Service.Tax.Id,
+                            Rate = sos.Service.Tax.Rate
+                        } : null
                     }).ToList() ?? new(),
                     Addons = contract.SaleOrder.SaleOrderAddons?.Select(soa => new AddonItemDto
                     {
@@ -373,7 +431,13 @@ namespace erp_backend.Controllers
                         UnitPrice = soa.UnitPrice,
                         Quantity = soa.Quantity,
                         Duration = soa.duration,
-                        Template = soa.template
+                        Template = soa.template,
+                        TaxId = soa.Addon?.TaxId,
+                        Tax = soa.Addon?.Tax != null ? new TaxBasicDto
+                        {
+                            Id = soa.Addon.Tax.Id,
+                            Rate = soa.Addon.Tax.Rate
+                        } : null
                     }).ToList() ?? new()
                 } : null,
                 UserId = contract.UserId,
@@ -418,9 +482,11 @@ namespace erp_backend.Controllers
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.SaleOrderServices)
 							.ThenInclude(sos => sos.Service)
+								.ThenInclude(s => s!.Tax)
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.SaleOrderAddons)
 							.ThenInclude(soa => soa.Addon)
+								.ThenInclude(a => a!.Tax)
 					.FirstOrDefaultAsync(c => c.Id == id);
 
 				if (contract == null)
@@ -480,9 +546,11 @@ namespace erp_backend.Controllers
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.SaleOrderServices)
 							.ThenInclude(sos => sos.Service)
+								.ThenInclude(s => s!.Tax)
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.SaleOrderAddons)
 							.ThenInclude(soa => soa.Addon)
+								.ThenInclude(a => a!.Tax)
 					.FirstOrDefaultAsync(c => c.Id == id);
 
 				if (contract == null)
@@ -648,8 +716,8 @@ namespace erp_backend.Controllers
 
 			// Thông tin hợp đồng cơ bản
 			template = template
-				.Replace("{{ContractNumber}}", contract.NumberContract ?? contract.Id.ToString())
-				.Replace("{{NumberContract}}", contract.NumberContract ?? contract.Id.ToString()) // ✅ THÊM MỚI
+				.Replace("{{ContractNumber}}", contract.NumberContract.ToString())
+				.Replace("{{NumberContract}}", contract.NumberContract.ToString()) // ✅ THÊM MỚI
 				.Replace("{{ContractYear}}", contract.CreatedAt.Year.ToString())
 				.Replace("{{Day}}", now.Day.ToString())
 				.Replace("{{Month}}", now.Month.ToString())
@@ -684,6 +752,25 @@ namespace erp_backend.Controllers
 					.Replace("{{CustomerBirthDay}}", "")
 					.Replace("{{CustomerBirthMonth}}", "")
 					.Replace("{{CustomerBirthYear}}", "");
+			}
+
+			// ✅ Ngày thành lập (nếu là doanh nghiệp) - Để trống nếu không có
+			if (customer.EstablishedDate.HasValue)
+			{
+				template = template
+					.Replace("{{CompanyBEstablishedDay}}", customer.EstablishedDate.Value.Day.ToString())
+					.Replace("{{CompanyBEstablishedMonth}}", customer.EstablishedDate.Value.Month.ToString())
+					.Replace("{{CompanyBEstablishedYear}}", customer.EstablishedDate.Value.Year.ToString())
+					.Replace("{{CompanyBEstablishedDate}}", customer.EstablishedDate.Value.ToString("dd/MM/yyyy"));
+			}
+			else
+			{
+				// ✅ Nếu không có ngày thành lập, thay thế bằng chuỗi rỗng
+				template = template
+					.Replace("{{CompanyBEstablishedDay}}", "")
+					.Replace("{{CompanyBEstablishedMonth}}", "")
+					.Replace("{{CompanyBEstablishedYear}}", "")
+					.Replace("{{CompanyBEstablishedDate}}", "");
 			}
 
 			// Thông tin tài chính từ Contract
@@ -736,14 +823,18 @@ namespace erp_backend.Controllers
 					var lineTotal = sos.UnitPrice * quantity;
 					subTotal += lineTotal;
 
+					// Lấy thông tin thuế
+					var taxRate = service?.Tax?.Rate ?? 0f;
+					var taxDisplay = taxRate > 0 ? $"{taxRate}%" : "0%";
+
 					items.AppendLine($@"
 					<tr>
 						<td style='text-align: center; border: 1px solid #000'>{index++}</td>
-						<td style='border: 1px solid #000'>Service</td>
-						<td style='border: 1px solid #000'>{sos.template ?? ""}</td>
 						<td style='border: 1px solid #000'>{service?.Name ?? ""}</td>
+						<td style='border: 1px solid #000'>{sos.template ?? ""}</td>
+						<td style='text-align: center; border: 1px solid #000'>{taxDisplay}</td>
 						<td style='text-align: center; border: 1px solid #000'>{sos.duration} tháng</td>
-						<td style='text-align: right; border: 1px solid #000'>0</td>
+						<td style='text-align: right; border: 1px solid #000'>{sos.UnitPrice:N0}</td>
 						<td style='text-align: right; border: 1px solid #000'>{lineTotal:N0}</td>
 					</tr>");
 				}
@@ -759,14 +850,18 @@ namespace erp_backend.Controllers
 					var lineTotal = soa.UnitPrice * quantity;
 					subTotal += lineTotal;
 
+					// Lấy thông tin thuế
+					var taxRate = addon?.Tax?.Rate ?? 0f;
+					var taxDisplay = taxRate > 0 ? $"{taxRate}%" : "0%";
+
 					items.AppendLine($@"
 					<tr>
 						<td style='text-align: center; border: 1px solid #000'>{index++}</td>
-						<td style='border: 1px solid #000'>Addon</td>
-						<td style='border: 1px solid #000'>{soa.template ?? ""}</td>
 						<td style='border: 1px solid #000'>{addon?.Name ?? ""}</td>
+						<td style='border: 1px solid #000'>{soa.template ?? ""}</td>
+						<td style='text-align: center; border: 1px solid #000'>{taxDisplay}</td>
 						<td style='text-align: center; border: 1px solid #000'>{soa.duration} tháng</td>
-						<td style='text-align: right; border: 1px solid #000'>0</td>
+						<td style='text-align: right; border: 1px solid #000'>{soa.UnitPrice:N0}</td>
 						<td style='text-align: right; border: 1px solid #000'>{lineTotal:N0}</td>
 					</tr>");
 				}	
