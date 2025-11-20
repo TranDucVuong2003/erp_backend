@@ -213,33 +213,58 @@ namespace erp_backend.Controllers
             }
         }
 
-        [HttpGet("sessions")]
-        [Authorize]
-        public async Task<ActionResult<IEnumerable<SessionInfo>>> GetUserSessions()
+        [HttpGet("admin/all-sessions")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<IEnumerable<SessionInfo>>> GetAllSessions(
+            [FromQuery] int? userId = null,
+            [FromQuery] bool includeRevoked = false,
+            [FromQuery] bool includeExpired = false)
         {
             try
             {
-                var userId = User.FindFirstValue("userid");
-                if (string.IsNullOrEmpty(userId))
+                var query = _context.JwtTokens
+                    .Include(t => t.User)
+                    .AsQueryable();
+
+                // Filter by specific user if provided
+                if (userId.HasValue)
                 {
-                    return Unauthorized(new { message = "User không xác định" });
+                    query = query.Where(t => t.UserId == userId.Value);
+                }
+
+                // Filter revoked sessions
+                if (!includeRevoked)
+                {
+                    query = query.Where(t => !t.IsRevoked);
+                }
+
+                // Filter expired sessions
+                if (!includeExpired)
+                {
+                    query = query.Where(t => t.Expiration > DateTime.UtcNow);
                 }
 
                 var currentRefreshToken = Request.Cookies["refreshToken"];
 
-                var sessions = await _context.JwtTokens
-                    .Where(t => 
-                        t.UserId.ToString() == userId && 
-                        !t.IsRevoked && 
-                        t.Expiration > DateTime.UtcNow)
+                var sessions = await query
                     .OrderByDescending(t => t.CreatedAt)
                     .Select(t => new SessionInfo
                     {
                         Id = t.Id,
+                        UserId = t.UserId,
+                        UserName = t.User != null ? t.User.Name : string.Empty,
+                        UserEmail = t.User != null ? t.User.Email : string.Empty,
+                        UserRole = t.User != null ? t.User.Role : string.Empty,
                         DeviceInfo = t.DeviceInfo ?? "Unknown Device",
                         IpAddress = t.IpAddress ?? "Unknown IP",
+                        UserAgent = t.UserAgent,
                         CreatedAt = t.CreatedAt,
                         ExpiresAt = t.Expiration,
+                        IsUsed = t.IsUsed,
+                        IsRevoked = t.IsRevoked,
+                        RevokedAt = t.RevokedAt,
+                        ReasonRevoked = t.ReasonRevoked,
+                        IsActive = !t.IsRevoked && t.Expiration > DateTime.UtcNow,
                         IsCurrentSession = t.Token == currentRefreshToken
                     })
                     .ToListAsync();
@@ -248,94 +273,51 @@ namespace erp_backend.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving user sessions");
-                return StatusCode(500, new { message = "Lỗi server khi lấy thông tin phiên đăng nhập", error = ex.Message });
+                _logger.LogError(ex, "Error retrieving all sessions");
+                return StatusCode(500, new { message = "Lỗi server khi lấy thông tin tất cả phiên đăng nhập", error = ex.Message });
             }
         }
 
-        [HttpPost("revoke-session/{id}")]
-        [Authorize]
-        public async Task<ActionResult> RevokeSession(int id)
+        [HttpPost("admin/revoke-session/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult> AdminRevokeSession(int id, [FromBody] RevokeSessionRequest? request = null)
         {
             try
             {
-                var userId = User.FindFirstValue("userid");
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return Unauthorized(new { message = "User không xác định" });
-                }
-
                 var session = await _context.JwtTokens
-                    .FirstOrDefaultAsync(t => 
-                        t.Id == id && 
-                        t.UserId.ToString() == userId);
+                    .Include(t => t.User)
+                    .FirstOrDefaultAsync(t => t.Id == id);
 
                 if (session == null)
                 {
                     return NotFound(new { message = "Không tìm thấy phiên đăng nhập" });
                 }
 
-                // Check if it's current session
-                var currentRefreshToken = Request.Cookies["refreshToken"];
-                if (session.Token == currentRefreshToken)
-                {
-                    return BadRequest(new { message = "Không thể thu hồi phiên đăng nhập hiện tại. Hãy đăng xuất." });
-                }
-
                 session.IsRevoked = true;
                 session.RevokedAt = DateTime.UtcNow;
-                session.ReasonRevoked = "Manually revoked by user";
+                session.ReasonRevoked = request?.Reason ?? "Revoked by admin";
                 await _context.SaveChangesAsync();
 
-                return Ok(new { message = "Thu hồi phiên đăng nhập thành công" });
+                return Ok(new 
+                { 
+                    message = "Thu hồi phiên đăng nhập thành công",
+                    session = new
+                    {
+                        id = session.Id,
+                        userId = session.UserId,
+                        userName = session.User?.Name,
+                        deviceInfo = session.DeviceInfo,
+                        revokedAt = session.RevokedAt
+                    }
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error revoking session");
+                _logger.LogError(ex, "Error revoking session by admin");
                 return StatusCode(500, new { message = "Lỗi server khi thu hồi phiên đăng nhập", error = ex.Message });
             }
         }
 
-        [HttpPost("revoke-all-sessions")]
-        [Authorize]
-        public async Task<ActionResult> RevokeAllSessions()
-        {
-            try
-            {
-                var userId = User.FindFirstValue("userid");
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return Unauthorized(new { message = "User không xác định" });
-                }
-
-                var currentRefreshToken = Request.Cookies["refreshToken"];
-
-                // Get all active sessions except current one
-                var sessions = await _context.JwtTokens
-                    .Where(t => 
-                        t.UserId.ToString() == userId && 
-                        !t.IsRevoked &&
-                        t.Token != currentRefreshToken)
-                    .ToListAsync();
-
-                // Revoke all sessions
-                foreach (var session in sessions)
-                {
-                    session.IsRevoked = true;
-                    session.RevokedAt = DateTime.UtcNow;
-                    session.ReasonRevoked = "Manually revoked by user (bulk action)";
-                }
-
-                await _context.SaveChangesAsync();
-
-                return Ok(new { message = $"Đã thu hồi {sessions.Count} phiên đăng nhập" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error revoking all sessions");
-                return StatusCode(500, new { message = "Lỗi server khi thu hồi tất cả phiên đăng nhập", error = ex.Message });
-            }
-        }
 
         private void SetRefreshTokenCookie(string token, DateTime expires)
         {

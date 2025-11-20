@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using erp_backend.Data;
 using erp_backend.Services;
+using erp_backend.Middleware;
 using IronPdf;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization; // ✅ THÊM
@@ -158,6 +159,9 @@ app.UseHttpsRedirection();
 // Add Authentication & Authorization middleware - QUAN TRỌNG!
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Add JWT Token Validation Middleware - Kiểm tra session có bị revoke không
+app.UseMiddleware<JwtTokenValidationMiddleware>();
 
 app.MapControllers();
 

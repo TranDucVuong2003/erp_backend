@@ -29,6 +29,7 @@ namespace erp_backend.Data
         public DbSet<Quote> Quotes { get; set; }
         public DbSet<QuoteService> QuoteServices { get; set; }
         public DbSet<QuoteAddon> QuoteAddons { get; set; }
+        public DbSet<MatchedTransaction> MatchedTransactions { get; set; } // ? THÊM M?I
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -535,6 +536,43 @@ namespace erp_backend.Data
                 // Indexes
                 entity.HasIndex(e => e.QuoteId);
                 entity.HasIndex(e => e.AddonId);
+            });
+
+            // Configure MatchedTransaction entity
+            modelBuilder.Entity<MatchedTransaction>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.TransactionId).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Amount).HasColumnType("decimal(18,2)").IsRequired();
+                entity.Property(e => e.ReferenceNumber).HasMaxLength(100);
+                entity.Property(e => e.Status).HasMaxLength(50);
+                entity.Property(e => e.TransactionDate).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.MatchedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.TransactionContent).HasMaxLength(500);
+                entity.Property(e => e.BankBrandName).HasMaxLength(50);
+                entity.Property(e => e.AccountNumber).HasMaxLength(50);
+                entity.Property(e => e.Notes).HasMaxLength(1000);
+
+                // Foreign Key relationships
+                entity.HasOne(e => e.Contract)
+                      .WithMany()
+                      .HasForeignKey(e => e.ContractId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.MatchedByUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.MatchedByUserId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Indexes
+                entity.HasIndex(e => e.TransactionId).IsUnique(); // TransactionId ph?i là duy nh?t
+                entity.HasIndex(e => e.ContractId);
+                entity.HasIndex(e => e.ReferenceNumber);
+                entity.HasIndex(e => e.TransactionDate);
+                entity.HasIndex(e => e.MatchedAt);
+                entity.HasIndex(e => e.MatchedByUserId);
+                entity.HasIndex(e => e.Status);
             });
         }
     }

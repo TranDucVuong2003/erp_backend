@@ -77,7 +77,13 @@ namespace erp_backend.Controllers
 				so.Id,
 				so.Title,
 				so.CustomerId,
-				Customer = so.Customer != null ? new { so.Customer.Id, so.Customer.Name } : null,
+				Customer = so.Customer != null ? new { 
+					so.Customer.Id, 
+					Name = so.Customer.CustomerType == "company" 
+						? so.Customer.CompanyName 
+						: so.Customer.Name,
+					so.Customer.CustomerType
+				} : null,
 				so.Value,
 				so.Probability,
 				so.Status,
@@ -120,13 +126,19 @@ namespace erp_backend.Controllers
 				.Where(d => d.CustomerId == customerId)
 				.ToListAsync();
 
-			// Map sang response có ??y ?? thông tin
+			// Map sang response có đầy đủ thông tin
 			var response = saleOrders.Select(so => new
 			{
 				so.Id,
 				so.Title,
 				so.CustomerId,
-				Customer = so.Customer != null ? new { so.Customer.Id, so.Customer.Name } : null,
+				Customer = so.Customer != null ? new { 
+					so.Customer.Id, 
+					Name = so.Customer.CustomerType == "company" 
+						? so.Customer.CompanyName 
+						: so.Customer.Name,
+					so.Customer.CustomerType
+				} : null,
 				so.Value,
 				so.Probability,
 				so.Status,
@@ -214,7 +226,13 @@ namespace erp_backend.Controllers
 				saleOrder.Id,
 				saleOrder.Title,
 				saleOrder.CustomerId,
-				Customer = saleOrder.Customer != null ? new { saleOrder.Customer.Id, saleOrder.Customer.Name } : null,
+				Customer = saleOrder.Customer != null ? new { 
+					saleOrder.Customer.Id, 
+					Name = saleOrder.Customer.CustomerType == "company" 
+						? saleOrder.Customer.CompanyName 
+						: saleOrder.Customer.Name,
+					saleOrder.Customer.CustomerType
+				} : null,
 				saleOrder.Value,
 				saleOrder.Probability,
 				saleOrder.Status,
