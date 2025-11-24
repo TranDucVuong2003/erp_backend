@@ -68,13 +68,13 @@ namespace erp_backend.Controllers
 								path = "/quotes",
 								icon = "DocumentTextIcon"
 							},
-                            //new
-                            //{
-                            //    name = "Task",
-                            //    path = "/tasks",
-                            //    icon = "CalendarIcon"
-                            //},
-                            new
+							new
+							{
+								name = "Lead",
+								path = "/companies",
+								icon = "CalendarIcon"
+							},
+							new
 							{
 								name = "Service",
 								icon = "CogIcon",
@@ -147,6 +147,12 @@ namespace erp_backend.Controllers
 								name = "Quote",
 								path = "/quotes",
 								icon = "DocumentTextIcon"
+							},
+							new
+							{
+								name = "Lead",
+								path = "/companies",
+								icon = "CalendarIcon"
 							},
 							new
 							{

@@ -30,8 +30,10 @@ namespace erp_backend.Data
         public DbSet<QuoteService> QuoteServices { get; set; }
         public DbSet<QuoteAddon> QuoteAddons { get; set; }
         public DbSet<MatchedTransaction> MatchedTransactions { get; set; } // ? THÊM M?I
+        public DbSet<Company> Companies { get; set; } // ? THÊM M?I
+        public DbSet<Url> Urls { get; set; } // ? THÊM M?I
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             
@@ -573,6 +575,51 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.MatchedAt);
                 entity.HasIndex(e => e.MatchedByUserId);
                 entity.HasIndex(e => e.Status);
+            });
+
+            // Configure Company entity
+            modelBuilder.Entity<Company>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.Mst).HasMaxLength(20);
+                entity.Property(e => e.TenDoanhNghiep).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.TenGiaoDich).HasMaxLength(255);
+                entity.Property(e => e.SoDienThoai).HasMaxLength(20);
+                entity.Property(e => e.DiaChi).HasMaxLength(500);
+                entity.Property(e => e.DaiDienPhapLuat).HasMaxLength(255);
+                entity.Property(e => e.NgayCapGiayPhep).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.NgayHoatDong).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.TrangThai).HasMaxLength(50);
+                entity.Property(e => e.Url).HasMaxLength(255);
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Foreign Key relationship with User
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Indexes
+                entity.HasIndex(e => e.Mst).IsUnique(); // Mã s? thu? là duy nh?t
+                entity.HasIndex(e => e.TenDoanhNghiep);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.TrangThai);
+                entity.HasIndex(e => e.CreatedAt);
+            });
+
+            // Configure Url entity
+            modelBuilder.Entity<Url>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.Links).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                // Indexes
+                entity.HasIndex(e => e.Links);
+                entity.HasIndex(e => e.CreatedAt);
             });
         }
     }
