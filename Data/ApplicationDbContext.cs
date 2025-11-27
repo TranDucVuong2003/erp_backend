@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using erp_backend.Models;
 
 namespace erp_backend.Data
@@ -29,9 +29,16 @@ namespace erp_backend.Data
         public DbSet<Quote> Quotes { get; set; }
         public DbSet<QuoteService> QuoteServices { get; set; }
         public DbSet<QuoteAddon> QuoteAddons { get; set; }
-        public DbSet<MatchedTransaction> MatchedTransactions { get; set; } // ? TH�M M?I
-        public DbSet<Company> Companies { get; set; } // ? TH�M M?I
-        public DbSet<Url> Urls { get; set; } // ? TH�M M?I
+        public DbSet<MatchedTransaction> MatchedTransactions { get; set; } // ? THÊM M?I
+        public DbSet<Company> Companies { get; set; } // ? THÊM M?I
+        public DbSet<Url> Urls { get; set; } // ? THÊM M?I
+        public DbSet<KPI> KPIs { get; set; }
+        public DbSet<Roles> Roles { get; set; }
+        public DbSet<Positions> Positions { get; set; }
+        public DbSet<Departments> Departments { get; set; }
+        public DbSet<Resion> Resions { get; set; }
+        public DbSet<ActiveAccount> ActiveAccounts { get; set; }
+        public DbSet<AccountActivationToken> AccountActivationTokens { get; set; }
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -42,12 +49,37 @@ namespace erp_backend.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
-                entity.Property(e => e.Password).IsRequired();
-                entity.Property(e => e.Role).HasMaxLength(50).HasDefaultValue("User");
+                entity.Property(e => e.Email).IsRequired().HasMaxLength(150);
+                entity.Property(e => e.Password).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.PhoneNumber).HasMaxLength(20);
+                entity.Property(e => e.Address).HasMaxLength(500);
+                entity.Property(e => e.SecondaryEmail).HasMaxLength(150);
+                entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("active");
                 entity.HasIndex(e => e.Email).IsUnique();
                 entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
                 entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+                // Foreign Key relationships
+                entity.HasOne(e => e.Role)
+                      .WithMany()
+                      .HasForeignKey(e => e.RoleId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Position)
+                      .WithMany()
+                      .HasForeignKey(e => e.PositionId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Department)
+                      .WithMany()
+                      .HasForeignKey(e => e.DepartmentId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Indexes
+                entity.HasIndex(e => e.RoleId);
+                entity.HasIndex(e => e.PositionId);
+                entity.HasIndex(e => e.DepartmentId);
+                entity.HasIndex(e => e.Status);
             });
 
             // Configure JwtToken entity
@@ -471,13 +503,13 @@ namespace erp_backend.Data
                       .HasForeignKey(e => e.AddonId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // ? TH�M: Foreign key relationship v?i User (CreatedByUser)
+                // ? THÊM: Foreign key relationship v?i User (CreatedByUser)
                 entity.HasOne(e => e.CreatedByUser)
                       .WithMany()
                       .HasForeignKey(e => e.CreatedByUserId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // ? TH�M: Foreign key relationship v?i Category_service_addons
+                // ? THÊM: Foreign key relationship v?i Category_service_addons
                 entity.HasOne(e => e.CategoryServiceAddon)
                       .WithMany()
                       .HasForeignKey(e => e.CategoryServiceAddonId)
@@ -487,8 +519,8 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.CustomerId);
                 entity.HasIndex(e => e.ServiceId);
                 entity.HasIndex(e => e.AddonId);
-                entity.HasIndex(e => e.CreatedByUserId); // ? TH�M index
-                entity.HasIndex(e => e.CategoryServiceAddonId); // ? TH�M index
+                entity.HasIndex(e => e.CreatedByUserId); // ? THÊM index
+                entity.HasIndex(e => e.CategoryServiceAddonId); // ? THÊM index
                 entity.HasIndex(e => e.CreatedAt);
             });
 
@@ -568,7 +600,7 @@ namespace erp_backend.Data
                       .OnDelete(DeleteBehavior.SetNull);
 
                 // Indexes
-                entity.HasIndex(e => e.TransactionId).IsUnique(); // TransactionId ph?i l� duy nh?t
+                entity.HasIndex(e => e.TransactionId).IsUnique(); // TransactionId ph?i là duy nh?t
                 entity.HasIndex(e => e.ContractId);
                 entity.HasIndex(e => e.ReferenceNumber);
                 entity.HasIndex(e => e.TransactionDate);
@@ -602,7 +634,7 @@ namespace erp_backend.Data
                       .OnDelete(DeleteBehavior.Restrict);
 
                 // Indexes
-                entity.HasIndex(e => e.Mst).IsUnique(); // M� s? thu? l� duy nh?t
+                entity.HasIndex(e => e.Mst).IsUnique(); // Mã s? thu? là duy nh?t
                 entity.HasIndex(e => e.TenDoanhNghiep);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.TrangThai);
@@ -621,6 +653,144 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.Links);
                 entity.HasIndex(e => e.CreatedAt);
             });
-        }
+
+			// Cấu hình KPI
+			modelBuilder.Entity<KPI>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+
+				entity.Property(e => e.Name)
+					.IsRequired()
+					.HasMaxLength(200);
+
+				entity.Property(e => e.Description)
+					.HasMaxLength(1000);
+
+				entity.Property(e => e.Department)
+					.IsRequired()
+					.HasMaxLength(50);
+
+				entity.Property(e => e.TargetValue)
+					.IsRequired();
+
+				entity.Property(e => e.TargetPercentage)
+					.IsRequired()
+					.HasDefaultValue(0);
+
+				entity.Property(e => e.CreatedAt)
+					.HasColumnType("timestamp with time zone")
+					.HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+				entity.Property(e => e.UpdatedAt)
+					.HasColumnType("timestamp with time zone");
+
+				// Indexes để tăng hiệu suất truy vấn
+				entity.HasIndex(e => e.Name);
+				entity.HasIndex(e => e.Department);
+				entity.HasIndex(e => e.CreatedAt);
+			});
+
+			// Configure Roles entity
+			modelBuilder.Entity<Roles>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.Name).IsRequired().HasMaxLength(50);
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				// Indexes
+				entity.HasIndex(e => e.Name);
+			});
+
+			// Configure Positions entity
+			modelBuilder.Entity<Positions>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.PositionName).IsRequired().HasMaxLength(100);
+				entity.Property(e => e.Level).IsRequired();
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				// Indexes
+				entity.HasIndex(e => e.PositionName);
+				entity.HasIndex(e => e.Level);
+			});
+
+			// Configure Departments entity
+			modelBuilder.Entity<Departments>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				// Foreign Key relationship
+				entity.HasOne(e => e.Resion)
+					  .WithMany()
+					  .HasForeignKey(e => e.ResionId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				// Indexes
+				entity.HasIndex(e => e.Name);
+				entity.HasIndex(e => e.ResionId);
+			});
+
+			// Configure Resion entity
+			modelBuilder.Entity<Resion>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.City).IsRequired().HasMaxLength(100);
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				// Indexes
+				entity.HasIndex(e => e.City);
+			});
+
+			// Configure ActiveAccount entity
+			modelBuilder.Entity<ActiveAccount>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.FirstLogin).IsRequired().HasDefaultValue(true);
+
+				// Foreign Key relationship with User
+				entity.HasOne(e => e.User)
+					  .WithMany()
+					  .HasForeignKey(e => e.UserId)
+					  .OnDelete(DeleteBehavior.Cascade);
+
+				// Indexes
+				entity.HasIndex(e => e.UserId).IsUnique(); // Mỗi user chỉ có một ActiveAccount
+			});
+
+			// Configure AccountActivationToken entity
+			modelBuilder.Entity<AccountActivationToken>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.Token).IsRequired().HasMaxLength(500);
+				entity.Property(e => e.IsUsed).IsRequired().HasDefaultValue(false);
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.ExpiresAt).HasColumnType("timestamp with time zone").IsRequired();
+				entity.Property(e => e.UsedAt).HasColumnType("timestamp with time zone");
+
+				// Foreign Key relationship with User
+				entity.HasOne(e => e.User)
+					  .WithMany()
+					  .HasForeignKey(e => e.UserId)
+					  .OnDelete(DeleteBehavior.Cascade);
+
+				// Indexes
+				entity.HasIndex(e => e.Token).IsUnique();
+				entity.HasIndex(e => e.UserId);
+				entity.HasIndex(e => e.ExpiresAt);
+				entity.HasIndex(e => e.IsUsed);
+			});
+		}
     }
 }

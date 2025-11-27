@@ -477,6 +477,7 @@ namespace erp_backend.Controllers
 				// Load Contract với đầy đủ relations
 				var contract = await _context.Contracts
 					.Include(c => c.User)
+						.ThenInclude(u => u.Position)
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.Customer)
 					.Include(c => c.SaleOrder)
@@ -541,6 +542,7 @@ namespace erp_backend.Controllers
 				// Bước 1: Lấy dữ liệu Contract với đầy đủ relations
 				var contract = await _context.Contracts
 					.Include(c => c.User)
+						.ThenInclude(u => u.Position)
 					.Include(c => c.SaleOrder)
 						.ThenInclude(so => so!.Customer)
 					.Include(c => c.SaleOrder)
@@ -796,7 +798,7 @@ namespace erp_backend.Controllers
 					.Replace("{{UserName}}", contract.User.Name)
 					.Replace("{{UserEmail}}", contract.User.Email)
 					.Replace("{{UserPhone}}", contract.User.PhoneNumber ?? "")
-					.Replace("{{UserPosition}}", contract.User.Position ?? "");
+					.Replace("{{UserPosition}}", contract.User.Position?.PositionName ?? "Nhân viên");
 			}
 
 			// Tạo bảng dịch vụ từ SaleOrder

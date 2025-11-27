@@ -81,8 +81,7 @@ namespace erp_backend.Controllers
 								children = new[]
 								{
 									new { name = "Service", path = "/service" },
-									new { name = "Addons", path = "/addons" },
-									new { name = "Categories", path = "/category-service-addons" }
+									new { name = "Addons", path = "/addons" }
 								}
 							},
 							new
@@ -91,7 +90,12 @@ namespace erp_backend.Controllers
 								path = "/sessions",
 								icon = "LifebuoyIcon"
 							},
-
+							new
+							{
+								name = "KPI",
+								path = "/kpis",
+								icon = "ChartPieIcon"
+							},
                             new
 							{
 								name = "User management",
@@ -102,11 +106,8 @@ namespace erp_backend.Controllers
 							{
 								name = "HelpDesk",
 								icon = "LifebuoyIcon",
-								children = new[]
-								{
-									new { name = "All Tickets", path = "/helpdesk" },
-									new { name = "Categories Ticket", path = "/ticket-categories" }
-								}
+								path = "/helpdesk"
+								
 							}
 						}
 					});
@@ -153,6 +154,12 @@ namespace erp_backend.Controllers
 								name = "Lead",
 								path = "/companies",
 								icon = "CalendarIcon"
+							},
+							new
+							{
+								name = "KPI",
+								path = "/kpis",
+								icon = "ChartPieIcon"
 							},
 							new
 							{

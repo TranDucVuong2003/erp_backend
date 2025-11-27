@@ -86,6 +86,9 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 // Add FileService
 builder.Services.AddScoped<IFileService, FileService>();
 
+// Add Account Activation Service
+builder.Services.AddScoped<IAccountActivationService, AccountActivationService>();
+
 // Add Authorization
 builder.Services.AddAuthorization();
 

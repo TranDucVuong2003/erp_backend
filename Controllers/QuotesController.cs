@@ -49,6 +49,7 @@ namespace erp_backend.Controllers
 			var query = _context.Quotes
 				.Include(q => q.Customer)
 				.Include(q => q.CreatedByUser)
+					.ThenInclude(u => u.Position)
 				.Include(q => q.CategoryServiceAddon)
 				.Include(q => q.QuoteServices)
 					.ThenInclude(qs => qs.Service)
@@ -164,6 +165,7 @@ namespace erp_backend.Controllers
 			var quote = await _context.Quotes
 				.Include(q => q.Customer)
 				.Include(q => q.CreatedByUser)
+					.ThenInclude(u => u.Position)
 				.Include(q => q.CategoryServiceAddon)
 				.Include(q => q.QuoteServices)
 					.ThenInclude(qs => qs.Service)
@@ -832,6 +834,7 @@ namespace erp_backend.Controllers
 				var quote = await _context.Quotes
 					.Include(q => q.Customer)
 					.Include(q => q.CreatedByUser)
+						.ThenInclude(u => u.Position)
 					.Include(q => q.CategoryServiceAddon)
 					.Include(q => q.QuoteServices)
 						.ThenInclude(qs => qs.Service)
@@ -878,6 +881,7 @@ namespace erp_backend.Controllers
 				var quote = await _context.Quotes
 					.Include(q => q.Customer)
 					.Include(q => q.CreatedByUser)
+						.ThenInclude(u => u.Position)
 					.Include(q => q.CategoryServiceAddon)
 					.Include(q => q.QuoteServices)
 						.ThenInclude(qs => qs.Service)
@@ -963,7 +967,7 @@ namespace erp_backend.Controllers
 					.Replace("{{nguoi_tao_quote}}", createdByUser.Name ?? "")
 					.Replace("{{email_nguoi_tao}}", createdByUser.Email ?? "")
 					.Replace("{{sdt_nguoi_tao}}", createdByUser.PhoneNumber ?? "")
-					.Replace("{{chuc_vu_nguoi_tao}}", createdByUser.Position ?? "");
+					.Replace("{{chuc_vu_nguoi_tao}}", createdByUser.Position?.PositionName ?? "");
 			}
 			else
 			{

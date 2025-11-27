@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <Folder Include="Docs\" />
+    <Folder Include="Scripts\" />
     <Folder Include="wwwroot\uploads\" />
   </ItemGroup>
 

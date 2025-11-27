@@ -19,6 +19,7 @@ namespace erp_backend.Models.DTOs
 		public string AccessToken { get; set; } = string.Empty;
 		public DateTime ExpiresAt { get; set; }
 		public UserInfo User { get; set; } = new UserInfo();
+		public bool FirstLogin { get; set; }
 		public string Message { get; set; } = "Đăng nhập thành công";
 	}
 
@@ -60,6 +61,7 @@ namespace erp_backend.Models.DTOs
 		public string Email { get; set; } = string.Empty;
 		public string Position { get; set; } = string.Empty;
 		public string Role { get; set; } = string.Empty;
+		public string Status { get; set; } = string.Empty;
 	}
 
 	public class RegisterRequest
@@ -176,5 +178,16 @@ namespace erp_backend.Models.DTOs
 		public string Message { get; set; } = string.Empty;
 		public AddonInfo DeletedAddon { get; set; } = null!;
 		public DateTime DeletedAt { get; set; }
+	}
+
+	public class ChangePasswordFirstTimeRequest
+	{
+		[Required(ErrorMessage = "Mật khẩu mới là bắt buộc")]
+		[MinLength(8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự")]
+		public string NewPassword { get; set; } = string.Empty;
+		
+		[Required(ErrorMessage = "Xác nhận mật khẩu là bắt buộc")]
+		[Compare("NewPassword", ErrorMessage = "Mật khẩu xác nhận không khớp")]
+		public string ConfirmPassword { get; set; } = string.Empty;
 	}
 }

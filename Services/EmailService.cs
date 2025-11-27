@@ -12,6 +12,7 @@ namespace erp_backend.Services
         Task SendTicketCreatedNotificationAsync(Ticket ticket, User createdByUser);
         Task SendTicketAssignedNotificationAsync(Ticket ticket, User assignedBy, string assignmentDetails);
         Task SendTicketStatusChangedNotificationAsync(Ticket ticket, User changedBy, string oldStatus, string newStatus);
+        Task SendAccountCreationEmailAsync(User user, string plainPassword, string activationLink);
     }
 
     public class EmailService : IEmailService
@@ -45,6 +46,62 @@ namespace erp_backend.Services
         {
             var content = $"Trạng thái ticket đã được thay đổi từ '{oldStatus}' thành '{newStatus}'";
             await SendEmailNotificationAsync(ticket, changedBy, "Thay đổi trạng thái", content, "status_changed");
+        }
+
+        public async Task SendAccountCreationEmailAsync(User user, string plainPassword, string activationLink)
+        {
+            try
+            {
+                // Validate email configuration first
+                if (!ValidateEmailConfiguration())
+                {
+                    _logger.LogWarning("Email configuration is incomplete. Skipping account creation email for user {UserId}", user.Id);
+                    return;
+                }
+
+                _logger.LogInformation("Preparing to send account creation email to {Email} for user {UserId}", user.Email, user.Id);
+
+                // Lấy thông tin SMTP từ config
+                var smtpServer = _configuration["Email:SmtpServer"];
+                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+                var smtpUsername = _configuration["Email:Username"];
+                var smtpPassword = _configuration["Email:Password"];
+                var senderEmail = _configuration["Email:SenderEmail"];
+                var senderName = _configuration["Email:SenderName"];
+
+                // Tạo email message
+                var mail = new MailMessage
+                {
+                    From = new MailAddress(senderEmail, senderName),
+                    Subject = "Tài khoản ERP của bạn đã được tạo - Vui lòng kích hoạt",
+                    Body = FormatAccountCreationEmailBody(user, plainPassword, activationLink),
+                    IsBodyHtml = true
+                };
+
+                // Thêm người nhận
+                mail.To.Add(user.Email);
+
+                // Tạo SMTP client và gửi email
+                using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+                {
+                    smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                    smtpClient.EnableSsl = true;
+                    smtpClient.Timeout = 30000; // 30 seconds timeout
+
+                    await smtpClient.SendMailAsync(mail);
+                }
+
+                _logger.LogInformation("Account creation email sent successfully to {Email} for user {UserId}", user.Email, user.Id);
+            }
+            catch (SmtpException smtpEx)
+            {
+                _logger.LogError(smtpEx, "SMTP error sending account creation email for user {UserId}: {StatusCode} - {Message}", 
+                    user.Id, smtpEx.StatusCode, smtpEx.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending account creation email for user {UserId}", user.Id);
+            }
         }
 
         private async Task SendEmailNotificationAsync(Ticket ticket, User actingUser, string actionType, string content, string emailType)
@@ -290,6 +347,117 @@ namespace erp_backend.Services
                 "status_changed" => "🔄",
                 _ => "📝"
             };
+        }
+
+        private string FormatAccountCreationEmailBody(User user, string plainPassword, string activationLink)
+        {
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
+        .content {{ padding: 30px; background-color: #f8f9fa; }}
+        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
+        .credentials-box {{ background-color: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        .credential-item {{ padding: 10px 0; border-bottom: 1px solid #eee; }}
+        .credential-item:last-child {{ border-bottom: none; }}
+        .credential-label {{ font-weight: bold; color: #667eea; display: inline-block; width: 150px; }}
+        .credential-value {{ color: #333; font-family: 'Courier New', monospace; background-color: #f0f0f0; padding: 5px 10px; border-radius: 3px; }}
+        .btn {{ display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
+        .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+        .icon {{ font-size: 24px; margin-right: 10px; }}
+        .highlight {{ color: #667eea; font-weight: bold; }}
+        .welcome-text {{ font-size: 18px; margin: 20px 0; }}
+        .steps {{ background-color: white; padding: 20px; border-radius: 4px; margin: 20px 0; }}
+        .step {{ padding: 10px 0; }}
+        .step-number {{ display: inline-block; width: 30px; height: 30px; background-color: #667eea; color: white; border-radius: 50%; text-align: center; line-height: 30px; margin-right: 10px; font-weight: bold; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h1><span class='icon'>🎉</span>Chào mừng đến với ERP System!</h1>
+            <p style='font-size: 16px; margin-top: 10px;'>Tài khoản của bạn đã được tạo thành công</p>
+        </div>
+        <div class='content'>
+            <p class='welcome-text'>Xin chào <strong>{user.Name}</strong>,</p>
+            
+            <p>Tài khoản ERP của bạn đã được tạo thành công. Dưới đây là thông tin đăng nhập của bạn:</p>
+            
+            <div class='credentials-box'>
+                <h3 style='color: #667eea; margin-top: 0;'>🔐 Thông tin đăng nhập</h3>
+                <div class='credential-item'>
+                    <span class='credential-label'>📧 Email/Tài khoản:</span>
+                    <span class='credential-value'>{user.Email}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>🔑 Mật khẩu tạm thời:</span>
+                    <span class='credential-value'>{plainPassword}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>👤 Họ tên:</span>
+                    <span class='credential-value'>{user.Name}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>🏢 Phòng ban:</span>
+                    <span class='credential-value'>{user.Department?.Name ?? "Chưa xác định"}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>💼 Chức vụ:</span>
+                    <span class='credential-value'>{user.Position?.PositionName ?? "Chưa xác định"}</span>
+                </div>
+            </div>
+            
+            <div class='warning-box'>
+                <strong>⚠️ Lưu ý quan trọng:</strong>
+                <ul style='margin: 10px 0; padding-left: 20px;'>
+                    <li>Đây là mật khẩu tạm thời, vui lòng đổi mật khẩu ngay sau lần đăng nhập đầu tiên</li>
+                    <li>Không chia sẻ thông tin này với bất kỳ ai</li>
+                    <li>Link kích hoạt có hiệu lực trong 24 giờ</li>
+                </ul>
+            </div>
+
+            <div class='steps'>
+                <h3 style='color: #667eea; margin-top: 0;'>📋 Các bước thực hiện</h3>
+                <div class='step'>
+                    <span class='step-number'>1</span>
+                    <span>Nhấn vào nút &quot;Kích hoạt tài khoản&quot; bên dưới</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>2</span>
+                    <span>Đăng nhập bằng email và mật khẩu tạm thời</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>3</span>
+                    <span>Thay đổi mật khẩu theo yêu cầu hệ thống</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>4</span>
+                    <span>Bắt đầu sử dụng hệ thống ERP</span>
+                </div>
+            </div>
+            
+            <div style='text-align: center;'>
+                <a href='{activationLink}' class='btn'>🚀 Kích hoạt tài khoản ngay</a>
+            </div>
+
+            <p style='margin-top: 30px; color: #666;'>
+                Nếu nút không hoạt động, vui lòng sao chép link dưới đây vào trình duyệt:<br>
+                <a href='{activationLink}' style='color: #667eea; word-break: break-all;'>{activationLink}</a>
+            </p>
+        </div>
+        <div class='footer'>
+            <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
+            <p>Nếu bạn không yêu cầu tạo tài khoản này, vui lòng liên hệ với quản trị viên ngay lập tức.</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
+        </div>
+    </div>
+</body>
+</html>";
         }
     }
 }

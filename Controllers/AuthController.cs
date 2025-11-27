@@ -17,15 +17,18 @@ namespace erp_backend.Controllers
         private readonly ApplicationDbContext _context;
         private readonly JwtService _jwtService;
         private readonly ILogger<AuthController> _logger;
+        private readonly IAccountActivationService _activationService;
 
         public AuthController(
             ApplicationDbContext context,
             JwtService jwtService,
-            ILogger<AuthController> logger)
+            ILogger<AuthController> logger,
+            IAccountActivationService activationService)
         {
             _context = context;
             _jwtService = jwtService;
             _logger = logger;
+            _activationService = activationService;
         }
 
         [HttpPost("login")]
@@ -41,6 +44,9 @@ namespace erp_backend.Controllers
 
                 // Find user
                 var user = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.Position)
+                    .Include(u => u.Department)
                     .FirstOrDefaultAsync(u => u.Email == request.Email);
 
                 if (user == null)
@@ -54,8 +60,34 @@ namespace erp_backend.Controllers
                     return Unauthorized(new { message = "Email hoặc mật khẩu không chính xác" });
                 }
 
-                // Generate tokens
-                var accessToken = _jwtService.GenerateAccessToken(user);
+                // Check if user account is active
+                if (user.Status != "active")
+                {
+                    return Unauthorized(new { message = "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để được hỗ trợ." });
+                }
+
+                // Check or create ActiveAccount record
+                var activeAccount = await _context.ActiveAccounts
+                    .FirstOrDefaultAsync(a => a.UserId == user.Id);
+
+                string message = "Đăng nhập thành công";
+                
+                if (activeAccount.FirstLogin == true)
+                {
+
+                    message = "Bạn phải đổi mật khẩu trước khi đăng nhập vào hệ thống";
+                }
+                else if(activeAccount.FirstLogin.ToString() == "")
+                {
+                    message = "Bạn phải đổi mật khẩu trước khi đăng nhập vào hệ thống";
+                }
+                else
+                {
+					message = "Đăng nhập thành công.";
+				}
+
+                    // Generate tokens
+                    var accessToken = _jwtService.GenerateAccessToken(user);
                 var refreshToken = _jwtService.GenerateRefreshToken();
                 var expiresAt = DateTime.UtcNow.AddDays(7);
 
@@ -81,13 +113,16 @@ namespace erp_backend.Controllers
                 {
                     AccessToken = accessToken,
                     ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtService.AccessTokenExpiryMinutes),
+                    FirstLogin = activeAccount.FirstLogin,
+                    Message = message,
                     User = new UserInfo
                     {
                         Id = user.Id,
                         Name = user.Name,
                         Email = user.Email,
-                        Position = user.Position,
-                        Role = user.Role
+                        Position = user.Position?.PositionName ?? string.Empty,
+                        Role = user.Role?.Name ?? string.Empty,
+                        Status = user.Status
                     }
                 };
 
@@ -115,6 +150,11 @@ namespace erp_backend.Controllers
                 // Get the stored token
                 var storedToken = await _context.JwtTokens
                     .Include(t => t.User)
+                        .ThenInclude(u => u.Role)
+                    .Include(t => t.User)
+                        .ThenInclude(u => u.Position)
+                    .Include(t => t.User)
+                        .ThenInclude(u => u.Department)
                     .FirstOrDefaultAsync(t => 
                         t.Token == refreshToken && 
                         t.Expiration > DateTime.UtcNow && 
@@ -131,6 +171,18 @@ namespace erp_backend.Controllers
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User không tồn tại" });
+                }
+
+                // Check if user account is active
+                if (user.Status != "active")
+                {
+                    // Revoke the current token
+                    storedToken.IsRevoked = true;
+                    storedToken.RevokedAt = DateTime.UtcNow;
+                    storedToken.ReasonRevoked = "User account is inactive";
+                    await _context.SaveChangesAsync();
+                    
+                    return Unauthorized(new { message = "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để được hỗ trợ." });
                 }
 
                 // Generate new tokens
@@ -224,6 +276,7 @@ namespace erp_backend.Controllers
             {
                 var query = _context.JwtTokens
                     .Include(t => t.User)
+                        .ThenInclude(u => u.Role)
                     .AsQueryable();
 
                 // Filter by specific user if provided
@@ -254,7 +307,7 @@ namespace erp_backend.Controllers
                         UserId = t.UserId,
                         UserName = t.User != null ? t.User.Name : string.Empty,
                         UserEmail = t.User != null ? t.User.Email : string.Empty,
-                        UserRole = t.User != null ? t.User.Role : string.Empty,
+                        UserRole = t.User != null && t.User.Role != null ? t.User.Role.Name : string.Empty,
                         DeviceInfo = t.DeviceInfo ?? "Unknown Device",
                         IpAddress = t.IpAddress ?? "Unknown IP",
                         UserAgent = t.UserAgent,
@@ -315,6 +368,116 @@ namespace erp_backend.Controllers
             {
                 _logger.LogError(ex, "Error revoking session by admin");
                 return StatusCode(500, new { message = "Lỗi server khi thu hồi phiên đăng nhập", error = ex.Message });
+            }
+        }
+
+        [HttpGet("verify-activation-token")]
+        [AllowAnonymous]
+        public async Task<ActionResult> VerifyActivationToken([FromQuery] string token)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(token))
+                {
+                    return BadRequest(new { message = "Token không được để trống" });
+                }
+
+                var (isValid, user, message) = await _activationService.ValidateAndActivateTokenAsync(token);
+
+                if (!isValid)
+                {
+                    return BadRequest(new { message });
+                }
+
+                // Trả về thông tin user để frontend hiển thị
+                return Ok(new
+                {
+                    message = "Token hợp lệ",
+                    user = new
+                    {
+                        email = user!.Email,
+                        name = user.Name,
+                        firstLogin = true // Để frontend biết cần đổi mật khẩu
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error verifying activation token");
+                return StatusCode(500, new { message = "Lỗi server khi xác thực token" });
+            }
+        }
+
+        [HttpPost("change-password-first-time")]
+        [Authorize]
+        public async Task<ActionResult> ChangePasswordFirstTime([FromBody] ChangePasswordFirstTimeRequest request)
+        {
+            try
+            {
+                // Lấy user ID từ JWT token
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+                {
+                    return Unauthorized(new { message = "Không tìm thấy thông tin người dùng" });
+                }
+
+                // Validate request
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                if (string.IsNullOrEmpty(request.NewPassword))
+                {
+                    return BadRequest(new { message = "Mật khẩu mới không được để trống" });
+                }
+
+                if (request.NewPassword.Length < 8)
+                {
+                    return BadRequest(new { message = "Mật khẩu phải có ít nhất 8 ký tự" });
+                }
+
+                // Tìm user
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null)
+                {
+                    return NotFound(new { message = "Không tìm thấy người dùng" });
+                }
+
+                // Kiểm tra ActiveAccount
+                var activeAccount = await _context.ActiveAccounts
+                    .FirstOrDefaultAsync(a => a.UserId == userId);
+
+                if (activeAccount == null)
+                {
+                    return BadRequest(new { message = "Không tìm thấy thông tin kích hoạt tài khoản" });
+                }
+
+                if (!activeAccount.FirstLogin)
+                {
+                    return BadRequest(new { message = "Tài khoản đã được kích hoạt trước đó" });
+                }
+
+                // Cập nhật mật khẩu
+                user.Password = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                user.UpdatedAt = DateTime.UtcNow;
+
+                // Đánh dấu không còn là lần đăng nhập đầu
+                activeAccount.FirstLogin = false;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("User {UserId} changed password on first login", userId);
+
+                return Ok(new
+                {
+                    message = "Đổi mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password on first login");
+                return StatusCode(500, new { message = "Lỗi server khi đổi mật khẩu" });
             }
         }
 

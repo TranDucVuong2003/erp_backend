@@ -52,7 +52,7 @@ namespace erp_backend.Services
 				new Claim("userid", user.Id.ToString()),
 				new Claim(ClaimTypes.Name, user.Name),
 				new Claim(ClaimTypes.Email, user.Email),
-				new Claim(ClaimTypes.Role, user.Role)
+				new Claim(ClaimTypes.Role, user.Role?.Name ?? "User")
 			};
 
 			var tokenDescriptor = new SecurityTokenDescriptor
