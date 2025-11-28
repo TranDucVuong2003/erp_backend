@@ -35,24 +35,23 @@ namespace erp_backend.Controllers
 				{
 					_logger.LogInformation("Admin role detected. Returning all KPIs");
 					var kpis = await _context.KPIs
+						.Include(k => k.Department)
+							.ThenInclude(d => d.Resion)
 						.OrderByDescending(k => k.CreatedAt)
 						.ToListAsync();
 					return Ok(kpis);
 				}
 				else if (role != null && role.ToLower() == "user")
 				{
-					// User chỉ xem KPI của phòng ban mình (nếu cần)
-
+					// User chỉ xem KPI của phòng ban mình
 					var userIdClaim = User.FindFirst("userid");
 					var userId = int.Parse(userIdClaim.Value);
 
-
-					if (userId == null)
+					if (userId == 0)
 					{
 						_logger.LogWarning("Không tìm thấy UserID");
 						return Forbid();
 					}
-
 
 					var user = await _context.Users
 						.Include(u => u.Position)
@@ -65,7 +64,7 @@ namespace erp_backend.Controllers
 						return NotFound(new { message = "Không tìm thấy thông tin người dùng" });
 					}
 
-					if (user.Department == null || string.IsNullOrWhiteSpace(user.Department.Name))
+					if (user.Department == null)
 					{
 						_logger.LogWarning("User {UserId} has no Department assigned", userId);
 						return Ok(new List<KPI>()); // Trả về danh sách rỗng nếu không có Department
@@ -73,18 +72,14 @@ namespace erp_backend.Controllers
 
 					_logger.LogInformation("User role detected. UserId: {UserId}, Department: {Department}", userId, user.Department.Name);
 					var kpis = await _context.KPIs
-						.Where(k => k.Department.ToLower() == user.Department.Name.ToLower())
+						.Include(k => k.Department)
+							.ThenInclude(d => d.Resion)
+						.Where(k => k.DepartmentId == user.DepartmentId)
 						.OrderByDescending(k => k.CreatedAt)
 						.ToListAsync();
 
 					_logger.LogInformation("Returning {Count} KPIs for department: {Department}", kpis.Count, user.Department.Name);
 					return Ok(kpis);
-
-					//_logger.LogInformation("User role detected. Returning all KPIs");
-					//var kpis = await _context.KPIs
-					//	.OrderByDescending(k => k.CreatedAt)
-					//	.ToListAsync();
-					//return Ok(kpis);
 				}
 				else
 				{
@@ -107,7 +102,12 @@ namespace erp_backend.Controllers
 		{
 			try
 			{
-				var kpi = await _context.KPIs.FindAsync(id);
+				var kpi = await _context.KPIs
+					.Include(k => k.Department)
+						.ThenInclude(d => d.Resion)
+					.Include(k => k.Creator)
+					.Include(k => k.CommissionTiers)
+					.FirstOrDefaultAsync(k => k.Id == id);
 
 				if (kpi == null)
 				{
@@ -124,15 +124,17 @@ namespace erp_backend.Controllers
 		}
 
 
-		// GET: api/KPIs/department/{department}
-		[HttpGet("department/{department}")]
+		// GET: api/KPIs/department/{departmentId}
+		[HttpGet("department/{departmentId}")]
 		[Authorize]
-		public async Task<ActionResult<IEnumerable<KPI>>> GetKPIsByDepartment(string department)
+		public async Task<ActionResult<IEnumerable<KPI>>> GetKPIsByDepartment(int departmentId)
 		{
 			try
 			{
 				var kpis = await _context.KPIs
-					.Where(k => k.Department.ToLower() == department.ToLower())
+					.Include(k => k.Department)
+						.ThenInclude(d => d.Resion)
+					.Where(k => k.DepartmentId == departmentId)
 					.OrderByDescending(k => k.CreatedAt)
 					.ToListAsync();
 
@@ -140,7 +142,7 @@ namespace erp_backend.Controllers
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Lỗi khi lấy danh sách KPI theo phòng ban: {Department}", department);
+				_logger.LogError(ex, "Lỗi khi lấy danh sách KPI theo phòng ban: {DepartmentId}", departmentId);
 				return StatusCode(500, new { message = "Lỗi server khi lấy danh sách KPI", error = ex.Message });
 			}
 		}
@@ -159,25 +161,51 @@ namespace erp_backend.Controllers
 					return BadRequest(ModelState);
 				}
 
-				// Kiểm tra trùng tên KPI (nếu cần)
+				// Kiểm tra phòng ban tồn tại
+				var department = await _context.Departments.FindAsync(kpi.DepartmentId);
+				if (department == null)
+				{
+					return BadRequest(new { message = "Phòng ban không tồn tại" });
+				}
+
+				// Kiểm tra trùng tên KPI
 				var existingKpi = await _context.KPIs
 					.FirstOrDefaultAsync(k => k.Name.ToLower() == kpi.Name.ToLower()
-						&& k.Department.ToLower() == kpi.Department.ToLower());
+						&& k.DepartmentId == kpi.DepartmentId);
 
 				if (existingKpi != null)
 				{
 					return BadRequest(new { message = "KPI với tên này đã tồn tại trong phòng ban" });
 				}
 
-				// Gán thời gian tạo UTC
+				// Lấy thông tin user tạo
+				var userIdClaim = User.FindFirst("userid");
+				if (userIdClaim != null)
+				{
+					kpi.CreatedBy = int.Parse(userIdClaim.Value);
+				}
+
+				// ✅ FIX: Chuyển DateTime sang UTC
 				kpi.CreatedAt = DateTime.UtcNow;
+				kpi.StartDate = DateTime.SpecifyKind(kpi.StartDate, DateTimeKind.Utc);
+				if (kpi.EndDate.HasValue)
+				{
+					kpi.EndDate = DateTime.SpecifyKind(kpi.EndDate.Value, DateTimeKind.Utc);
+				}
 
 				_context.KPIs.Add(kpi);
 				await _context.SaveChangesAsync();
 
 				_logger.LogInformation("Đã tạo KPI mới với ID: {KpiId}", kpi.Id);
 
-				return CreatedAtAction(nameof(GetKPI), new { id = kpi.Id }, kpi);
+				// Load lại thông tin đầy đủ với Department và Resion
+				var createdKpi = await _context.KPIs
+					.Include(k => k.Department)
+						.ThenInclude(d => d.Resion)
+					.Include(k => k.Creator)
+					.FirstOrDefaultAsync(k => k.Id == kpi.Id);
+
+				return CreatedAtAction(nameof(GetKPI), new { id = kpi.Id }, createdKpi);
 			}
 			catch (Exception ex)
 			{
@@ -206,30 +234,60 @@ namespace erp_backend.Controllers
 					return NotFound(new { message = "Không tìm thấy KPI" });
 				}
 
+				// Kiểm tra phòng ban tồn tại
+				var department = await _context.Departments.FindAsync(kpi.DepartmentId);
+				if (department == null)
+				{
+					return BadRequest(new { message = "Phòng ban không tồn tại" });
+				}
+
 				// Kiểm tra trùng tên (ngoại trừ chính nó)
 				var duplicateKpi = await _context.KPIs
 					.FirstOrDefaultAsync(k => k.Id != id
 						&& k.Name.ToLower() == kpi.Name.ToLower()
-						&& k.Department.ToLower() == kpi.Department.ToLower());
+						&& k.DepartmentId == kpi.DepartmentId);
 
 				if (duplicateKpi != null)
 				{
 					return BadRequest(new { message = "KPI với tên này đã tồn tại trong phòng ban" });
 				}
 
+				// ✅ FIX: Chuyển DateTime sang UTC trước khi cập nhật
+				var startDateUtc = DateTime.SpecifyKind(kpi.StartDate, DateTimeKind.Utc);
+				DateTime? endDateUtc = null;
+				if (kpi.EndDate.HasValue)
+				{
+					endDateUtc = DateTime.SpecifyKind(kpi.EndDate.Value, DateTimeKind.Utc);
+				}
+
 				// Cập nhật các trường
 				existingKpi.Name = kpi.Name;
 				existingKpi.Description = kpi.Description;
-				existingKpi.Department = kpi.Department;
+				existingKpi.DepartmentId = kpi.DepartmentId;
+				existingKpi.KpiType = kpi.KpiType;
+				existingKpi.MeasurementUnit = kpi.MeasurementUnit;
 				existingKpi.TargetValue = kpi.TargetValue;
-				existingKpi.TargetPercentage = kpi.TargetPercentage;
+				existingKpi.CalculationFormula = kpi.CalculationFormula;
+				existingKpi.CommissionType = kpi.CommissionType;
+				existingKpi.Period = kpi.Period;
+				existingKpi.StartDate = startDateUtc;
+				existingKpi.EndDate = endDateUtc;
+				existingKpi.Weight = kpi.Weight;
+				existingKpi.IsActive = kpi.IsActive;
 				existingKpi.UpdatedAt = DateTime.UtcNow;
 
 				await _context.SaveChangesAsync();
 
 				_logger.LogInformation("Đã cập nhật KPI với ID: {KpiId}", id);
 
-				return Ok(new { message = "Cập nhật KPI thành công", kpi = existingKpi });
+				// Load lại thông tin đầy đủ với Department và Resion
+				var updatedKpi = await _context.KPIs
+					.Include(k => k.Department)
+						.ThenInclude(d => d.Resion)
+					.Include(k => k.Creator)
+					.FirstOrDefaultAsync(k => k.Id == id);
+
+				return Ok(new { message = "Cập nhật KPI thành công", kpi = updatedKpi });
 			}
 			catch (DbUpdateConcurrencyException)
 			{

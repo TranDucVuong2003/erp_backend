@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using erp_backend.Data;
 using erp_backend.Services;
 using erp_backend.Middleware;
+using erp_backend.BackgroundJobs;
 using IronPdf;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization; // ✅ THÊM
@@ -88,6 +89,12 @@ builder.Services.AddScoped<IFileService, FileService>();
 
 // Add Account Activation Service
 builder.Services.AddScoped<IAccountActivationService, AccountActivationService>();
+
+// Add Commission Calculation Service
+builder.Services.AddScoped<ICommissionCalculationService, CommissionCalculationService>();
+
+// Add KPI Calculation Job
+builder.Services.AddScoped<KpiCalculationJob>();
 
 // Add Authorization
 builder.Services.AddAuthorization();

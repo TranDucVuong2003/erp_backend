@@ -51,19 +51,19 @@ namespace erp_backend.Controllers
 
                 if (user == null)
                 {
-                    return Unauthorized(new { message = "Email hoặc mật khẩu không chính xác" });
+                    return BadRequest(new { message = "Email hoặc mật khẩu không chính xác" });
                 }
 
                 // Verify password
                 if (!BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
                 {
-                    return Unauthorized(new { message = "Email hoặc mật khẩu không chính xác" });
+                    return BadRequest(new { message = "Email hoặc mật khẩu không chính xác" });
                 }
 
                 // Check if user account is active
                 if (user.Status != "active")
                 {
-                    return Unauthorized(new { message = "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để được hỗ trợ." });
+                    return BadRequest(new { message = "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để được hỗ trợ." });
                 }
 
                 // Check or create ActiveAccount record
@@ -415,7 +415,7 @@ namespace erp_backend.Controllers
             try
             {
                 // Lấy user ID từ JWT token
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("userid")?.Value;
                 if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
                 {
                     return Unauthorized(new { message = "Không tìm thấy thông tin người dùng" });

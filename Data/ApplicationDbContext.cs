@@ -40,6 +40,14 @@ namespace erp_backend.Data
         public DbSet<ActiveAccount> ActiveAccounts { get; set; }
         public DbSet<AccountActivationToken> AccountActivationTokens { get; set; }
 
+        // KPI System DbSets
+        public DbSet<UserKpiAssignment> UserKpiAssignments { get; set; }
+        public DbSet<KpiRecord> KpiRecords { get; set; }
+        public DbSet<KpiCommissionTier> KpiCommissionTiers { get; set; }
+        public DbSet<MarketingBudget> MarketingBudgets { get; set; }
+        public DbSet<MarketingExpense> MarketingExpenses { get; set; }
+        public DbSet<Lead> Leads { get; set; }
+        
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -666,16 +674,8 @@ namespace erp_backend.Data
 				entity.Property(e => e.Description)
 					.HasMaxLength(1000);
 
-				entity.Property(e => e.Department)
-					.IsRequired()
-					.HasMaxLength(50);
-
 				entity.Property(e => e.TargetValue)
-					.IsRequired();
-
-				entity.Property(e => e.TargetPercentage)
-					.IsRequired()
-					.HasDefaultValue(0);
+					.HasColumnType("decimal(18,2)");
 
 				entity.Property(e => e.CreatedAt)
 					.HasColumnType("timestamp with time zone")
@@ -684,9 +684,25 @@ namespace erp_backend.Data
 				entity.Property(e => e.UpdatedAt)
 					.HasColumnType("timestamp with time zone");
 
-				// Indexes để tăng hiệu suất truy vấn
+				entity.Property(e => e.StartDate).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.EndDate).HasColumnType("timestamp with time zone");
+
+				// Foreign Key relationships
+				entity.HasOne(e => e.Department)
+					  .WithMany()
+					  .HasForeignKey(e => e.DepartmentId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				entity.HasOne(e => e.Creator)
+					  .WithMany()
+					  .HasForeignKey(e => e.CreatedBy)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				// Indexes
 				entity.HasIndex(e => e.Name);
-				entity.HasIndex(e => e.Department);
+				entity.HasIndex(e => e.DepartmentId);
+				entity.HasIndex(e => e.KpiType);
+				entity.HasIndex(e => e.IsActive);
 				entity.HasIndex(e => e.CreatedAt);
 			});
 
@@ -790,6 +806,204 @@ namespace erp_backend.Data
 				entity.HasIndex(e => e.UserId);
 				entity.HasIndex(e => e.ExpiresAt);
 				entity.HasIndex(e => e.IsUsed);
+			});
+
+			// ===== KPI SYSTEM CONFIGURATIONS =====
+
+			// Configure UserKpiAssignment
+			modelBuilder.Entity<UserKpiAssignment>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+
+				entity.Property(e => e.CustomTargetValue).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				entity.HasOne(e => e.User)
+					  .WithMany()
+					  .HasForeignKey(e => e.UserId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				entity.HasOne(e => e.Kpi)
+					  .WithMany(k => k.UserKpiAssignments)
+					  .HasForeignKey(e => e.KpiId)
+					  .OnDelete(DeleteBehavior.Cascade);
+
+				entity.HasOne(e => e.Assigner)
+					  .WithMany()
+					  .HasForeignKey(e => e.AssignedBy)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				entity.HasIndex(e => new { e.UserId, e.KpiId, e.IsActive });
+				entity.HasIndex(e => e.AssignedDate);
+			});
+
+			// Configure KpiRecord
+			modelBuilder.Entity<KpiRecord>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+
+				entity.Property(e => e.ActualValue).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.TargetValue).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.AchievementPercentage).HasColumnType("decimal(5,2)");
+				
+				// Sales
+				entity.Property(e => e.CommissionAmount).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.CommissionPercentage).HasColumnType("decimal(5,2)");
+				
+				// IT
+				entity.Property(e => e.AverageResolutionTime).HasColumnType("decimal(10,2)");
+				
+				// Marketing
+				entity.Property(e => e.LeadConversionRate).HasColumnType("decimal(5,2)");
+				entity.Property(e => e.LeadsScore).HasColumnType("decimal(5,2)");
+				entity.Property(e => e.ApprovedBudget).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.ActualSpending).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.BudgetUsagePercentage).HasColumnType("decimal(5,2)");
+				entity.Property(e => e.BudgetScore).HasColumnType("decimal(5,2)");
+				entity.Property(e => e.MarketingTotalScore).HasColumnType("decimal(5,2)");
+				entity.Property(e => e.CostPerLead).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.CostPerConversion).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.ROI).HasColumnType("decimal(18,2)");
+
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.ApprovedAt).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.RecordDate).HasColumnType("timestamp with time zone");
+
+				entity.HasOne(e => e.Kpi)
+					  .WithMany(k => k.KpiRecords)
+					  .HasForeignKey(e => e.KpiId)
+					  .OnDelete(DeleteBehavior.Cascade);
+
+				entity.HasOne(e => e.User)
+					  .WithMany()
+					  .HasForeignKey(e => e.UserId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				entity.HasOne(e => e.Approver)
+					  .WithMany()
+					  .HasForeignKey(e => e.ApprovedBy)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				entity.HasIndex(e => new { e.KpiId, e.UserId, e.Period });
+				entity.HasIndex(e => e.Status);
+				entity.HasIndex(e => e.RecordDate);
+			});
+
+			// Configure KpiCommissionTier
+			modelBuilder.Entity<KpiCommissionTier>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+
+				entity.Property(e => e.MinRevenue).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.MaxRevenue).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.CommissionPercentage).HasColumnType("decimal(5,2)");
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				entity.HasOne(e => e.Kpi)
+					  .WithMany(k => k.CommissionTiers)
+					  .HasForeignKey(e => e.KpiId)
+					  .OnDelete(DeleteBehavior.Cascade);
+
+				entity.HasIndex(e => new { e.KpiId, e.TierLevel });
+				entity.HasIndex(e => e.IsActive);
+			});
+
+			// Configure MarketingBudget
+			modelBuilder.Entity<MarketingBudget>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+
+				entity.Property(e => e.ApprovedBudget).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.ActualSpending).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.UsagePercentage).HasColumnType("decimal(5,2)");
+				entity.Property(e => e.OverBudgetAmount).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.ApprovedAt).HasColumnType("timestamp with time zone");
+
+				entity.HasOne(e => e.User)
+					  .WithMany()
+					  .HasForeignKey(e => e.UserId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				entity.HasOne(e => e.Approver)
+					  .WithMany()
+					  .HasForeignKey(e => e.ApprovedBy)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				entity.HasIndex(e => new { e.UserId, e.Period }).IsUnique();
+				entity.HasIndex(e => e.Status);
+			});
+
+			// Configure MarketingExpense
+			modelBuilder.Entity<MarketingExpense>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+
+				entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.RevenueGenerated).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.CostPerLead).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.ExpenseDate).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.ApprovedAt).HasColumnType("timestamp with time zone");
+
+				entity.HasOne(e => e.MarketingBudget)
+					  .WithMany(b => b.Expenses)
+					  .HasForeignKey(e => e.MarketingBudgetId)
+					  .OnDelete(DeleteBehavior.Cascade);
+
+				entity.HasOne(e => e.User)
+					  .WithMany()
+					  .HasForeignKey(e => e.UserId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				entity.HasOne(e => e.Approver)
+					  .WithMany()
+					  .HasForeignKey(e => e.ApprovedBy)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				entity.HasIndex(e => e.ExpenseDate);
+				entity.HasIndex(e => e.Status);
+				entity.HasIndex(e => e.ExpenseType);
+			});
+
+			// Configure Lead
+			modelBuilder.Entity<Lead>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+
+				entity.Property(e => e.RevenueGenerated).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.AcquisitionCost).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.ROI).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.ConvertedAt).HasColumnType("timestamp with time zone");
+
+				entity.HasOne(e => e.CreatedByUser)
+					  .WithMany()
+					  .HasForeignKey(e => e.CreatedByUserId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				entity.HasOne(e => e.Customer)
+					  .WithMany()
+					  .HasForeignKey(e => e.CustomerId)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				entity.HasOne(e => e.AssignedToUser)
+					  .WithMany()
+					  .HasForeignKey(e => e.AssignedToUserId)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				entity.HasIndex(e => e.Status);
+				entity.HasIndex(e => e.Source);
+				entity.HasIndex(e => e.IsConverted);
+				entity.HasIndex(e => e.CreatedByUserId);
+				entity.HasIndex(e => e.QualityScore);
+				entity.HasIndex(e => e.CreatedAt);
 			});
 		}
     }

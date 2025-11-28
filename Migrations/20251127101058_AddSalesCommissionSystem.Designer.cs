@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251127101058_AddSalesCommissionSystem")]
+    partial class AddSalesCommissionSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -801,7 +804,7 @@ namespace erp_backend.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
@@ -931,9 +934,6 @@ namespace erp_backend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("ActualROI")
-                        .HasColumnType("numeric");
-
                     b.Property<decimal>("ActualSpending")
                         .HasColumnType("decimal(18,2)");
 
@@ -970,9 +970,6 @@ namespace erp_backend.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
-
-                    b.Property<decimal>("TargetROI")
-                        .HasColumnType("numeric");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1555,6 +1552,104 @@ namespace erp_backend.Migrations
                         .IsUnique();
 
                     b.ToTable("SaleOrderServices");
+                });
+
+            modelBuilder.Entity("erp_backend.Models.SalesCommission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("AchievementRate")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int?>("ApprovedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ApprovedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("BaseTargetRevenue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("CommissionAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("CommissionPercentage")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("KpiId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("PaidDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PeriodMonth")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("Revenue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("SaleOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<int?>("TierLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("KpiId");
+
+                    b.HasIndex("Period");
+
+                    b.HasIndex("SaleOrderId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TierLevel");
+
+                    b.HasIndex("UserId", "PeriodMonth");
+
+                    b.ToTable("SalesCommissions");
                 });
 
             modelBuilder.Entity("erp_backend.Models.Service", b =>
@@ -2143,8 +2238,7 @@ namespace erp_backend.Migrations
                     b.HasOne("erp_backend.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Approver");
 
@@ -2382,6 +2476,38 @@ namespace erp_backend.Migrations
                     b.Navigation("SaleOrder");
 
                     b.Navigation("Service");
+                });
+
+            modelBuilder.Entity("erp_backend.Models.SalesCommission", b =>
+                {
+                    b.HasOne("erp_backend.Models.User", "Approver")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("erp_backend.Models.KPI", "Kpi")
+                        .WithMany()
+                        .HasForeignKey("KpiId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("erp_backend.Models.SaleOrder", "SaleOrder")
+                        .WithMany()
+                        .HasForeignKey("SaleOrderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("erp_backend.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Approver");
+
+                    b.Navigation("Kpi");
+
+                    b.Navigation("SaleOrder");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("erp_backend.Models.Service", b =>
