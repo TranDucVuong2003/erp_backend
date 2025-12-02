@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251202022747_RemoveKpiSystem")]
+    partial class RemoveKpiSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -183,97 +186,6 @@ namespace erp_backend.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("CategoryServiceAddons");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.CommissionRate", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("CommissionPercentage")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<decimal?>("MaxAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("MinAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("TierLevel")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IsActive");
-
-                    b.HasIndex("TierLevel");
-
-                    b.HasIndex("MinAmount", "MaxAmount");
-
-                    b.ToTable("CommissionRates");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CommissionPercentage = 5.00m,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "15 triệu - 30 triệu VND",
-                            IsActive = true,
-                            MaxAmount = 30000000m,
-                            MinAmount = 15000000m,
-                            TierLevel = 1
-                        },
-                        new
-                        {
-                            Id = 2,
-                            CommissionPercentage = 7.00m,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "30 triệu - 60 triệu VND",
-                            IsActive = true,
-                            MaxAmount = 60000000m,
-                            MinAmount = 30000001m,
-                            TierLevel = 2
-                        },
-                        new
-                        {
-                            Id = 3,
-                            CommissionPercentage = 8.00m,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "60 triệu - 100 triệu VND",
-                            IsActive = true,
-                            MaxAmount = 100000000m,
-                            MinAmount = 60000001m,
-                            TierLevel = 3
-                        },
-                        new
-                        {
-                            Id = 4,
-                            CommissionPercentage = 10.00m,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Trên 100 triệu VND",
-                            IsActive = true,
-                            MinAmount = 100000001m,
-                            TierLevel = 4
-                        });
                 });
 
             modelBuilder.Entity("erp_backend.Models.Company", b =>
@@ -949,137 +861,6 @@ namespace erp_backend.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("Roles");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleKpiRecord", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("AchievementPercentage")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ApprovedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("CommissionAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("CommissionPercentage")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<int?>("CommissionTierLevel")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<bool>("IsKpiAchieved")
-                        .HasColumnType("boolean");
-
-                    b.Property<int?>("KpiTargetId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Month")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<decimal>("TargetAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("TotalContracts")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("TotalPaidAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ApprovedBy");
-
-                    b.HasIndex("IsKpiAchieved");
-
-                    b.HasIndex("KpiTargetId");
-
-                    b.HasIndex("UserId", "Month", "Year")
-                        .IsUnique();
-
-                    b.ToTable("SaleKpiRecords");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleKpiTarget", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("AssignedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("Month")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<decimal>("TargetAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignedAt");
-
-                    b.HasIndex("AssignedByUserId");
-
-                    b.HasIndex("IsActive");
-
-                    b.HasIndex("UserId", "Month", "Year")
-                        .IsUnique();
-
-                    b.ToTable("SaleKpiTargets");
                 });
 
             modelBuilder.Entity("erp_backend.Models.SaleOrder", b =>
@@ -1830,50 +1611,6 @@ namespace erp_backend.Migrations
                     b.Navigation("Quote");
 
                     b.Navigation("Service");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleKpiRecord", b =>
-                {
-                    b.HasOne("erp_backend.Models.User", "ApprovedByUser")
-                        .WithMany()
-                        .HasForeignKey("ApprovedBy")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("erp_backend.Models.SaleKpiTarget", "KpiTarget")
-                        .WithMany()
-                        .HasForeignKey("KpiTargetId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("erp_backend.Models.User", "SaleUser")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("ApprovedByUser");
-
-                    b.Navigation("KpiTarget");
-
-                    b.Navigation("SaleUser");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SaleKpiTarget", b =>
-                {
-                    b.HasOne("erp_backend.Models.User", "AssignedByUser")
-                        .WithMany()
-                        .HasForeignKey("AssignedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("erp_backend.Models.User", "SaleUser")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AssignedByUser");
-
-                    b.Navigation("SaleUser");
                 });
 
             modelBuilder.Entity("erp_backend.Models.SaleOrder", b =>

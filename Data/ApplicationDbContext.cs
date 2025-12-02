@@ -29,10 +29,9 @@ namespace erp_backend.Data
         public DbSet<Quote> Quotes { get; set; }
         public DbSet<QuoteService> QuoteServices { get; set; }
         public DbSet<QuoteAddon> QuoteAddons { get; set; }
-        public DbSet<MatchedTransaction> MatchedTransactions { get; set; } // ? THÊM M?I
-        public DbSet<Company> Companies { get; set; } // ? THÊM M?I
-        public DbSet<Url> Urls { get; set; } // ? THÊM M?I
-        public DbSet<KPI> KPIs { get; set; }
+        public DbSet<MatchedTransaction> MatchedTransactions { get; set; }
+        public DbSet<Company> Companies { get; set; }
+        public DbSet<Url> Urls { get; set; }
         public DbSet<Roles> Roles { get; set; }
         public DbSet<Positions> Positions { get; set; }
         public DbSet<Departments> Departments { get; set; }
@@ -40,14 +39,11 @@ namespace erp_backend.Data
         public DbSet<ActiveAccount> ActiveAccounts { get; set; }
         public DbSet<AccountActivationToken> AccountActivationTokens { get; set; }
 
-        // KPI System DbSets
-        public DbSet<UserKpiAssignment> UserKpiAssignments { get; set; }
-        public DbSet<KpiRecord> KpiRecords { get; set; }
-        public DbSet<KpiCommissionTier> KpiCommissionTiers { get; set; }
-        public DbSet<MarketingBudget> MarketingBudgets { get; set; }
-        public DbSet<MarketingExpense> MarketingExpenses { get; set; }
-        public DbSet<Lead> Leads { get; set; }
-        
+        // ✅ THÊM MỚI: Sale KPI Module
+        public DbSet<SaleKpiTarget> SaleKpiTargets { get; set; }
+        public DbSet<CommissionRate> CommissionRates { get; set; }
+        public DbSet<SaleKpiRecord> SaleKpiRecords { get; set; }
+
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -83,10 +79,17 @@ namespace erp_backend.Data
                       .HasForeignKey(e => e.DepartmentId)
                       .OnDelete(DeleteBehavior.Restrict);
 
+                // Self-referencing relationship cho Manager
+                entity.HasOne(e => e.Manager)
+                      .WithMany(e => e.Subordinates)
+                      .HasForeignKey(e => e.ManagerId)
+                      .OnDelete(DeleteBehavior.SetNull); // ON DELETE SET NULL
+
                 // Indexes
                 entity.HasIndex(e => e.RoleId);
                 entity.HasIndex(e => e.PositionId);
                 entity.HasIndex(e => e.DepartmentId);
+                entity.HasIndex(e => e.ManagerId);
                 entity.HasIndex(e => e.Status);
             });
 
@@ -511,13 +514,11 @@ namespace erp_backend.Data
                       .HasForeignKey(e => e.AddonId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // ? THÊM: Foreign key relationship v?i User (CreatedByUser)
                 entity.HasOne(e => e.CreatedByUser)
                       .WithMany()
                       .HasForeignKey(e => e.CreatedByUserId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // ? THÊM: Foreign key relationship v?i Category_service_addons
                 entity.HasOne(e => e.CategoryServiceAddon)
                       .WithMany()
                       .HasForeignKey(e => e.CategoryServiceAddonId)
@@ -527,8 +528,8 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.CustomerId);
                 entity.HasIndex(e => e.ServiceId);
                 entity.HasIndex(e => e.AddonId);
-                entity.HasIndex(e => e.CreatedByUserId); // ? THÊM index
-                entity.HasIndex(e => e.CategoryServiceAddonId); // ? THÊM index
+                entity.HasIndex(e => e.CreatedByUserId);
+                entity.HasIndex(e => e.CategoryServiceAddonId);
                 entity.HasIndex(e => e.CreatedAt);
             });
 
@@ -608,7 +609,7 @@ namespace erp_backend.Data
                       .OnDelete(DeleteBehavior.SetNull);
 
                 // Indexes
-                entity.HasIndex(e => e.TransactionId).IsUnique(); // TransactionId ph?i là duy nh?t
+                entity.HasIndex(e => e.TransactionId).IsUnique();
                 entity.HasIndex(e => e.ContractId);
                 entity.HasIndex(e => e.ReferenceNumber);
                 entity.HasIndex(e => e.TransactionDate);
@@ -642,7 +643,7 @@ namespace erp_backend.Data
                       .OnDelete(DeleteBehavior.Restrict);
 
                 // Indexes
-                entity.HasIndex(e => e.Mst).IsUnique(); // Mã s? thu? là duy nh?t
+                entity.HasIndex(e => e.Mst).IsUnique();
                 entity.HasIndex(e => e.TenDoanhNghiep);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.TrangThai);
@@ -661,50 +662,6 @@ namespace erp_backend.Data
                 entity.HasIndex(e => e.Links);
                 entity.HasIndex(e => e.CreatedAt);
             });
-
-			// Cấu hình KPI
-			modelBuilder.Entity<KPI>(entity =>
-			{
-				entity.HasKey(e => e.Id);
-
-				entity.Property(e => e.Name)
-					.IsRequired()
-					.HasMaxLength(200);
-
-				entity.Property(e => e.Description)
-					.HasMaxLength(1000);
-
-				entity.Property(e => e.TargetValue)
-					.HasColumnType("decimal(18,2)");
-
-				entity.Property(e => e.CreatedAt)
-					.HasColumnType("timestamp with time zone")
-					.HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-				entity.Property(e => e.UpdatedAt)
-					.HasColumnType("timestamp with time zone");
-
-				entity.Property(e => e.StartDate).HasColumnType("timestamp with time zone");
-				entity.Property(e => e.EndDate).HasColumnType("timestamp with time zone");
-
-				// Foreign Key relationships
-				entity.HasOne(e => e.Department)
-					  .WithMany()
-					  .HasForeignKey(e => e.DepartmentId)
-					  .OnDelete(DeleteBehavior.Restrict);
-
-				entity.HasOne(e => e.Creator)
-					  .WithMany()
-					  .HasForeignKey(e => e.CreatedBy)
-					  .OnDelete(DeleteBehavior.SetNull);
-
-				// Indexes
-				entity.HasIndex(e => e.Name);
-				entity.HasIndex(e => e.DepartmentId);
-				entity.HasIndex(e => e.KpiType);
-				entity.HasIndex(e => e.IsActive);
-				entity.HasIndex(e => e.CreatedAt);
-			});
 
 			// Configure Roles entity
 			modelBuilder.Entity<Roles>(entity =>
@@ -781,7 +738,7 @@ namespace erp_backend.Data
 					  .OnDelete(DeleteBehavior.Cascade);
 
 				// Indexes
-				entity.HasIndex(e => e.UserId).IsUnique(); // Mỗi user chỉ có một ActiveAccount
+				entity.HasIndex(e => e.UserId).IsUnique();
 			});
 
 			// Configure AccountActivationToken entity
@@ -808,203 +765,133 @@ namespace erp_backend.Data
 				entity.HasIndex(e => e.IsUsed);
 			});
 
-			// ===== KPI SYSTEM CONFIGURATIONS =====
-
-			// Configure UserKpiAssignment
-			modelBuilder.Entity<UserKpiAssignment>(entity =>
+			// ✅ Configure SaleKpiTarget entity
+			modelBuilder.Entity<SaleKpiTarget>(entity =>
 			{
 				entity.HasKey(e => e.Id);
-
-				entity.Property(e => e.CustomTargetValue).HasColumnType("decimal(18,2)");
+				
+				entity.Property(e => e.TargetAmount).HasColumnType("decimal(18,2)").IsRequired();
+				entity.Property(e => e.AssignedAt).HasColumnType("timestamp with time zone");
 				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
 				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
 
-				entity.HasOne(e => e.User)
+				// Foreign key relationships
+				entity.HasOne(e => e.SaleUser)
 					  .WithMany()
 					  .HasForeignKey(e => e.UserId)
 					  .OnDelete(DeleteBehavior.Restrict);
 
-				entity.HasOne(e => e.Kpi)
-					  .WithMany(k => k.UserKpiAssignments)
-					  .HasForeignKey(e => e.KpiId)
-					  .OnDelete(DeleteBehavior.Cascade);
-
-				entity.HasOne(e => e.Assigner)
+				entity.HasOne(e => e.AssignedByUser)
 					  .WithMany()
-					  .HasForeignKey(e => e.AssignedBy)
-					  .OnDelete(DeleteBehavior.SetNull);
-
-				entity.HasIndex(e => new { e.UserId, e.KpiId, e.IsActive });
-				entity.HasIndex(e => e.AssignedDate);
-			});
-
-			// Configure KpiRecord
-			modelBuilder.Entity<KpiRecord>(entity =>
-			{
-				entity.HasKey(e => e.Id);
-
-				entity.Property(e => e.ActualValue).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.TargetValue).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.AchievementPercentage).HasColumnType("decimal(5,2)");
-				
-				// Sales
-				entity.Property(e => e.CommissionAmount).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.CommissionPercentage).HasColumnType("decimal(5,2)");
-				
-				// IT
-				entity.Property(e => e.AverageResolutionTime).HasColumnType("decimal(10,2)");
-				
-				// Marketing
-				entity.Property(e => e.LeadConversionRate).HasColumnType("decimal(5,2)");
-				entity.Property(e => e.LeadsScore).HasColumnType("decimal(5,2)");
-				entity.Property(e => e.ApprovedBudget).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.ActualSpending).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.BudgetUsagePercentage).HasColumnType("decimal(5,2)");
-				entity.Property(e => e.BudgetScore).HasColumnType("decimal(5,2)");
-				entity.Property(e => e.MarketingTotalScore).HasColumnType("decimal(5,2)");
-				entity.Property(e => e.CostPerLead).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.CostPerConversion).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.ROI).HasColumnType("decimal(18,2)");
-
-				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
-				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
-				entity.Property(e => e.ApprovedAt).HasColumnType("timestamp with time zone");
-				entity.Property(e => e.RecordDate).HasColumnType("timestamp with time zone");
-
-				entity.HasOne(e => e.Kpi)
-					  .WithMany(k => k.KpiRecords)
-					  .HasForeignKey(e => e.KpiId)
-					  .OnDelete(DeleteBehavior.Cascade);
-
-				entity.HasOne(e => e.User)
-					  .WithMany()
-					  .HasForeignKey(e => e.UserId)
+					  .HasForeignKey(e => e.AssignedByUserId)
 					  .OnDelete(DeleteBehavior.Restrict);
 
-				entity.HasOne(e => e.Approver)
-					  .WithMany()
-					  .HasForeignKey(e => e.ApprovedBy)
-					  .OnDelete(DeleteBehavior.SetNull);
-
-				entity.HasIndex(e => new { e.KpiId, e.UserId, e.Period });
-				entity.HasIndex(e => e.Status);
-				entity.HasIndex(e => e.RecordDate);
+				// Indexes
+				entity.HasIndex(e => new { e.UserId, e.Month, e.Year })
+					  .IsUnique(); // Mỗi sale chỉ có 1 KPI/tháng
+				entity.HasIndex(e => e.IsActive);
+				entity.HasIndex(e => e.AssignedAt);
 			});
 
-			// Configure KpiCommissionTier
-			modelBuilder.Entity<KpiCommissionTier>(entity =>
+			// ✅ Configure CommissionRate entity
+			modelBuilder.Entity<CommissionRate>(entity =>
 			{
 				entity.HasKey(e => e.Id);
-
-				entity.Property(e => e.MinRevenue).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.MaxRevenue).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.CommissionPercentage).HasColumnType("decimal(5,2)");
+				
+				entity.Property(e => e.MinAmount).HasColumnType("decimal(18,2)").IsRequired();
+				entity.Property(e => e.MaxAmount).HasColumnType("decimal(18,2)");
+				entity.Property(e => e.CommissionPercentage).HasColumnType("decimal(5,2)").IsRequired();
 				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
 				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
 
-				entity.HasOne(e => e.Kpi)
-					  .WithMany(k => k.CommissionTiers)
-					  .HasForeignKey(e => e.KpiId)
-					  .OnDelete(DeleteBehavior.Cascade);
-
-				entity.HasIndex(e => new { e.KpiId, e.TierLevel });
+				// Indexes
+				entity.HasIndex(e => new { e.MinAmount, e.MaxAmount });
+				entity.HasIndex(e => e.TierLevel);
 				entity.HasIndex(e => e.IsActive);
 			});
 
-			// Configure MarketingBudget
-			modelBuilder.Entity<MarketingBudget>(entity =>
+			// ✅ Configure SaleKpiRecord entity
+			modelBuilder.Entity<SaleKpiRecord>(entity =>
 			{
 				entity.HasKey(e => e.Id);
-
-				entity.Property(e => e.ApprovedBudget).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.ActualSpending).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.UsagePercentage).HasColumnType("decimal(5,2)");
-				entity.Property(e => e.OverBudgetAmount).HasColumnType("decimal(18,2)");
+				
+				entity.Property(e => e.TotalPaidAmount).HasColumnType("decimal(18,2)").IsRequired();
+				entity.Property(e => e.TargetAmount).HasColumnType("decimal(18,2)").IsRequired();
+				entity.Property(e => e.AchievementPercentage).HasColumnType("decimal(5,2)").IsRequired();
+				entity.Property(e => e.CommissionPercentage).HasColumnType("decimal(5,2)").IsRequired();
+				entity.Property(e => e.CommissionAmount).HasColumnType("decimal(18,2)").IsRequired();
 				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
 				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
-				entity.Property(e => e.ApprovedAt).HasColumnType("timestamp with time zone");
 
-				entity.HasOne(e => e.User)
+				// Foreign key relationships
+				entity.HasOne(e => e.SaleUser)
 					  .WithMany()
 					  .HasForeignKey(e => e.UserId)
 					  .OnDelete(DeleteBehavior.Restrict);
 
-				entity.HasOne(e => e.Approver)
+				entity.HasOne(e => e.KpiTarget)
+					  .WithMany()
+					  .HasForeignKey(e => e.KpiTargetId)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				entity.HasOne(e => e.ApprovedByUser)
 					  .WithMany()
 					  .HasForeignKey(e => e.ApprovedBy)
 					  .OnDelete(DeleteBehavior.SetNull);
 
-				entity.HasIndex(e => new { e.UserId, e.Period }).IsUnique();
-				entity.HasIndex(e => e.Status);
+				// Indexes
+				entity.HasIndex(e => new { e.UserId, e.Month, e.Year })
+					  .IsUnique(); // Mỗi sale chỉ có 1 record/tháng
+				entity.HasIndex(e => e.IsKpiAchieved);
 			});
 
-			// Configure MarketingExpense
-			modelBuilder.Entity<MarketingExpense>(entity =>
-			{
-				entity.HasKey(e => e.Id);
-
-				entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.RevenueGenerated).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.CostPerLead).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.ExpenseDate).HasColumnType("timestamp with time zone");
-				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
-				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
-				entity.Property(e => e.ApprovedAt).HasColumnType("timestamp with time zone");
-
-				entity.HasOne(e => e.MarketingBudget)
-					  .WithMany(b => b.Expenses)
-					  .HasForeignKey(e => e.MarketingBudgetId)
-					  .OnDelete(DeleteBehavior.Cascade);
-
-				entity.HasOne(e => e.User)
-					  .WithMany()
-					  .HasForeignKey(e => e.UserId)
-					  .OnDelete(DeleteBehavior.Restrict);
-
-				entity.HasOne(e => e.Approver)
-					  .WithMany()
-					  .HasForeignKey(e => e.ApprovedBy)
-					  .OnDelete(DeleteBehavior.SetNull);
-
-				entity.HasIndex(e => e.ExpenseDate);
-				entity.HasIndex(e => e.Status);
-				entity.HasIndex(e => e.ExpenseType);
-			});
-
-			// Configure Lead
-			modelBuilder.Entity<Lead>(entity =>
-			{
-				entity.HasKey(e => e.Id);
-
-				entity.Property(e => e.RevenueGenerated).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.AcquisitionCost).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.ROI).HasColumnType("decimal(18,2)");
-				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
-				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
-				entity.Property(e => e.ConvertedAt).HasColumnType("timestamp with time zone");
-
-				entity.HasOne(e => e.CreatedByUser)
-					  .WithMany()
-					  .HasForeignKey(e => e.CreatedByUserId)
-					  .OnDelete(DeleteBehavior.Restrict);
-
-				entity.HasOne(e => e.Customer)
-					  .WithMany()
-					  .HasForeignKey(e => e.CustomerId)
-					  .OnDelete(DeleteBehavior.SetNull);
-
-				entity.HasOne(e => e.AssignedToUser)
-					  .WithMany()
-					  .HasForeignKey(e => e.AssignedToUserId)
-					  .OnDelete(DeleteBehavior.SetNull);
-
-				entity.HasIndex(e => e.Status);
-				entity.HasIndex(e => e.Source);
-				entity.HasIndex(e => e.IsConverted);
-				entity.HasIndex(e => e.CreatedByUserId);
-				entity.HasIndex(e => e.QualityScore);
-				entity.HasIndex(e => e.CreatedAt);
-			});
+			// ✅ Seed Data cho CommissionRate
+			modelBuilder.Entity<CommissionRate>().HasData(
+				new CommissionRate 
+				{ 
+					Id = 1, 
+					MinAmount = 15000000, 
+					MaxAmount = 30000000, 
+					CommissionPercentage = 5.00m, 
+					TierLevel = 1,
+					Description = "15 triệu - 30 triệu VND",
+					IsActive = true,
+					CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+				},
+				new CommissionRate 
+				{ 
+					Id = 2, 
+					MinAmount = 30000001, 
+					MaxAmount = 60000000, 
+					CommissionPercentage = 7.00m, 
+					TierLevel = 2,
+					Description = "30 triệu - 60 triệu VND",
+					IsActive = true,
+					CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+				},
+				new CommissionRate 
+				{ 
+					Id = 3, 
+					MinAmount = 60000001, 
+					MaxAmount = 100000000, 
+					CommissionPercentage = 8.00m, 
+					TierLevel = 3,
+					Description = "60 triệu - 100 triệu VND",
+					IsActive = true,
+					CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+				},
+				new CommissionRate 
+				{ 
+					Id = 4, 
+					MinAmount = 100000001, 
+					MaxAmount = null, 
+					CommissionPercentage = 10.00m, 
+					TierLevel = 4,
+					Description = "Trên 100 triệu VND",
+					IsActive = true,
+					CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+				}
+			);
 		}
     }
 }

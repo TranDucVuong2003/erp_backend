@@ -838,8 +838,10 @@ namespace erp_backend.Controllers
 					.Include(q => q.CategoryServiceAddon)
 					.Include(q => q.QuoteServices)
 						.ThenInclude(qs => qs.Service)
+							.ThenInclude(s => s!.Tax)
 					.Include(q => q.QuoteAddons)
 						.ThenInclude(qa => qa.Addon)
+							.ThenInclude(a => a!.Tax)
 					.FirstOrDefaultAsync(q => q.Id == id);
 
 				if (quote == null)

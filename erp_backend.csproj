@@ -28,7 +28,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="BackgroundJobs\" />
     <Folder Include="Docs\" />
+    <Folder Include="Postman\" />
     <Folder Include="Scripts\" />
     <Folder Include="wwwroot\uploads\" />
   </ItemGroup>

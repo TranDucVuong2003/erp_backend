@@ -90,12 +90,12 @@ namespace erp_backend.Controllers
 								path = "/sessions",
 								icon = "LifebuoyIcon"
 							},
-							new
-							{
-								name = "KPI",
-								path = "/kpis",
-								icon = "ChartPieIcon"
-							},
+							//new
+							//{
+							//	name = "KPI",
+							//	path = "/kpis",
+							//	icon = "ChartPieIcon"
+							//},
                             new
 							{
 								name = "User management",
@@ -155,12 +155,12 @@ namespace erp_backend.Controllers
 								path = "/companies",
 								icon = "CalendarIcon"
 							},
-							new
-							{
-								name = "KPI",
-								path = "/kpis",
-								icon = "ChartPieIcon"
-							},
+							//new
+							//{
+							//	name = "KPI",
+							//	path = "/kpis",
+							//	icon = "ChartPieIcon"
+							//},
 							new
 							{
 								name = "My Tickets",
