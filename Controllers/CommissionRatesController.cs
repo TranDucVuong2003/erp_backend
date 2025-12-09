@@ -240,35 +240,35 @@ namespace erp_backend.Controllers
         /// <param name="id">ID của CommissionRate</param>
         /// <returns>NoContent nếu thành công</returns>
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteCommissionRate(int id)
-        {
-            try
-            {
-                var commissionRate = await _context.CommissionRates.FindAsync(id);
-                if (commissionRate == null)
-                {
-                    return NotFound(new { message = $"Không tìm thấy bậc hoa hồng với ID {id}" });
-                }
+		public async Task<IActionResult> DeleteCommissionRate(int id)
+		{
+			try
+			{
+				var commissionRate = await _context.CommissionRates.FindAsync(id);
+				if (commissionRate == null)
+				{
+					return NotFound(new { message = $"Không tìm thấy bậc hoa hồng với ID {id}" });
+				}
 
-                // Soft delete
-                commissionRate.IsActive = false;
-                commissionRate.UpdatedAt = DateTime.UtcNow;
+				// Hard delete
+				_context.CommissionRates.Remove(commissionRate);
 
-                await _context.SaveChangesAsync();
+				await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Đã xóa (soft delete) CommissionRate ID {Id}", id);
+				_logger.LogInformation("Đã xóa (hard delete) CommissionRate ID {Id}", id);
 
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi xóa CommissionRate ID {Id}", id);
-                return StatusCode(500, new { message = "Đã xảy ra lỗi khi xóa bậc hoa hồng" });
-            }
-        }
+				return NoContent();
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi xóa CommissionRate ID {Id}", id);
+				return StatusCode(500, new { message = "Đã xảy ra lỗi khi xóa bậc hoa hồng" });
+			}
+		}
 
 
-        private async Task<bool> CommissionRateExists(int id)
+
+		private async Task<bool> CommissionRateExists(int id)
         {
             return await _context.CommissionRates.AnyAsync(e => e.Id == id);
         }

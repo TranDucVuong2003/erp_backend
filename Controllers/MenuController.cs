@@ -19,6 +19,7 @@ namespace erp_backend.Controllers
 		/// <summary>
 		/// Lấy sidebar menu theo role của user
 		/// Admin: Full menu với tất cả chức năng
+		/// Manager: Menu có quyền xem báo cáo và KPI Dashboard
 		/// User: Menu giới hạn chỉ những gì họ được phép truy cập
 		/// </summary>
 		[HttpGet("sidebar")]
@@ -86,17 +87,24 @@ namespace erp_backend.Controllers
 							},
 							new
 							{
-								name = "Support",
+								name = "Session",
 								path = "/sessions",
 								icon = "LifebuoyIcon"
 							},
-							//new
-							//{
-							//	name = "KPI",
-							//	path = "/kpis",
-							//	icon = "ChartPieIcon"
-							//},
-                            new
+							new
+							{
+								name = "KPI",
+								icon = "ChartPieIcon",
+								children = new[]
+								{
+									new { name = "Dashboard KPI", path = "/kpi/dashboard" },
+									new { name = "Quản lý KPI", path = "/kpi/management" },
+									//new { name = "KPI của tôi", path = "/kpi/my-kpi" },
+									new { name = "Bảng xếp hạng", path = "/kpi/leaderboard" },
+									new { name = "Bậc hoa hồng", path = "/kpi/commission-rates" }
+								}
+							},
+							new
 							{
 								name = "User management",
 								path = "/usermanagement",
@@ -107,14 +115,76 @@ namespace erp_backend.Controllers
 								name = "HelpDesk",
 								icon = "LifebuoyIcon",
 								path = "/helpdesk"
-								
+							}
+						}
+					});
+				}
+				else if (role?.ToLower() == "manager")
+				{
+					// Menu cho Manager (có quyền xem báo cáo và KPI Dashboard)
+					return Ok(new
+					{
+						role = "Manager",
+						userId = userId,
+						menu = new object[]
+						{
+							new
+							{
+								name = "Dashboard",
+								path = "/",
+								icon = "HomeIcon"
+							},
+							new
+							{
+								name = "Customer",
+								path = "/customers",
+								icon = "UsersIcon"
+							},
+							new
+							{
+								name = "Sale",
+								icon = "ChartBarIcon",
+								children = new[]
+								{
+									new { name = "Sales order", path = "/sales" },
+									new { name = "Contract", path = "/contract" }
+								}
+							},
+							new
+							{
+								name = "Quote",
+								path = "/quotes",
+								icon = "DocumentTextIcon"
+							},
+							new
+							{
+								name = "Lead",
+								path = "/companies",
+								icon = "CalendarIcon"
+							},
+							new
+							{
+								name = "KPI",
+								icon = "ChartPieIcon",
+								children = new[]
+								{
+									new { name = "Dashboard KPI", path = "/kpi/dashboard" },
+									new { name = "KPI của tôi", path = "/kpi/my-kpi" },
+									new { name = "Bảng xếp hạng", path = "/kpi/leaderboard" }
+								}
+							},
+							new
+							{
+								name = "My Tickets",
+								path = "/helpdesk",
+								icon = "LifebuoyIcon"
 							}
 						}
 					});
 				}
 				else
 				{
-					// Menu giới hạn cho User thường
+					// Menu giới hạn cho User thường (Sale)
 					return Ok(new
 					{
 						role = "User",
@@ -155,19 +225,22 @@ namespace erp_backend.Controllers
 								path = "/companies",
 								icon = "CalendarIcon"
 							},
-							//new
-							//{
-							//	name = "KPI",
-							//	path = "/kpis",
-							//	icon = "ChartPieIcon"
-							//},
+							new
+							{
+								name = "KPI",
+								icon = "ChartPieIcon",
+								children = new[]
+								{
+									new { name = "KPI của tôi", path = "/kpi/my-kpi" },
+									new { name = "Bảng xếp hạng", path = "/kpi/leaderboard" }
+								}
+							},
 							new
 							{
 								name = "My Tickets",
 								path = "/helpdesk",
 								icon = "LifebuoyIcon"
 							}
-							
 						}
 					});
 				}

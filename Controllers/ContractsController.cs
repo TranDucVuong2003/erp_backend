@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using erp_backend.Services;
+using System.Web;
 
 namespace erp_backend.Controllers
 {
@@ -14,11 +16,19 @@ namespace erp_backend.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<ContractsController> _logger;
+        private readonly IKpiCalculationService _kpiCalculationService;
+        private readonly IConfiguration _configuration;
 
-        public ContractsController(ApplicationDbContext context, ILogger<ContractsController> logger)
+        public ContractsController(
+            ApplicationDbContext context, 
+            ILogger<ContractsController> logger,
+            IKpiCalculationService kpiCalculationService,
+            IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
+            _kpiCalculationService = kpiCalculationService;
+            _configuration = configuration;
         }
 
         // GET: api/Contracts
@@ -125,8 +135,10 @@ namespace erp_backend.Controllers
                 var saleOrder = await _context.SaleOrders
                     .Include(so => so.SaleOrderServices)
                         .ThenInclude(sos => sos.Service)
+                            .ThenInclude(s => s!.Tax)
                     .Include(so => so.SaleOrderAddons)
                         .ThenInclude(soa => soa.Addon)
+                            .ThenInclude(a => a!.Tax)
                     .FirstOrDefaultAsync(so => so.Id == request.SaleOrderId);
 
                 if (saleOrder == null)
@@ -149,11 +161,51 @@ namespace erp_backend.Controllers
 
                 int nextNumber = maxContractNumber > 0 ? maxContractNumber + 1 : 128;
 
-                // Tính toán tự động SubTotal, TaxAmount, TotalAmount từ SaleOrder
-                decimal subTotal = saleOrder.Value;
+                // ✅ Tính toán SubTotal, TaxAmount, TotalAmount
+                decimal subTotal = 0;
                 decimal taxAmount = 0;
 
-                // Không còn tính thuế từ SaleOrder nữa vì đã xóa TaxId
+                // Tính từ Services
+                if (saleOrder.SaleOrderServices != null && saleOrder.SaleOrderServices.Any())
+                {
+                    foreach (var sos in saleOrder.SaleOrderServices)
+                    {
+                        var quantity = sos.Quantity ?? (sos.Service?.Quantity ?? 1);
+                        var lineTotal = sos.UnitPrice * quantity;
+                        subTotal += lineTotal;
+
+                        // Tính thuế cho từng service
+                        if (sos.Service?.Tax != null)
+                        {
+                            var taxRate = (decimal)sos.Service.Tax.Rate / 100m;
+                            taxAmount += lineTotal * taxRate;
+                        }
+                    }
+                }
+
+                // Tính từ Addons
+                if (saleOrder.SaleOrderAddons != null && saleOrder.SaleOrderAddons.Any())
+                {
+                    foreach (var soa in saleOrder.SaleOrderAddons)
+                    {
+                        var quantity = soa.Quantity ?? (soa.Addon?.Quantity ?? 1);
+                        var lineTotal = soa.UnitPrice * quantity;
+                        subTotal += lineTotal;
+
+                        // Tính thuế cho từng addon
+                        if (soa.Addon?.Tax != null)
+                        {
+                            var taxRate = (decimal)soa.Addon.Tax.Rate / 100m;
+                            taxAmount += lineTotal * taxRate;
+                        }
+                    }
+                }
+
+                // Nếu không có services/addons, sử dụng Value từ SaleOrder
+                if (subTotal == 0)
+                {
+                    subTotal = saleOrder.Value;
+                }
 
                 decimal totalAmount = subTotal + taxAmount;
 
@@ -210,11 +262,17 @@ namespace erp_backend.Controllers
             try
             {
                 // Kiểm tra contract có tồn tại không
-                var existingContract = await _context.Contracts.FindAsync(id);
+                var existingContract = await _context.Contracts
+                    .Include(c => c.SaleOrder) // ✅ Load SaleOrder để lấy CreatedByUserId
+                    .FirstOrDefaultAsync(c => c.Id == id);
+                    
                 if (existingContract == null)
                 {
                     return NotFound(new { message = "Không tìm thấy hợp đồng" });
                 }
+
+                // ✅ Lưu trạng thái cũ để so sánh
+                var oldStatus = existingContract.Status;
 
                 // Kiểm tra SaleOrder tồn tại (nếu thay đổi)
                 if (request.SaleOrderId != existingContract.SaleOrderId)
@@ -271,18 +329,118 @@ namespace erp_backend.Controllers
                 existingContract.Notes = request.Notes;
                 existingContract.UpdatedAt = DateTime.UtcNow;
 
-                // Tính lại SubTotal, TaxAmount, TotalAmount nếu SaleOrder thay đổi
+                // ✅ Tính lại SubTotal, TaxAmount, TotalAmount nếu SaleOrder thay đổi
                 if (request.SaleOrderId != existingContract.SaleOrderId)
                 {
                     var saleOrder = await _context.SaleOrders
+                        .Include(so => so.SaleOrderServices)
+                            .ThenInclude(sos => sos.Service)
+                                .ThenInclude(s => s!.Tax)
+                        .Include(so => so.SaleOrderAddons)
+                            .ThenInclude(soa => soa.Addon)
+                                .ThenInclude(a => a!.Tax)
                         .FirstAsync(so => so.Id == request.SaleOrderId);
 
-                    existingContract.SubTotal = saleOrder.Value;
-                    existingContract.TaxAmount = 0; // Không còn thuế từ SaleOrder
-                    existingContract.TotalAmount = existingContract.SubTotal + existingContract.TaxAmount;
+                    decimal subTotal = 0;
+                    decimal taxAmount = 0;
+
+                    // Tính từ Services
+                    if (saleOrder.SaleOrderServices != null && saleOrder.SaleOrderServices.Any())
+                    {
+                        foreach (var sos in saleOrder.SaleOrderServices)
+                        {
+                            var quantity = sos.Quantity ?? (sos.Service?.Quantity ?? 1);
+                            var lineTotal = sos.UnitPrice * quantity;
+                            subTotal += lineTotal;
+
+                            // Tính thuế cho từng service
+                            if (sos.Service?.Tax != null)
+                            {
+                                var taxRate = (decimal)sos.Service.Tax.Rate / 100m;
+                                taxAmount += lineTotal * taxRate;
+                            }
+                        }
+                    }
+
+                    // Tính từ Addons
+                    if (saleOrder.SaleOrderAddons != null && saleOrder.SaleOrderAddons.Any())
+                    {
+                        foreach (var soa in saleOrder.SaleOrderAddons)
+                        {
+                            var quantity = soa.Quantity ?? (soa.Addon?.Quantity ?? 1);
+                            var lineTotal = soa.UnitPrice * quantity;
+                            subTotal += lineTotal;
+
+                            // Tính thuế cho từng addon
+                            if (soa.Addon?.Tax != null)
+                            {
+                                var taxRate = (decimal)soa.Addon.Tax.Rate / 100m;
+                                taxAmount += lineTotal * taxRate;
+                            }
+                        }
+                    }
+
+                    // Nếu không có services/addons, sử dụng Value từ SaleOrder
+                    if (subTotal == 0)
+                    {
+                        subTotal = saleOrder.Value;
+                    }
+
+                    existingContract.SubTotal = subTotal;
+                    existingContract.TaxAmount = taxAmount;
+                    existingContract.TotalAmount = subTotal + taxAmount;
                 }
 
                 await _context.SaveChangesAsync();
+
+                // ✅ KPI AUTO-CALCULATION: Khi status đổi thành "Paid"
+                if (oldStatus?.ToLower() != "paid" && request.Status?.ToLower() == "paid")
+                {
+                    _logger.LogInformation("Contract {ContractId} status changed to Paid. Triggering KPI calculation...", id);
+
+                    // Lấy thông tin Sale User từ SaleOrder.CreatedByUserId
+                    var saleOrderForKpi = existingContract.SaleOrder;
+                    if (saleOrderForKpi == null)
+                    {
+                        // Reload nếu chưa có
+                        saleOrderForKpi = await _context.SaleOrders.FindAsync(existingContract.SaleOrderId);
+                    }
+
+                    if (saleOrderForKpi?.CreatedByUserId.HasValue == true)
+                    {
+                        var saleUserId = saleOrderForKpi.CreatedByUserId.Value;
+                        var contractMonth = existingContract.CreatedAt.Month;
+                        var contractYear = existingContract.CreatedAt.Year;
+
+                        _logger.LogInformation(
+                            "Auto-calculating KPI for Sale User {UserId} (Contract {ContractId}, Month {Month}/{Year})",
+                            saleUserId, id, contractMonth, contractYear);
+
+                        try
+                        {
+                            // Gọi service tính KPI cho user này trong tháng tạo hợp đồng
+                            await _kpiCalculationService.CalculateKpiForUserAsync(saleUserId, contractMonth, contractYear);
+                            
+                            _logger.LogInformation(
+                                "✅ Successfully calculated KPI for User {UserId} after Contract {ContractId} marked as Paid",
+                                saleUserId, id);
+                        }
+                        catch (Exception kpiEx)
+                        {
+                            // Log lỗi nhưng không fail toàn bộ request
+                            _logger.LogError(kpiEx, 
+                                "❌ Failed to calculate KPI for User {UserId} after Contract {ContractId} marked as Paid. " +
+                                "KPI calculation can be triggered manually later.",
+                                saleUserId, id);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Contract {ContractId} marked as Paid but SaleOrder.CreatedByUserId is null. Cannot auto-calculate KPI.",
+                            id);
+                    }
+                }
 
                 // Load lại contract với đầy đủ navigation properties
                 var contract = await _context.Contracts
@@ -323,36 +481,100 @@ namespace erp_backend.Controllers
         [Authorize]
 		public async Task<IActionResult> DeleteContract(int id)
 		{
-			var contract = await _context.Contracts.FindAsync(id);
-			if (contract == null)
+			try
 			{
-				return NotFound(new { message = "Không tìm thấy hợp đồng" });
-			}
+				// Load contract với SaleOrder để lấy CreatedByUserId
+				var contract = await _context.Contracts
+					.Include(c => c.SaleOrder)
+					.FirstOrDefaultAsync(c => c.Id == id);
 
-			// ✅ Xóa file PDF nếu tồn tại
-			if (!string.IsNullOrEmpty(contract.ContractPdfPath))
-			{
-				var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", contract.ContractPdfPath);
-				
-				if (System.IO.File.Exists(filePath))
+				if (contract == null)
 				{
-					try
+					return NotFound(new { message = "Không tìm thấy hợp đồng" });
+				}
+
+				// ✅ Lưu thông tin cần thiết để tính lại KPI sau khi xóa
+				int? saleUserId = contract.SaleOrder?.CreatedByUserId;
+				int contractMonth = contract.CreatedAt.Month;
+				int contractYear = contract.CreatedAt.Year;
+
+				// ✅ 1. Xóa các MatchedTransactions liên quan đến Contract này
+				var matchedTransactions = await _context.MatchedTransactions
+					.Where(mt => mt.ContractId == id)
+					.ToListAsync();
+
+				if (matchedTransactions.Any())
+				{
+					_context.MatchedTransactions.RemoveRange(matchedTransactions);
+					_logger.LogInformation("Đã xóa {Count} MatchedTransaction(s) liên quan đến Contract {ContractId}", 
+						matchedTransactions.Count, id);
+				}
+
+				// ✅ 2. Xóa file PDF nếu tồn tại
+				if (!string.IsNullOrEmpty(contract.ContractPdfPath))
+				{
+					var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", contract.ContractPdfPath);
+					
+					if (System.IO.File.Exists(filePath))
 					{
-						System.IO.File.Delete(filePath);
-						_logger.LogInformation("Đã xóa file PDF: {FilePath}", contract.ContractPdfPath);
-					}
-					catch (Exception ex)
-					{
-						_logger.LogWarning(ex, "Không thể xóa file PDF: {FilePath}", contract.ContractPdfPath);
-						// Tiếp tục xóa record trong database dù file không xóa được
+						try
+						{
+							System.IO.File.Delete(filePath);
+							_logger.LogInformation("Đã xóa file PDF: {FilePath}", contract.ContractPdfPath);
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Không thể xóa file PDF: {FilePath}", contract.ContractPdfPath);
+							// Tiếp tục xóa record trong database dù file không xóa được
+						}
 					}
 				}
+
+				// ✅ 3. Xóa Contract
+				_context.Contracts.Remove(contract);
+				await _context.SaveChangesAsync();
+
+				_logger.LogInformation("Đã xóa Contract {ContractId}", id);
+
+				// ✅ 4. Tính lại KPI cho user nếu contract có liên kết với Sale User
+				if (saleUserId.HasValue)
+				{
+					_logger.LogInformation(
+						"Contract {ContractId} đã bị xóa. Đang tính lại KPI cho User {UserId} (Tháng {Month}/{Year})...",
+						id, saleUserId.Value, contractMonth, contractYear);
+
+					try
+					{
+						// Gọi service để tính lại KPI
+						await _kpiCalculationService.CalculateKpiForUserAsync(saleUserId.Value, contractMonth, contractYear);
+						
+						_logger.LogInformation(
+							"✅ Đã tính lại KPI thành công cho User {UserId} sau khi xóa Contract {ContractId}",
+							saleUserId.Value, id);
+					}
+					catch (Exception kpiEx)
+					{
+						// Log lỗi nhưng không fail toàn bộ request (Contract đã xóa thành công)
+						_logger.LogError(kpiEx, 
+							"❌ Lỗi khi tính lại KPI cho User {UserId} sau khi xóa Contract {ContractId}. " +
+							"KPI có thể được tính lại thủ công sau.",
+							saleUserId.Value, id);
+					}
+				}
+				else
+				{
+					_logger.LogWarning(
+						"Contract {ContractId} đã bị xóa nhưng không có SaleOrder.CreatedByUserId. Không thể tính lại KPI.",
+						id);
+				}
+
+				return NoContent();
 			}
-
-			_context.Contracts.Remove(contract);
-			await _context.SaveChangesAsync();
-
-			return NoContent();
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi xóa Contract {ContractId}", id);
+				return StatusCode(500, new { message = "Lỗi server khi xóa hợp đồng", error = ex.Message });
+			}
 		}
 
         // GET: api/Contracts/saleorder/5
@@ -710,7 +932,176 @@ namespace erp_backend.Controllers
 			}
 		}
 
-		// Helper method: Bind dữ liệu Contract vào template
+		// ==================== QR CODE PAYMENT ====================
+
+		/// <summary>
+		/// Tạo URL QR code thanh toán cho hợp đồng
+		/// GET /api/Contracts/5/qr-code?paymentType=full100
+		/// </summary>
+		/// <param name="id">Contract ID</param>
+		/// <param name="paymentType">Loại thanh toán: full100 (mặc định), deposit50, final50</param>
+		[HttpGet("{id}/qr-code")]
+		[Authorize]
+		public async Task<ActionResult<object>> GetContractQrCode(int id, [FromQuery] string paymentType = "full100")
+		{
+			try
+			{
+				// 1. Lấy thông tin Contract
+				var contract = await _context.Contracts
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so!.Customer)
+					.FirstOrDefaultAsync(c => c.Id == id);
+
+				if (contract == null)
+				{
+					return NotFound(new { message = "Không tìm thấy hợp đồng" });
+				}
+
+				// 2. Lấy thông tin ngân hàng từ config
+				var bankCode = _configuration["Sepay:BankCode"] ?? "MB";
+				var accountNumber = _configuration["Sepay:AccountNumber"] ?? "";
+				var accountName = _configuration["Sepay:AccountName"] ?? "";
+
+				if (string.IsNullOrEmpty(accountNumber))
+				{
+					return BadRequest(new { message = "Chưa cấu hình thông tin tài khoản ngân hàng" });
+				}
+
+				// 3. Xác định số tiền và nội dung thanh toán dựa trên paymentType
+				decimal amount;
+				string contentTemplate;
+				string paymentTypeDisplay;
+
+				switch (paymentType.ToLower())
+				{
+					case "deposit50":
+						amount = contract.TotalAmount * 0.5m;
+						contentTemplate = _configuration["Sepay:PaymentContentTemplates:Deposit50"] ?? "DatCoc50%HopDong{0}";
+						paymentTypeDisplay = "Đặt cọc 50%";
+						break;
+
+					case "final50":
+						amount = contract.TotalAmount * 0.5m;
+						contentTemplate = _configuration["Sepay:PaymentContentTemplates:Final50"] ?? "ThanhToan50%HopDong{0}";
+						paymentTypeDisplay = "Thanh toán nốt 50%";
+						break;
+
+					case "full100":
+					default:
+						amount = contract.TotalAmount;
+						contentTemplate = _configuration["Sepay:PaymentContentTemplates:Full100"] ?? "ThanhToanHopDong{0}";
+						paymentTypeDisplay = "Thanh toán 100%";
+						break;
+				}
+
+				// 4. Tạo nội dung chuyển khoản với số hợp đồng
+				var description = string.Format(contentTemplate, contract.NumberContract);
+				var encodedDescription = HttpUtility.UrlEncode(description);
+
+				// 5. Tạo URL QR code theo format Sepay
+				var qrCodeUrl = $"https://qr.sepay.vn/img?acc={accountNumber}&bank={bankCode}&amount={amount}&des={encodedDescription}";
+
+				_logger.LogInformation("Generated QR code for Contract {ContractId}, PaymentType: {PaymentType}, Amount: {Amount}", 
+					id, paymentType, amount);
+
+				// 6. Trả về thông tin đầy đủ
+				return Ok(new
+				{
+					success = true,
+					contractId = contract.Id,
+					contractNumber = contract.NumberContract,
+					paymentType = paymentType.ToLower(),
+					paymentTypeDisplay = paymentTypeDisplay,
+					qrCodeUrl = qrCodeUrl,
+					paymentInfo = new
+					{
+						bankCode = bankCode,
+						bankName = await GetBankNameAsync(bankCode),
+						accountNumber = accountNumber,
+						accountName = accountName,
+						amount = amount,
+						amountFormatted = amount.ToString("N0"),
+						totalAmount = contract.TotalAmount,
+						totalAmountFormatted = contract.TotalAmount.ToString("N0"),
+						description = description,
+						status = contract.Status
+					}
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi tạo QR code cho Contract ID: {ContractId}", id);
+				return StatusCode(500, new { message = "Lỗi server khi tạo QR code", error = ex.Message });
+			}
+		}
+
+		/// <summary>
+		/// Helper method: Lấy tên ngân hàng từ mã ngân hàng
+		/// </summary>
+		private async Task<string> GetBankNameAsync(string bankCode)
+		{
+			try
+			{
+				using var httpClient = new HttpClient();
+				var response = await httpClient.GetAsync("https://qr.sepay.vn/banks.json");
+				
+				if (response.IsSuccessStatusCode)
+				{
+					var json = await response.Content.ReadAsStringAsync();
+					var apiResponse = System.Text.Json.JsonSerializer.Deserialize<SepayBankResponse>(json);
+					
+					if (apiResponse?.Data != null)
+					{
+						var bank = apiResponse.Data.FirstOrDefault(b => 
+							b.Code.Equals(bankCode, StringComparison.OrdinalIgnoreCase));
+						
+						if (bank != null)
+						{
+							return $"{bank.Name} ({bank.ShortName})";
+						}
+					}
+				}
+				
+				// Fallback nếu API lỗi hoặc không tìm thấy
+				_logger.LogWarning("Could not fetch bank name from Sepay API for code: {BankCode}", bankCode);
+				return bankCode;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error calling Sepay API for bank code: {BankCode}", bankCode);
+				return bankCode;
+			}
+		}
+
+		// DTO classes for Sepay API
+		private class SepayBankResponse
+		{
+			[System.Text.Json.Serialization.JsonPropertyName("no_banks")]
+			public string? NoBanks { get; set; }
+			
+			[System.Text.Json.Serialization.JsonPropertyName("data")]
+			public List<SepayBank>? Data { get; set; }
+		}
+
+		private class SepayBank
+		{
+			[System.Text.Json.Serialization.JsonPropertyName("name")]
+			public string Name { get; set; } = string.Empty;
+			
+			[System.Text.Json.Serialization.JsonPropertyName("code")]
+			public string Code { get; set; } = string.Empty;
+			
+			[System.Text.Json.Serialization.JsonPropertyName("bin")]
+			public string Bin { get; set; } = string.Empty;
+			
+			[System.Text.Json.Serialization.JsonPropertyName("short_name")]
+			public string ShortName { get; set; } = string.Empty;
+			
+			[System.Text.Json.Serialization.JsonPropertyName("supported")]
+			public bool Supported { get; set; }
+		}
+
+        // Helper method: Bind dữ liệu Contract vào template
 		private string BindContractDataToTemplate(string template, Contract contract)
 		{
 			var customer = contract.SaleOrder!.Customer!;
@@ -814,6 +1205,7 @@ namespace erp_backend.Controllers
 			var items = new System.Text.StringBuilder();
 			var index = 1;
 			decimal subTotal = 0;
+			decimal totalTax = 0;
 
 			// Thêm Services từ SaleOrder
 			if (contract.SaleOrder!.SaleOrderServices != null && contract.SaleOrder.SaleOrderServices.Any())
@@ -828,6 +1220,10 @@ namespace erp_backend.Controllers
 					// Lấy thông tin thuế
 					var taxRate = service?.Tax?.Rate ?? 0f;
 					var taxDisplay = taxRate > 0 ? $"{taxRate}%" : "0%";
+					
+					// Tính thuế cho dòng này
+					var lineTax = taxRate > 0 ? lineTotal * (decimal)taxRate / 100m : 0;
+					totalTax += lineTax;
 
 					items.AppendLine($@"
 					<tr>
@@ -855,6 +1251,10 @@ namespace erp_backend.Controllers
 					// Lấy thông tin thuế
 					var taxRate = addon?.Tax?.Rate ?? 0f;
 					var taxDisplay = taxRate > 0 ? $"{taxRate}%" : "0%";
+					
+					// Tính thuế cho dòng này
+					var lineTax = taxRate > 0 ? lineTotal * (decimal)taxRate / 100m : 0;
+					totalTax += lineTax;
 
 					items.AppendLine($@"
 					<tr>
@@ -873,7 +1273,7 @@ namespace erp_backend.Controllers
 			items.AppendLine($@"
 			<tr style='background-color: #f9f9f9'>
 				<td colspan='6' style='text-align: right; border: 1px solid #000;'>
-					<b>Cộng</b>
+					<b>Cộng (chưa thuế)</b>
 				</td>
 				<td style='text-align: right; border: 1px solid #000;'>
 					<b>{subTotal:N0}</b>
@@ -881,14 +1281,24 @@ namespace erp_backend.Controllers
 			</tr>
 			<tr style='background-color: #f9f9f9'>
 				<td colspan='6' style='text-align: right; border: 1px solid #000;'>
-					<b>Giảm</b>
+					<b>Thuế VAT</b>
+				</td>
+				<td style='text-align: right; border: 1px solid #000;'>
+					<b>{totalTax:N0}</b>
+				</td>
+			</tr>
+			<tr style='background-color: #f9f9f9'>
+				<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+					<b>Giảm giá</b>
 				</td>
 				<td style='text-align: right; border: 1px solid #000;'>
 					<b>0</b>
 				</td>
 			</tr>");
 
-			// Không còn dòng VAT vì đã xóa Tax
+
+			// Tổng Cồng
+			var finalTotal = subTotal + totalTax;
 			
 			items.AppendLine($@"
 			<tr style='background-color: #e8f4fd'>
@@ -896,9 +1306,16 @@ namespace erp_backend.Controllers
 					<b>Thanh Toán</b>
 				</td>
 				<td style='text-align: right; border: 1px solid #000;'>
-					<b>{contract.TotalAmount:N0}</b>
+					<b>{finalTotal:N0}</b>
+				</td>
+			</tr>
+			<tr style='border: none;'>
+				<td colspan='7' style='text-align: right; border: none;'>
+					<b>Bằng chữ: {ConvertNumberToWords(finalTotal)}</b>
 				</td>
 			</tr>");
+
+
 
 			// Nếu không có services/addons, hiển thị title của SaleOrder
 			if ((contract.SaleOrder.SaleOrderServices == null || !contract.SaleOrder.SaleOrderServices.Any()) &&
@@ -908,17 +1325,37 @@ namespace erp_backend.Controllers
 				items.AppendLine($@"
 				<tr>
 					<td style='text-align: center; border: 1px solid #000'>1</td>
-					<td style='border: 1px solid #000'>General</td>
-					<td style='border: 1px solid #000'>N/A</td>
 					<td style='border: 1px solid #000'>{contract.SaleOrder.Title}</td>
+					<td style='border: 1px solid #000'>N/A</td>
+					<td style='text-align: center; border: 1px solid #000'>0%</td>
 					<td style='text-align: center; border: 1px solid #000'>N/A</td>
-					<td style='text-align: right; border: 1px solid #000'>0</td>
 					<td style='text-align: right; border: 1px solid #000'>{contract.SubTotal:N0}</td>
-				</tr>");
-
-				// Không còn dòng VAT
-
-				items.AppendLine($@"
+					<td style='text-align: right; border: 1px solid #000'>{contract.SubTotal:N0}</td>
+				</tr>
+				<tr style='background-color: #f9f9f9'>
+					<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+						<b>Cộng (chưa thuế)</b>
+					</td>
+					<td style='text-align: right; border: 1px solid #000;'>
+						<b>{contract.SubTotal:N0}</b>
+					</td>
+				</tr>
+				<tr style='background-color: #f9f9f9'>
+					<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+						<b>Thuế VAT</b>
+					</td>
+					<td style='text-align: right; border: 1px solid #000;'>
+						<b>{contract.TaxAmount:N0}</b>
+					</td>
+				</tr>
+				<tr style='background-color: #f9f9f9'>
+					<td colspan='6' style='text-align: right; border: 1px solid #000;'>
+						<b>Giảm giá</b>
+					</td>
+					<td style='text-align: right; border: 1px solid #000;'>
+						<b>0</b>
+					</td>
+				</tr>
 				<tr style='background-color: #e8f4fd'>
 					<td colspan='6' style='text-align: right; border: 1px solid #000;'>
 						<b>Thanh Toán</b>

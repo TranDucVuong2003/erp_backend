@@ -40,6 +40,7 @@ namespace erp_backend.Data
         public DbSet<AccountActivationToken> AccountActivationTokens { get; set; }
 
         // ✅ THÊM MỚI: Sale KPI Module
+        public DbSet<KpiPackage> KpiPackages { get; set; }
         public DbSet<SaleKpiTarget> SaleKpiTargets { get; set; }
         public DbSet<CommissionRate> CommissionRates { get; set; }
         public DbSet<SaleKpiRecord> SaleKpiRecords { get; set; }
@@ -765,6 +766,32 @@ namespace erp_backend.Data
 				entity.HasIndex(e => e.IsUsed);
 			});
 
+			// ✅ Configure KpiPackage entity
+			modelBuilder.Entity<KpiPackage>(entity =>
+			{
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+				entity.Property(e => e.Month).IsRequired();
+				entity.Property(e => e.Year).IsRequired();
+				entity.Property(e => e.TargetAmount).HasColumnType("decimal(18,2)").IsRequired();
+				entity.Property(e => e.Description).HasMaxLength(1000);
+				entity.Property(e => e.IsActive).HasDefaultValue(true);
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+				// Foreign key relationship with User (CreatedByUser)
+				entity.HasOne(e => e.CreatedByUser)
+					  .WithMany()
+					  .HasForeignKey(e => e.CreatedByUserId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				// Indexes
+				entity.HasIndex(e => e.Name);
+				entity.HasIndex(e => new { e.Month, e.Year });
+				entity.HasIndex(e => e.IsActive);
+				entity.HasIndex(e => e.CreatedByUserId);
+			});
+
 			// ✅ Configure SaleKpiTarget entity
 			modelBuilder.Entity<SaleKpiTarget>(entity =>
 			{
@@ -774,6 +801,8 @@ namespace erp_backend.Data
 				entity.Property(e => e.AssignedAt).HasColumnType("timestamp with time zone");
 				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
 				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.Notes).HasMaxLength(1000);
+				entity.Property(e => e.IsActive).HasDefaultValue(true);
 
 				// Foreign key relationships
 				entity.HasOne(e => e.SaleUser)
@@ -786,9 +815,15 @@ namespace erp_backend.Data
 					  .HasForeignKey(e => e.AssignedByUserId)
 					  .OnDelete(DeleteBehavior.Restrict);
 
+				entity.HasOne(e => e.KpiPackage)
+					  .WithMany()
+					  .HasForeignKey(e => e.KpiPackageId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
 				// Indexes
 				entity.HasIndex(e => new { e.UserId, e.Month, e.Year })
 					  .IsUnique(); // Mỗi sale chỉ có 1 KPI/tháng
+				entity.HasIndex(e => e.KpiPackageId);
 				entity.HasIndex(e => e.IsActive);
 				entity.HasIndex(e => e.AssignedAt);
 			});
@@ -844,54 +879,6 @@ namespace erp_backend.Data
 					  .IsUnique(); // Mỗi sale chỉ có 1 record/tháng
 				entity.HasIndex(e => e.IsKpiAchieved);
 			});
-
-			// ✅ Seed Data cho CommissionRate
-			modelBuilder.Entity<CommissionRate>().HasData(
-				new CommissionRate 
-				{ 
-					Id = 1, 
-					MinAmount = 15000000, 
-					MaxAmount = 30000000, 
-					CommissionPercentage = 5.00m, 
-					TierLevel = 1,
-					Description = "15 triệu - 30 triệu VND",
-					IsActive = true,
-					CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-				},
-				new CommissionRate 
-				{ 
-					Id = 2, 
-					MinAmount = 30000001, 
-					MaxAmount = 60000000, 
-					CommissionPercentage = 7.00m, 
-					TierLevel = 2,
-					Description = "30 triệu - 60 triệu VND",
-					IsActive = true,
-					CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-				},
-				new CommissionRate 
-				{ 
-					Id = 3, 
-					MinAmount = 60000001, 
-					MaxAmount = 100000000, 
-					CommissionPercentage = 8.00m, 
-					TierLevel = 3,
-					Description = "60 triệu - 100 triệu VND",
-					IsActive = true,
-					CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-				},
-				new CommissionRate 
-				{ 
-					Id = 4, 
-					MinAmount = 100000001, 
-					MaxAmount = null, 
-					CommissionPercentage = 10.00m, 
-					TierLevel = 4,
-					Description = "Trên 100 triệu VND",
-					IsActive = true,
-					CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-				}
-			);
 		}
     }
 }

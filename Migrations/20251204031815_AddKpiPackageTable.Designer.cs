@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251204031815_AddKpiPackageTable")]
+    partial class AddKpiPackageTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1755,13 +1758,11 @@ namespace erp_backend.Migrations
 
             modelBuilder.Entity("erp_backend.Models.KpiPackage", b =>
                 {
-                    b.HasOne("erp_backend.Models.User", "CreatedByUser")
+                    b.HasOne("erp_backend.Models.User", null)
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("CreatedByUser");
                 });
 
             modelBuilder.Entity("erp_backend.Models.MatchedTransaction", b =>

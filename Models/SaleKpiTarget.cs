@@ -1,48 +1,51 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace erp_backend.Models
 {
-    /// <summary>
-    /// B?ng l?u KPI ???c giao cho t?ng Sale theo th�ng
-    /// Admin s? giao KPI ??u m?i th�ng
-    /// </summary>
-    public class SaleKpiTarget
-    {
-        public int Id { get; set; }
+	public class SaleKpiTarget
+	{
+		public int Id { get; set; }
 
-        [Required]
-        public int UserId { get; set; } // Sale User ID
+		[Required]
+		public int UserId { get; set; } // Sale được gán
 
-        [Required]
-        [Range(1, 12)]
-        public int Month { get; set; } // Th�ng (1-12)
+		// --- PHẦN THÊM MỚI ---
+		[Required]
+		public int KpiPackageId { get; set; } // Khóa ngoại trỏ về bảng MonthlyKpiPackage
+											  // ---------------------
 
-        [Required]
-        [Range(2020, 2100)]
-        public int Year { get; set; } // N?m
+		[Required]
+		[Range(1, 12)]
+		public int Month { get; set; }
 
-        [Required]
-        [Range(0, double.MaxValue, ErrorMessage = "KPI ph?i l?n h?n 0")]
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal TargetAmount { get; set; } // S? ti?n KPI (VD: 20,000,000 VND)
+		[Required]
+		[Range(2020, 2100)]
+		public int Year { get; set; }
 
-        [Required]
-        public int AssignedByUserId { get; set; } // Admin giao KPI
+		// VẪN GIỮ LẠI CỘT NÀY (Để snapshot giá trị tiền tại thời điểm gán)
+		[Required]
+		[Column(TypeName = "decimal(18,2)")]
+		public decimal TargetAmount { get; set; }
 
-        public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
+		[Required]
+		public int AssignedByUserId { get; set; }
 
-        [StringLength(1000)]
-        public string? Notes { get; set; }
+		public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
 
-        public bool IsActive { get; set; } = true;
+		[StringLength(1000)]
+		public string? Notes { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+		public bool IsActive { get; set; } = true;
+		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+		public DateTime? UpdatedAt { get; set; }
 
-        public DateTime? UpdatedAt { get; set; }
+		// Navigation properties
+		public User? SaleUser { get; set; }
+		public User? AssignedByUser { get; set; }
 
-        // Navigation properties
-        public User? SaleUser { get; set; }
-        public User? AssignedByUser { get; set; }
-    }
+		// --- NAVIGATION MỚI ---
+		[ForeignKey("KpiPackageId")]
+		public KpiPackage? KpiPackage { get; set; }
+	}
 }

@@ -86,8 +86,16 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 // Add FileService
 builder.Services.AddScoped<IFileService, FileService>();
 
+// Add PdfService
+builder.Services.AddScoped<IPdfService, PdfService>();
+
 // Add Account Activation Service
 builder.Services.AddScoped<IAccountActivationService, AccountActivationService>();
+
+// ✅ Add KPI Calculation Service
+builder.Services.AddScoped<IKpiCalculationService, KpiCalculationService>();
+
+
 
 // Add Authorization
 builder.Services.AddAuthorization();
@@ -168,4 +176,4 @@ app.UseMiddleware<JwtTokenValidationMiddleware>();
 
 app.MapControllers();
 
-app.Run();
+app.Run();app.Run();
