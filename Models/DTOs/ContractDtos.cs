@@ -73,6 +73,7 @@ namespace erp_backend.Models.DTOs
         public CustomerBasicDto? Customer { get; set; }
         public decimal Value { get; set; }
         public int Probability { get; set; }
+        public string? Notes { get; set; }
         public int? TaxId { get; set; }
         public TaxBasicDto? Tax { get; set; }
         public List<ServiceItemDto> Services { get; set; } = new();

@@ -68,6 +68,12 @@ namespace erp_backend.Controllers
             }
         }
 
+        /// <summary>
+        /// Tìm bậc hoa hồng phù hợp theo số tiền
+        /// </summary>
+        /// <param name="amount">Số tiền cần tra cứu</param>
+        /// <returns>CommissionRate phù hợp</returns>
+        [HttpGet("by-amount/{amount}")]
         public async Task<ActionResult<CommissionRate>> GetCommissionRateByAmount(decimal amount)
         {
             try

@@ -87,6 +87,7 @@ namespace erp_backend.Controllers
 				so.Value,
 				so.Probability,
 				so.Status,
+				so.Notes,
 				so.CreatedAt,
 				so.UpdatedAt,
 				so.CreatedByUserId,
@@ -142,6 +143,7 @@ namespace erp_backend.Controllers
 				so.Value,
 				so.Probability,
 				so.Status,
+				so.Notes,
 				so.CreatedAt,
 				so.UpdatedAt,
 				SaleOrderServices = so.SaleOrderServices.Select(sos => new
@@ -236,6 +238,7 @@ namespace erp_backend.Controllers
 				saleOrder.Value,
 				saleOrder.Probability,
 				saleOrder.Status,
+				saleOrder.Notes,
 				saleOrder.CreatedAt,
 				saleOrder.UpdatedAt,
 				saleOrder.CreatedByUserId,

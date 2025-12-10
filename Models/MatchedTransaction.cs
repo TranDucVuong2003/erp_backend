@@ -20,8 +20,9 @@ namespace erp_backend.Models
 		[StringLength(100)]
 		public string? ReferenceNumber { get; set; }
 
+		[Required]
 		[StringLength(50)]
-		public string Status { get; set; } 
+		public string Status { get; set; } = "Unmatched"; // ✅ Thêm giá trị mặc định
 
 		public DateTime TransactionDate { get; set; }
 

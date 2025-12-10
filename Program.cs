@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using erp_backend.Data;
 using erp_backend.Services;
 using erp_backend.Middleware;
+using erp_backend.Hubs;
 using IronPdf;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization;
@@ -95,7 +96,8 @@ builder.Services.AddScoped<IAccountActivationService, AccountActivationService>(
 // ✅ Add KPI Calculation Service
 builder.Services.AddScoped<IKpiCalculationService, KpiCalculationService>();
 
-
+// ✅ Add SignalR
+builder.Services.AddSignalR();
 
 // Add Authorization
 builder.Services.AddAuthorization();
@@ -105,10 +107,10 @@ builder.Services.AddCors(options =>
 {
 	options.AddPolicy("AllowReactApp", policy =>
 	{
-		policy.WithOrigins("http://localhost:3000", "http://localhost:5173", "http://localhost:4200") // React dev server ports
+		policy.WithOrigins("http://localhost:5173", "https://erpsystem.click") // React dev server ports
 			  .AllowAnyMethod()
 			  .AllowAnyHeader()
-			  .AllowCredentials();
+			  .AllowCredentials(); // ✅ QUAN TRỌNG cho SignalR
 	});
 });
 
@@ -176,4 +178,7 @@ app.UseMiddleware<JwtTokenValidationMiddleware>();
 
 app.MapControllers();
 
-app.Run();app.Run();
+// ✅ Map SignalR Hub
+app.MapHub<PaymentHub>("/paymentHub");
+
+app.Run();

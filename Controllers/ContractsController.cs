@@ -999,7 +999,9 @@ namespace erp_backend.Controllers
 				var encodedDescription = HttpUtility.UrlEncode(description);
 
 				// 5. Tạo URL QR code theo format Sepay
-				var qrCodeUrl = $"https://qr.sepay.vn/img?acc={accountNumber}&bank={bankCode}&amount={amount}&des={encodedDescription}";
+				// ✅ Chuyển amount thành integer để bỏ dấu chấm và số 0 thập phân
+				var amountInt = (long)Math.Round(amount);
+				var qrCodeUrl = $"https://qr.sepay.vn/img?acc={accountNumber}&bank={bankCode}&amount={amountInt}&des={encodedDescription}";
 
 				_logger.LogInformation("Generated QR code for Contract {ContractId}, PaymentType: {PaymentType}, Amount: {Amount}", 
 					id, paymentType, amount);
