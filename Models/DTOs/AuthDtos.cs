@@ -135,7 +135,6 @@ namespace erp_backend.Models.DTOs
 		public string? Description { get; set; }
 		public decimal Price { get; set; }
 		public int? Quantity { get; set; }
-		public string? Category { get; set; }
 		public bool IsActive { get; set; }
 		public string? Notes { get; set; }
 	}
@@ -161,7 +160,6 @@ namespace erp_backend.Models.DTOs
 		public string? Description { get; set; }
 		public decimal Price { get; set; }
 		public int? Quantity { get; set; }
-		public string? Type { get; set; }
 		public bool IsActive { get; set; }
 		public string? Notes { get; set; }
 	}

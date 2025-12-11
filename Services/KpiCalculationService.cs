@@ -35,6 +35,7 @@ namespace erp_backend.Services
 
         /// <summary>
         /// Tính toán KPI cho m?t user trong tháng/n?m c? th?
+        /// ? B?N M?I: Tính c? deposit 50% vào doanh thu KPI
         /// </summary>
         public async Task CalculateKpiForUserAsync(int userId, int month, int year)
         {
@@ -56,21 +57,58 @@ namespace erp_backend.Services
                     return;
                 }
 
-                // 2. Tính t?ng doanh thu th?c t? t? các h?p ??ng
-                // ? FIXED: Thêm Status "Paid" vì trong ContractsController khi contract chuy?n sang "Paid" s? trigger KPI calculation
+                // 2. ? Tính t?ng doanh thu th?c t? t? các h?p ??ng (BAO G?M C? DEPOSIT)
+                // Logic m?i:
+                // - "Deposit 50%": Tính d?a trên s? ti?n ?ã thanh toán th?c t? (t? MatchedTransactions)
+                // - "Paid": Tính d?a trên s? ti?n ?ã thanh toán th?c t?
+                // - Fallback: N?u không có transactions, tính theo status
+                
                 var contractsQuery = _context.Contracts
                     .Include(c => c.SaleOrder)
+                    .Include(c => c.MatchedTransactions) // ? THÊM: L?y transactions
                     .Where(c => c.SaleOrder!.CreatedByUserId == userId
                         && c.CreatedAt.Month == month
                         && c.CreatedAt.Year == year
-                        && (c.Status == "Paid" || c.Status == "Completed" || c.Status == "Signed" || c.Status == "Active"));
+                        && (c.Status == "Deposit 50%"      // ? THÊM: Bao g?m c? deposit
+                            || c.Status == "Paid" 
+                            || c.Status == "Completed" 
+                            || c.Status == "Signed" 
+                            || c.Status == "Active"));
 
                 var contracts = await contractsQuery.ToListAsync();
 
-                decimal totalPaidAmount = contracts.Sum(c => c.TotalAmount);
+                // ? Tính t?ng doanh thu d?a trên MatchedTransactions th?c t?
+                decimal totalPaidAmount = 0;
                 int totalContracts = contracts.Count;
 
-                _logger.LogInformation("User {UserId}: T?ng {Count} h?p ??ng, T?ng ti?n: {Amount:N0} VN?", 
+                foreach (var contract in contracts)
+                {
+                    // L?y t?ng s? ti?n ?ã thanh toán t? MatchedTransactions
+                    var paidAmount = contract.MatchedTransactions?
+                        .Where(mt => mt.Status == "Matched")
+                        .Sum(mt => mt.Amount) ?? 0;
+
+                    if (paidAmount > 0)
+                    {
+                        // ?u tiên s? ti?n th?c t? ?ã thanh toán
+                        totalPaidAmount += paidAmount;
+                        _logger.LogInformation("Contract {ContractId} (#{ContractNumber}): ?ã thanh toán {Amount:N0} VN? (t? transactions)", 
+                            contract.Id, contract.NumberContract, paidAmount);
+                    }
+                    else
+                    {
+                        // Fallback: Tính theo status n?u không có transaction data
+                        decimal contractRevenue = contract.Status?.ToLower() == "deposit 50%" 
+                            ? contract.TotalAmount * 0.5m 
+                            : contract.TotalAmount;
+                        
+                        totalPaidAmount += contractRevenue;
+                        _logger.LogInformation("Contract {ContractId} (#{ContractNumber}): Tính doanh thu {Amount:N0} VN? (theo status: {Status})", 
+                            contract.Id, contract.NumberContract, contractRevenue, contract.Status);
+                    }
+                }
+
+                _logger.LogInformation("?? User {UserId}: T?ng {Count} h?p ??ng, T?ng doanh thu: {Amount:N0} VN?", 
                     userId, totalContracts, totalPaidAmount);
 
                 // 3. Tìm m?c hoa h?ng (CommissionRate) áp d?ng
@@ -88,7 +126,7 @@ namespace erp_backend.Services
                 // Tính ti?n hoa h?ng
                 decimal commissionAmount = (totalPaidAmount * commissionPercent) / 100;
 
-                _logger.LogInformation("User {UserId}: Commission Tier {Tier}, Rate {Rate}%, Amount {Amount:N0} VN?", 
+                _logger.LogInformation("?? User {UserId}: Commission Tier {Tier}, Rate {Rate}%, Amount {Amount:N0} VN?", 
                     userId, tierLevel, commissionPercent, commissionAmount);
 
                 // 4. Tính % hoàn thành KPI
@@ -104,7 +142,7 @@ namespace erp_backend.Services
 
                 bool isAchieved = totalPaidAmount >= target.TargetAmount;
 
-                _logger.LogInformation("User {UserId}: ??t {Percent:N2}% KPI ({Paid:N0}/{Target:N0}), Hoàn thành: {Achieved}", 
+                _logger.LogInformation("?? User {UserId}: ??t {Percent:N2}% KPI ({Paid:N0}/{Target:N0}), Hoàn thành: {Achieved}", 
                     userId, achievementPercent, totalPaidAmount, target.TargetAmount, isAchieved);
 
                 // 5. C?p nh?t ho?c T?o m?i vào b?ng SaleKpiRecord
@@ -124,11 +162,11 @@ namespace erp_backend.Services
                         CreatedAt = DateTime.UtcNow
                     };
                     _context.SaleKpiRecords.Add(record);
-                    _logger.LogInformation("T?o m?i KPI Record cho User {UserId}", userId);
+                    _logger.LogInformation("? T?o m?i KPI Record cho User {UserId}", userId);
                 }
                 else
                 {
-                    _logger.LogInformation("C?p nh?t KPI Record ID {RecordId} cho User {UserId}", record.Id, userId);
+                    _logger.LogInformation("?? C?p nh?t KPI Record ID {RecordId} cho User {UserId}", record.Id, userId);
                 }
 
                 // Update các ch? s? m?i nh?t

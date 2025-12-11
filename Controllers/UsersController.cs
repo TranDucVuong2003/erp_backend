@@ -185,7 +185,7 @@ namespace erp_backend.Controllers
 						var activationToken = await _activationService.GenerateActivationTokenAsync(user.Id, expiryHours: 24);
 						
 						// Lấy base URL từ config hoặc request
-						var baseUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+						var baseUrl = _configuration["FrontendUrl"] ?? "https://erpsystem.click";
 						var activationLink = $"{baseUrl}/activate-account?token={Uri.EscapeDataString(activationToken)}";
 						
 						// Gửi email không đồng bộ

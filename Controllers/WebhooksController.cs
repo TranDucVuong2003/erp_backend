@@ -179,14 +179,19 @@ namespace erp_backend.Controllers
 
 				_logger.LogInformation("📢 Sent SignalR notification to group {GroupName}", groupName);
 
-				// 9. 🎯 Tự động tính KPI nếu contract chuyển sang Paid
-				if (oldStatus?.ToLower() != "paid" && contract.Status?.ToLower() == "paid")
+				// 9. 🎯 Tự động tính KPI cho deposit 50% HOẶC thanh toán hoàn toàn
+				// ✅ THAY ĐỔI: Trigger KPI calculation cho cả "Deposit 50%" và "Paid"
+				var shouldCalculateKpi = (oldStatus?.ToLower() != "deposit 50%" && contract.Status?.ToLower() == "deposit 50%")
+				                       || (oldStatus?.ToLower() != "paid" && contract.Status?.ToLower() == "paid");
+
+				if (shouldCalculateKpi)
 				{
 					var saleUserId = contract.SaleOrder?.CreatedByUserId;
 
 					if (saleUserId.HasValue)
 					{
-						_logger.LogInformation("⚙️ Triggering KPI calculation for User {UserId}...", saleUserId.Value);
+						_logger.LogInformation("⚙️ Triggering KPI calculation for User {UserId} (Status: {OldStatus} → {NewStatus})...", 
+							saleUserId.Value, oldStatus, contract.Status);
 
 						try
 						{

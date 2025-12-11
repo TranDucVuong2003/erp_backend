@@ -259,6 +259,10 @@ namespace erp_backend.Services
         {
             var statusColor = GetStatusColor(ticket.Status);
             var actionIcon = GetActionIcon(emailType);
+            
+            // Lấy frontend URL từ configuration
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            var ticketUrl = $"{frontendUrl}/helpdesk";
 
             return $@"
 <!DOCTYPE html>
@@ -311,7 +315,7 @@ namespace erp_backend.Services
             
             <div style='text-align: center; margin: 20px 0;'>
                 <p>Vui lòng đăng nhập vào hệ thống để xem chi tiết và phản hồi.</p>
-                <a href='#' class='btn'>Xem Ticket</a>
+                <a href='{ticketUrl}' class='btn'>Xem Ticket</a>
             </div>
         </div>
         <div class='footer'>

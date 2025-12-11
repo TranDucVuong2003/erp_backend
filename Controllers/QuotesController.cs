@@ -124,17 +124,11 @@ namespace erp_backend.Controllers
 						qs.Service.Name,
 						qs.Service.Description,
 						qs.Service.Price,
-						qs.Service.Category,
 						qs.Service.IsActive,
 						Tax = qs.Service.Tax != null ? new
 						{
 							qs.Service.Tax.Id,
 							qs.Service.Tax.Rate
-						} : null,
-						CategoryServiceAddon = qs.Service.CategoryServiceAddons != null ? new
-						{
-							qs.Service.CategoryServiceAddons.Id,
-							qs.Service.CategoryServiceAddons.Name
 						} : null
 					} : null
 				}).ToList(),

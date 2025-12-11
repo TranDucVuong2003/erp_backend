@@ -63,5 +63,9 @@ namespace erp_backend.Models
 		// Navigation properties (NO JsonIgnore - we handle it in DTOs)
 		public User? User { get; set; }
 		public SaleOrder? SaleOrder { get; set; }
+		
+		// ✅ THÊM: Navigation property đến MatchedTransactions
+		[JsonIgnore] // Tránh circular reference khi serialize
+		public ICollection<MatchedTransaction>? MatchedTransactions { get; set; }
 	}
 }

@@ -175,7 +175,6 @@ namespace erp_backend.Data
 				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
 				entity.Property(e => e.Description).HasMaxLength(1000);
 				entity.Property(e => e.Price).HasColumnType("decimal(15,2)").IsRequired();
-				entity.Property(e => e.Category).HasMaxLength(50);
 				entity.Property(e => e.IsActive).HasDefaultValue(true);
 				entity.Property(e => e.Notes).HasMaxLength(2000);
                 entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -195,7 +194,6 @@ namespace erp_backend.Data
 
 				// Indexes
 				entity.HasIndex(e => e.Name);
-				entity.HasIndex(e => e.Category);
 				entity.HasIndex(e => e.IsActive);
 				entity.HasIndex(e => e.TaxId);
 				entity.HasIndex(e => e.CategoryId);
@@ -209,7 +207,6 @@ namespace erp_backend.Data
 				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
 				entity.Property(e => e.Description).HasMaxLength(1000);
 				entity.Property(e => e.Price).HasColumnType("decimal(15,2)").IsRequired();
-				entity.Property(e => e.Type).HasMaxLength(50);
 				entity.Property(e => e.IsActive).HasDefaultValue(true);
 				entity.Property(e => e.Notes).HasMaxLength(2000);
 				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -229,7 +226,6 @@ namespace erp_backend.Data
 
 				// Indexes
 				entity.HasIndex(e => e.Name);
-				entity.HasIndex(e => e.Type);
 				entity.HasIndex(e => e.IsActive);
 				entity.HasIndex(e => e.TaxId);
 				entity.HasIndex(e => e.CategoryId);
@@ -600,7 +596,7 @@ namespace erp_backend.Data
 
                 // Foreign Key relationships
                 entity.HasOne(e => e.Contract)
-                      .WithMany()
+                      .WithMany(c => c.MatchedTransactions) // ✅ THÊM: Two-way relationship
                       .HasForeignKey(e => e.ContractId)
                       .OnDelete(DeleteBehavior.SetNull);
 

@@ -9,7 +9,6 @@ namespace erp_backend.Controllers
 {
 	[ApiController]
 	[Route("api/[controller]")]
-	//[Authorize(Roles = "Admin")]
 	public class AddonsController : ControllerBase
 	{
 		private readonly ApplicationDbContext _context;
@@ -23,7 +22,7 @@ namespace erp_backend.Controllers
 
 		// Lấy danh sách tất cả addons
 		[HttpGet]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<IEnumerable<Addon>>> GetAddons()
 		{
 			return await _context.Addons
@@ -34,7 +33,7 @@ namespace erp_backend.Controllers
 
 		// Lấy addons đang hoạt động
 		[HttpGet("active")]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<IEnumerable<Addon>>> GetActiveAddons()
 		{
 			return await _context.Addons
@@ -44,15 +43,15 @@ namespace erp_backend.Controllers
 				.ToListAsync();
 		}
 
-		// Lấy addons theo type
-		[HttpGet("by-type/{type}")]
-		//[Authorize]
-		public async Task<ActionResult<IEnumerable<Addon>>> GetAddonsByType(string type)
+		// Lấy addons theo categoryId
+		[HttpGet("by-category/{categoryId}")]
+		[Authorize]
+		public async Task<ActionResult<IEnumerable<Addon>>> GetAddonsByCategoryId(int categoryId)
 		{
 			return await _context.Addons
 				.Include(a => a.Tax)
 				.Include(a => a.CategoryServiceAddons)
-				.Where(a => a.Type == type)
+				.Where(a => a.CategoryId == categoryId)
 				.ToListAsync();
 		}
 
@@ -76,7 +75,7 @@ namespace erp_backend.Controllers
 
 		// Tạo addon mới
 		[HttpPost]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<Addon>> CreateAddon(Addon addon)
 		{
 			try
@@ -113,8 +112,8 @@ namespace erp_backend.Controllers
 
 		// Cập nhật addon
 		[HttpPut("{id}")]
-		//[Authorize]
-		public async Task<ActionResult<UpdateAddonResponse>> UpdateAddon(int id, [FromBody] Dictionary<string, object?> updateData)
+		[Authorize]
+		public async Task<ActionResult> UpdateAddon(int id, [FromBody] Dictionary<string, object?> updateData)
 		{
 			try
 			{
@@ -189,14 +188,53 @@ namespace erp_backend.Controllers
 							}
 							break;
 
-						case "type":
-							if (value != null)
+						case "categoryid":
+							if (kvp.Value != null)
 							{
-								if (!string.IsNullOrWhiteSpace(value) && value.Length > 50)
+								if (int.TryParse(kvp.Value.ToString(), out int categoryId))
 								{
-									return BadRequest(new { message = "Type không được vượt quá 50 ký tự" });
+									// Verify category exists
+									var categoryExists = await _context.CategoryServiceAddons.AnyAsync(c => c.Id == categoryId);
+									if (!categoryExists)
+									{
+										return BadRequest(new { message = "Category không tồn tại" });
+									}
+									existingAddon.CategoryId = categoryId;
 								}
-								existingAddon.Type = string.IsNullOrWhiteSpace(value) ? null : value;
+								else
+								{
+									return BadRequest(new { message = "CategoryId không hợp lệ" });
+								}
+							}
+							else
+							{
+								// Cho phép set CategoryId = null
+								existingAddon.CategoryId = null;
+							}
+							break;
+
+						case "taxid":
+							if (kvp.Value != null)
+							{
+								if (int.TryParse(kvp.Value.ToString(), out int taxId))
+								{
+									// Verify tax exists
+									var taxExists = await _context.Taxes.AnyAsync(t => t.Id == taxId);
+									if (!taxExists)
+									{
+										return BadRequest(new { message = "Tax không tồn tại" });
+									}
+									existingAddon.TaxId = taxId;
+								}
+								else
+								{
+									return BadRequest(new { message = "TaxId không hợp lệ" });
+								}
+							}
+							else
+							{
+								// Cho phép set TaxId = null
+								existingAddon.TaxId = null;
 							}
 							break;
 
@@ -228,6 +266,7 @@ namespace erp_backend.Controllers
 						case "id":
 						case "createdat":
 						case "updatedat":
+						case "type": // Ignore old type field
 							// Bỏ qua các trường này
 							break;
 
@@ -240,17 +279,18 @@ namespace erp_backend.Controllers
 				existingAddon.UpdatedAt = DateTime.UtcNow;
 				await _context.SaveChangesAsync();
 
-				var response = new UpdateAddonResponse
+				var response = new
 				{
 					Message = "Cập nhật addon thành công",
-					Addon = new AddonInfo
+					Addon = new
 					{
 						Id = existingAddon.Id,
 						Name = existingAddon.Name,
 						Description = existingAddon.Description,
 						Price = existingAddon.Price,
 						Quantity = existingAddon.Quantity,
-						Type = existingAddon.Type,
+						CategoryId = existingAddon.CategoryId,
+						TaxId = existingAddon.TaxId,
 						IsActive = existingAddon.IsActive,
 						Notes = existingAddon.Notes
 					},
@@ -268,8 +308,8 @@ namespace erp_backend.Controllers
 
 		// Xóa addon
 		[HttpDelete("{id}")]
-		//[Authorize]
-		public async Task<ActionResult<DeleteAddonResponse>> DeleteAddon(int id)
+		[Authorize]
+		public async Task<ActionResult> DeleteAddon(int id)
 		{
 			try
 			{
@@ -279,27 +319,26 @@ namespace erp_backend.Controllers
 					return NotFound(new { message = "Không tìm thấy addon" });
 				}
 
-				var deletedAddonInfo = new AddonInfo
+				var response = new
 				{
-					Id = addon.Id,
-					Name = addon.Name,
-					Description = addon.Description,
-					Price = addon.Price,
-					Quantity = addon.Quantity,
-					Type = addon.Type,
-					IsActive = addon.IsActive,
-					Notes = addon.Notes
+					Message = "Xóa addon thành công",
+					DeletedAddon = new
+					{
+						Id = addon.Id,
+						Name = addon.Name,
+						Description = addon.Description,
+						Price = addon.Price,
+						Quantity = addon.Quantity,
+						CategoryId = addon.CategoryId,
+						TaxId = addon.TaxId,
+						IsActive = addon.IsActive,
+						Notes = addon.Notes
+					},
+					DeletedAt = DateTime.UtcNow
 				};
 
 				_context.Addons.Remove(addon);
 				await _context.SaveChangesAsync();
-
-				var response = new DeleteAddonResponse
-				{
-					Message = "Xóa addon thành công",
-					DeletedAddon = deletedAddonInfo,
-					DeletedAt = DateTime.UtcNow
-				};
 
 				return Ok(response);
 			}

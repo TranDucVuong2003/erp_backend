@@ -21,7 +21,7 @@ namespace erp_backend.Controllers
             _logger = logger;
         }
 
-        // L?y danh sách t?t c? services
+        // L?y danh s?ch t?t c? services
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Service>>> GetServices()
         {
@@ -42,14 +42,14 @@ namespace erp_backend.Controllers
                 .ToListAsync();
         }
 
-        // L?y services theo category
-        [HttpGet("by-category/{category}")]
-        public async Task<ActionResult<IEnumerable<Service>>> GetServicesByCategory(string category)
+        // L?y services theo categoryId
+        [HttpGet("by-category/{categoryId}")]
+        public async Task<ActionResult<IEnumerable<Service>>> GetServicesByCategoryId(int categoryId)
         {
             return await _context.Services
                 .Include(s => s.Tax)
                 .Include(s => s.CategoryServiceAddons)
-                .Where(s => s.Category == category)
+                .Where(s => s.CategoryId == categoryId)
                 .ToListAsync();
         }
 
@@ -64,7 +64,7 @@ namespace erp_backend.Controllers
 
             if (service == null)
             {
-                return NotFound(new { message = "Không tìm th?y service" });
+                return NotFound(new { message = "Kh?ng t?m th?y service" });
             }
 
             return service;
@@ -84,7 +84,7 @@ namespace erp_backend.Controllers
                 // Validate price
                 if (service.Price < 0)
                 {
-                    return BadRequest(new { message = "Giá service ph?i l?n h?n ho?c b?ng 0" });
+                    return BadRequest(new { message = "Gi? service ph?i l?n h?n ho?c b?ng 0" });
                 }
 
                 // Validate quantity
@@ -115,7 +115,7 @@ namespace erp_backend.Controllers
                 var existingService = await _context.Services.FindAsync(id);
                 if (existingService == null)
                 {
-                    return NotFound(new { message = "Không tìm th?y service" });
+                    return NotFound(new { message = "Kh?ng t?m th?y service" });
                 }
 
                 foreach (var kvp in updateData)
@@ -130,7 +130,7 @@ namespace erp_backend.Controllers
                             {
                                 if (value.Length > 200)
                                 {
-                                    return BadRequest(new { message = "Tên service không ???c v??t quá 200 ký t?" });
+                                    return BadRequest(new { message = "T?n service kh?ng ???c v??t qu? 200 k? t?" });
                                 }
                                 existingService.Name = value;
                             }
@@ -141,7 +141,7 @@ namespace erp_backend.Controllers
                             {
                                 if (!string.IsNullOrWhiteSpace(value) && value.Length > 1000)
                                 {
-                                    return BadRequest(new { message = "Mô t? không ???c v??t quá 1000 ký t?" });
+                                    return BadRequest(new { message = "M? t? kh?ng ???c v??t qu? 1000 k? t?" });
                                 }
                                 existingService.Description = string.IsNullOrWhiteSpace(value) ? null : value;
                             }
@@ -154,13 +154,13 @@ namespace erp_backend.Controllers
                                 {
                                     if (price < 0)
                                     {
-                                        return BadRequest(new { message = "Giá service ph?i l?n h?n ho?c b?ng 0" });
+                                        return BadRequest(new { message = "Gi? service ph?i l?n h?n ho?c b?ng 0" });
                                     }
                                     existingService.Price = price;
                                 }
                                 else
                                 {
-                                    return BadRequest(new { message = "Giá service không h?p l?" });
+                                    return BadRequest(new { message = "Gi? service kh?ng h?p l?" });
                                 }
                             }
                             break;
@@ -178,19 +178,28 @@ namespace erp_backend.Controllers
                                 }
                                 else
                                 {
-                                    return BadRequest(new { message = "S? l??ng không h?p l?" });
+                                    return BadRequest(new { message = "S? l??ng kh?ng h?p l?" });
                                 }
                             }
                             break;
 
-                        case "category":
-                            if (value != null)
+                        case "categoryid":
+                            if (kvp.Value != null)
                             {
-                                if (!string.IsNullOrWhiteSpace(value) && value.Length > 50)
+                                if (int.TryParse(kvp.Value.ToString(), out int categoryId))
                                 {
-                                    return BadRequest(new { message = "Category không ???c v??t quá 50 ký t?" });
+                                    // Verify category exists
+                                    var categoryExists = await _context.CategoryServiceAddons.AnyAsync(c => c.Id == categoryId);
+                                    if (!categoryExists)
+                                    {
+                                        return BadRequest(new { message = "Category không t?n t?i" });
+                                    }
+                                    existingService.CategoryId = categoryId;
                                 }
-                                existingService.Category = string.IsNullOrWhiteSpace(value) ? null : value;
+                                else
+                                {
+                                    return BadRequest(new { message = "CategoryId không h?p l?" });
+                                }
                             }
                             break;
 
@@ -203,7 +212,7 @@ namespace erp_backend.Controllers
                                 }
                                 else
                                 {
-                                    return BadRequest(new { message = "Giá tr? IsActive ph?i là true ho?c false" });
+                                    return BadRequest(new { message = "Gi? tr? IsActive ph?i l? true ho?c false" });
                                 }
                             }
                             break;
@@ -213,7 +222,7 @@ namespace erp_backend.Controllers
                             {
                                 if (!string.IsNullOrWhiteSpace(value) && value.Length > 2000)
                                 {
-                                    return BadRequest(new { message = "Ghi chú không ???c v??t quá 2000 ký t?" });
+                                    return BadRequest(new { message = "Ghi ch? kh?ng ???c v??t qu? 2000 k? t?" });
                                 }
                                 existingService.Notes = string.IsNullOrWhiteSpace(value) ? null : value;
                             }
@@ -222,11 +231,12 @@ namespace erp_backend.Controllers
                         case "id":
                         case "createdat":
                         case "updatedat":
-                            // B? qua các tr??ng này
+                        case "category": // Ignore old category field
+                            // B? qua c?c tr??ng n?y
                             break;
 
                         default:
-                            // B? qua các tr??ng không ???c h? tr?
+                            // B? qua c?c tr??ng kh?ng ???c h? tr?
                             break;
                     }
                 }
@@ -236,7 +246,7 @@ namespace erp_backend.Controllers
 
                 var response = new UpdateServiceResponse
                 {
-                    Message = "C?p nh?t service thành công",
+                    Message = "C?p nh?t service th?nh c?ng",
                     Service = new ServiceInfo
                     {
                         Id = existingService.Id,
@@ -244,7 +254,6 @@ namespace erp_backend.Controllers
                         Description = existingService.Description,
                         Price = existingService.Price,
                         Quantity = existingService.Quantity,
-                        Category = existingService.Category,
                         IsActive = existingService.IsActive,
                         Notes = existingService.Notes
                     },
@@ -260,7 +269,7 @@ namespace erp_backend.Controllers
             }
         }
 
-        // Xóa service
+        // X?a service
         [HttpDelete("{id}")]
         public async Task<ActionResult<DeleteServiceResponse>> DeleteService(int id)
         {
@@ -269,7 +278,7 @@ namespace erp_backend.Controllers
                 var service = await _context.Services.FindAsync(id);
                 if (service == null)
                 {
-                    return NotFound(new { message = "Không tìm th?y service" });
+                    return NotFound(new { message = "Kh?ng t?m th?y service" });
                 }
 
                 var deletedServiceInfo = new ServiceInfo
@@ -279,7 +288,6 @@ namespace erp_backend.Controllers
                     Description = service.Description,
                     Price = service.Price,
                     Quantity = service.Quantity,
-                    Category = service.Category,
                     IsActive = service.IsActive,
                     Notes = service.Notes
                 };
@@ -289,7 +297,7 @@ namespace erp_backend.Controllers
 
                 var response = new DeleteServiceResponse
                 {
-                    Message = "Xóa service thành công",
+                    Message = "X?a service th?nh c?ng",
                     DeletedService = deletedServiceInfo,
                     DeletedAt = DateTime.UtcNow
                 };
@@ -298,8 +306,8 @@ namespace erp_backend.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "L?i khi xóa service v?i ID: {ServiceId}", id);
-                return StatusCode(500, new { message = "L?i server khi xóa service", error = ex.Message });
+                _logger.LogError(ex, "L?i khi x?a service v?i ID: {ServiceId}", id);
+                return StatusCode(500, new { message = "L?i server khi x?a service", error = ex.Message });
             }
         }
 
