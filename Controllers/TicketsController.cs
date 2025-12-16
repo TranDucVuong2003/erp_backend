@@ -29,7 +29,7 @@ namespace erp_backend.Controllers
         /// <summary>
         /// Lấy danh sách tickets theo role của user
         /// - Admin: Thấy tất cả tickets
-        /// - User: Chỉ thấy tickets được phân công cho mình (AssignedToId = userId)
+        /// - User: Thấy tickets được phân công cho mình (AssignedToId = userId) HOẶC tickets do mình tạo (CreatedById = userId)
         /// </summary>
         [HttpGet("my-tickets")]
         public async Task<ActionResult<IEnumerable<Ticket>>> GetMyTickets(
@@ -54,11 +54,11 @@ namespace erp_backend.Controllers
                     .Include(t => t.CreatedBy)
                     .AsQueryable();
 
-                // ✅ PHÂN QUYỀN: Nếu không phải Admin, chỉ lấy tickets được phân công
+                // ✅ PHÂN QUYỀN: Nếu không phải Admin, chỉ lấy tickets được phân công HOẶC tickets do mình tạo
                 var isAdmin = IsCurrentUserAdmin();
                 if (!isAdmin)
                 {
-                    query = query.Where(t => t.AssignedToId == currentUserId);
+                    query = query.Where(t => t.AssignedToId == currentUserId || t.CreatedById == currentUserId);
                 }
 
                 // Apply filters
@@ -384,13 +384,21 @@ namespace erp_backend.Controllers
         {
             try
             {
-                // Normalize status
-                ticket.Status = NormalizeStatus(ticket.Status);
+                // Set default status to "New" if not provided
+                if (string.IsNullOrWhiteSpace(ticket.Status))
+                {
+                    ticket.Status = "New";
+                }
+                else
+                {
+                    // Normalize status
+                    ticket.Status = NormalizeStatus(ticket.Status);
+                }
 
                 // Validate status
                 if (!IsValidStatus(ticket.Status))
                 {
-                    return BadRequest($"Status '{ticket.Status}' không hợp lệ. Các giá trị hợp lệ: Open, In Progress, Closed, On Hold, Cancelled, Archived");
+                    return BadRequest($"Status '{ticket.Status}' không hợp lệ. Các giá trị hợp lệ: New, Processing, Closed, Archived");
                 }
 
                 // Verify required foreign keys exist
@@ -546,17 +554,15 @@ namespace erp_backend.Controllers
         private string NormalizeStatus(string status)
         {
             if (string.IsNullOrWhiteSpace(status))
-                return "Open";
+                return "New";
 
             return status.Trim().ToLower() switch
             {
-                "open" or "new" => "Open",
-                "in progress" or "working" or "inprogress" or "in_progress" => "In Progress",
+                "new" => "New",
+                "processing" or "in progress" or "working" or "inprogress" or "in_progress" or "open" => "Processing",
                 "closed" or "completed" or "resolved" or "done" => "Closed",
-                "on hold" or "pending" or "onhold" => "On Hold",
-                "cancelled" or "canceled" => "Cancelled",
                 "archived" => "Archived",
-				_ => status.Trim() // Return original if no match
+                _ => status.Trim() // Return original if no match
             };
         }
 
@@ -565,7 +571,7 @@ namespace erp_backend.Controllers
         /// </summary>
         private bool IsValidStatus(string status)
         {
-            var validStatuses = new[] { "Open", "In Progress", "Closed", "On Hold", "Cancelled", "Archived" };
+            var validStatuses = new[] { "New", "Processing", "Closed", "Archived" };
             return validStatuses.Contains(status);
         }
 

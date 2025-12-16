@@ -43,62 +43,62 @@ namespace erp_backend.Controllers
 						{
 							new
 							{
-								name = "Dashboard",
+								name = "Tổng quan",
 								path = "/",
 								icon = "HomeIcon"
 							},
 							new
 							{
-								name = "Customer",
+								name = "Khách hàng",
 								path = "/customers",
 								icon = "UsersIcon"
 							},
 							new
 							{
-								name = "Sale",
+								name = "Bán hàng",
 								icon = "ChartBarIcon",
 								children = new[]
 								{
-									new { name = "Sales order", path = "/sales" },
-									new { name = "Contract", path = "/contract" }
+									new { name = "Đơn hàng", path = "/sales" },
+									new { name = "Hợp đồng", path = "/contract" }
 								}
 							},
 							new
 							{
-								name = "Quote",
+								name = "Báo giá",
 								path = "/quotes",
 								icon = "DocumentTextIcon"
 							},
 							new
 							{
-								name = "Lead",
+								name = "Dữ liệu công ty",
 								path = "/companies",
 								icon = "CalendarIcon"
 							},
 							new
 							{
-								name = "Service",
+								name = "Dịch vụ",
 								icon = "CogIcon",
 								children = new[]
 								{
-									new { name = "Service", path = "/service" },
-									new { name = "Addons", path = "/addons" }
+									new { name = "Dịch vụ", path = "/service" },
+									new { name = "Dịch vụ đi kèm", path = "/addons" }
 								}
 							},
 							new
 							{
-								name = "Session",
+								name = "Phiên đăng nhập",
 								path = "/sessions",
 								icon = "LifebuoyIcon"
 							},
 							new
 							{
-								name = "KPI",
+								name = "Chỉ tiêu (KPI)",
 								icon = "ChartPieIcon",
 								children = new[]
 								{
-									new { name = "Dashboard KPI", path = "/kpi/dashboard" },
-									new { name = "Quản lý KPI", path = "/kpi/management" },
+									new { name = "Tổng Quan chỉ tiêu", path = "/kpi/dashboard" },
+									new { name = "Quản lý chỉ tiêu", path = "/kpi/management" },
 									//new { name = "KPI của tôi", path = "/kpi/my-kpi" },
 									new { name = "Bảng xếp hạng", path = "/kpi/leaderboard" },
 									new { name = "Bậc hoa hồng", path = "/kpi/commission-rates" }
@@ -106,13 +106,13 @@ namespace erp_backend.Controllers
 							},
 							new
 							{
-								name = "User management",
+								name = "Quản lý người dùng",
 								path = "/usermanagement",
 								icon = "CogIcon"
 							},
 							new
 							{
-								name = "HelpDesk",
+								name = "Hỗ trợ",
 								icon = "LifebuoyIcon",
 								path = "/helpdesk"
 							}
@@ -184,7 +184,7 @@ namespace erp_backend.Controllers
 				}
 				else
 				{
-					// Menu giới hạn cho User thường (Sale)
+			
 					return Ok(new
 					{
 						role = "User",
