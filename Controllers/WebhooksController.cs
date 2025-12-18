@@ -18,17 +18,20 @@ namespace erp_backend.Controllers
 		private readonly ILogger<WebhooksController> _logger;
 		private readonly IKpiCalculationService _kpiCalculationService;
 		private readonly IHubContext<PaymentHub> _hubContext;
+		private readonly IEmailService _emailService;
 
 		public WebhooksController(
 			ApplicationDbContext context,
 			ILogger<WebhooksController> logger,
 			IKpiCalculationService kpiCalculationService,
-			IHubContext<PaymentHub> hubContext)
+			IHubContext<PaymentHub> hubContext,
+			IEmailService emailService)
 		{
 			_context = context;
 			_logger = logger;
 			_kpiCalculationService = kpiCalculationService;
 			_hubContext = hubContext;
+			_emailService = emailService;
 		}
 
 		/// <summary>
@@ -70,9 +73,16 @@ namespace erp_backend.Controllers
 					return Ok(new { success = true, processed = false, message = "Cannot extract contract number" });
 				}
 
-				// 4. Tìm Contract theo NumberContract
+				// 4. Tìm Contract theo NumberContract và load thêm thông tin cần thiết cho email
 				var contract = await _context.Contracts
 					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so.CreatedByUser)
+							.ThenInclude(u => u.Department)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so.CreatedByUser)
+							.ThenInclude(u => u.Position)
+					.Include(c => c.SaleOrder)
+						.ThenInclude(so => so.Customer)
 					.FirstOrDefaultAsync(c => c.NumberContract == contractNumber.Value);
 
 				if (contract == null)
@@ -178,6 +188,39 @@ namespace erp_backend.Controllers
 				});
 
 				_logger.LogInformation("📢 Sent SignalR notification to group {GroupName}", groupName);
+
+				// 📧 GỬI EMAIL THÔNG BÁO CHO KHÁCH HÀNG, SALE VÀ ADMIN
+				try
+				{
+					var customer = contract.SaleOrder?.Customer;
+					var saleUser = contract.SaleOrder?.CreatedByUser;
+
+					if (customer != null)
+					{
+						_logger.LogInformation("📧 Sending payment success notification emails for contract {ContractId}...", contract.Id);
+						
+						await _emailService.SendPaymentSuccessNotificationAsync(
+							contract,
+							payload.Amount,
+							paymentType,
+							payload.TransactionId,
+							payload.TransactionDateTime,
+							customer,
+							saleUser
+						);
+
+						_logger.LogInformation("✅ Payment success notification emails sent for contract {ContractId}", contract.Id);
+					}
+					else
+					{
+						_logger.LogWarning("⚠️ Cannot send payment notification: Customer not found for contract {ContractId}", contract.Id);
+					}
+				}
+				catch (Exception emailEx)
+				{
+					_logger.LogError(emailEx, "❌ Lỗi khi gửi email thông báo thanh toán cho Contract {ContractId}", contract.Id);
+					// Không throw exception để không ảnh hưởng đến việc xử lý webhook
+				}
 
 				// 9. 🎯 Tự động tính KPI cho deposit 50% HOẶC thanh toán hoàn toàn
 				// ✅ THAY ĐỔI: Trigger KPI calculation cho cả "Deposit 50%" và "Paid"

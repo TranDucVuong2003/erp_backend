@@ -13,6 +13,7 @@ namespace erp_backend.Services
         Task SendTicketAssignedNotificationAsync(Ticket ticket, User assignedBy, string assignmentDetails);
         Task SendTicketStatusChangedNotificationAsync(Ticket ticket, User changedBy, string oldStatus, string newStatus);
         Task SendAccountCreationEmailAsync(User user, string plainPassword, string activationLink);
+        Task SendPaymentSuccessNotificationAsync(Contract contract, decimal amount, string paymentType, string transactionId, DateTime transactionDate, Customer customer, User? saleUser);
     }
 
     public class EmailService : IEmailService
@@ -228,6 +229,112 @@ namespace erp_backend.Services
             {
                 // Log lỗi nhưng không throw exception để không ảnh hưởng đến việc lưu TicketLog
                 _logger.LogError(ex, "Error sending email notification for ticket {TicketId}", ticket.Id);
+            }
+        }
+
+        public async Task SendPaymentSuccessNotificationAsync(
+            Contract contract, 
+            decimal amount, 
+            string paymentType, 
+            string transactionId, 
+            DateTime transactionDate,
+            Customer customer,
+            User? saleUser)
+        {
+            try
+            {
+                // Validate email configuration first
+                if (!ValidateEmailConfiguration())
+                {
+                    _logger.LogWarning("Email configuration is incomplete. Skipping payment notification for contract {ContractId}", contract.Id);
+                    return;
+                }
+
+                _logger.LogInformation("Preparing to send payment success notification for contract {ContractId}", contract.Id);
+
+                // Xác định người nhận - sử dụng HashSet để tránh trùng lặp
+                var recipients = new Dictionary<string, string>(); // email -> recipient type
+
+                // 1. Email khách hàng
+                if (!string.IsNullOrEmpty(customer.Email))
+                {
+                    recipients[customer.Email.Trim().ToLower()] = "customer";
+                }
+                if (!string.IsNullOrEmpty(customer.RepresentativeEmail))
+                {
+                    recipients[customer.RepresentativeEmail.Trim().ToLower()] = "customer";
+                }
+
+                // 2. Email sale (người tạo khách hàng)
+                if (saleUser != null && !string.IsNullOrEmpty(saleUser.Email))
+                {
+                    recipients[saleUser.Email.Trim().ToLower()] = "sale";
+                }
+                if (saleUser != null && !string.IsNullOrEmpty(saleUser.SecondaryEmail))
+                {
+                    recipients[saleUser.SecondaryEmail.Trim().ToLower()] = "sale";
+                }
+
+                // 3. Email admin - lấy từ config hoặc tìm user có role admin
+                var adminEmail = _configuration["AdminEmail"];
+                if (!string.IsNullOrEmpty(adminEmail))
+                {
+                    recipients[adminEmail.Trim().ToLower()] = "admin";
+                }
+
+                if (!recipients.Any())
+                {
+                    _logger.LogWarning("No email recipients for payment notification on contract {ContractId}", contract.Id);
+                    return;
+                }
+
+                _logger.LogInformation("Preparing to send payment notification emails to {RecipientCount} recipients for contract {ContractId}", 
+                    recipients.Count, contract.Id);
+
+                // Lấy thông tin SMTP từ config
+                var smtpServer = _configuration["Email:SmtpServer"];
+                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+                var smtpUsername = _configuration["Email:Username"];
+                var smtpPassword = _configuration["Email:Password"];
+                var senderEmail = _configuration["Email:SenderEmail"];
+                var senderName = _configuration["Email:SenderName"];
+
+                // Gửi email riêng cho từng loại người nhận
+                foreach (var recipient in recipients)
+                {
+                    try
+                    {
+                        var mail = new MailMessage
+                        {
+                            From = new MailAddress(senderEmail, senderName),
+                            Subject = GeneratePaymentEmailSubject(contract, paymentType),
+                            Body = FormatPaymentEmailBody(contract, amount, paymentType, transactionId, transactionDate, customer, saleUser, recipient.Value),
+                            IsBodyHtml = true
+                        };
+
+                        mail.To.Add(recipient.Key);
+
+                        using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+                        {
+                            smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                            smtpClient.EnableSsl = true;
+                            smtpClient.Timeout = 30000;
+
+                            await smtpClient.SendMailAsync(mail);
+                        }
+
+                        _logger.LogInformation("Payment notification email sent successfully to {Email} ({RecipientType}) for contract {ContractId}", 
+                            recipient.Key, recipient.Value, contract.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send payment notification to {Email} for contract {ContractId}", recipient.Key, contract.Id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending payment notification for contract {ContractId}", contract.Id);
             }
         }
 
@@ -457,6 +564,172 @@ namespace erp_backend.Services
         <div class='footer'>
             <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
             <p>Nếu bạn không yêu cầu tạo tài khoản này, vui lòng liên hệ với quản trị viên ngay lập tức.</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
+        </div>
+    </div>
+</body>
+</html>";
+        }
+
+        private string GeneratePaymentEmailSubject(Contract contract, string paymentType)
+        {
+            var paymentTypeText = paymentType switch
+            {
+                "deposit50" => "Đặt cọc 50%",
+                "final50" => "Thanh toán nốt 50%",
+                "full100" => "Thanh toán 100%",
+                _ => "Thanh toán"
+            };
+
+            return $"[Hợp đồng #{contract.NumberContract}] Xác nhận {paymentTypeText} thành công";
+        }
+
+        private string FormatPaymentEmailBody(
+            Contract contract, 
+            decimal amount, 
+            string paymentType, 
+            string transactionId, 
+            DateTime transactionDate,
+            Customer customer,
+            User? saleUser,
+            string recipientType)
+        {
+            var paymentTypeText = paymentType switch
+            {
+                "deposit50" => "Đặt cọc 50%",
+                "final50" => "Thanh toán nốt 50%",
+                "full100" => "Thanh toán 100%",
+                _ => "Thanh toán"
+            };
+
+            var greeting = recipientType switch
+            {
+                "customer" => $"Kính gửi quý khách hàng <strong>{customer.Name ?? customer.CompanyName}</strong>,",
+                "sale" => $"Xin chào <strong>{saleUser?.Name}</strong>,",
+                "admin" => "Kính gửi Quản trị viên,",
+                _ => "Xin chào,"
+            };
+
+            var mainMessage = recipientType switch
+            {
+                "customer" => $"Chúng tôi xác nhận đã nhận được khoản thanh toán <strong>{paymentTypeText}</strong> của quý khách cho hợp đồng số <strong>#{contract.NumberContract}</strong>.",
+                "sale" => $"Khách hàng <strong>{customer.Name ?? customer.CompanyName}</strong> đã thanh toán thành công <strong>{paymentTypeText}</strong> cho hợp đồng số <strong>#{contract.NumberContract}</strong>.",
+                "admin" => $"Hệ thống đã ghi nhận khoản thanh toán <strong>{paymentTypeText}</strong> cho hợp đồng số <strong>#{contract.NumberContract}</strong> của khách hàng <strong>{customer.Name ?? customer.CompanyName}</strong>.",
+                _ => $"Khoản thanh toán <strong>{paymentTypeText}</strong> cho hợp đồng số <strong>#{contract.NumberContract}</strong> đã được xác nhận."
+            };
+
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            var contractUrl = recipientType == "customer" 
+                ? $"{frontendUrl}" 
+                : $"{frontendUrl}/contracts/{contract.Id}";
+
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
+        .content {{ padding: 30px; background-color: #f8f9fa; }}
+        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
+        .payment-info {{ background-color: white; padding: 20px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        .info-row {{ padding: 10px 0; border-bottom: 1px solid #eee; }}
+        .info-row:last-child {{ border-bottom: none; }}
+        .info-label {{ font-weight: bold; color: #28a745; display: inline-block; width: 180px; }}
+        .info-value {{ color: #333; }}
+        .success-badge {{ background-color: #28a745; color: white; padding: 8px 16px; border-radius: 20px; display: inline-block; font-weight: bold; }}
+        .btn {{ display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
+        .icon {{ font-size: 48px; }}
+        .highlight {{ color: #28a745; font-weight: bold; }}
+        .customer-info {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; }}
+        .thank-you {{ background-color: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <div class='icon'>✅</div>
+            <h1 style='margin: 10px 0;'>Thanh toán thành công!</h1>
+            <p style='font-size: 16px; margin: 0;'>{paymentTypeText}</p>
+        </div>
+        <div class='content'>
+            <p>{greeting}</p>
+            
+            <p>{mainMessage}</p>
+            
+            <div class='payment-info'>
+                <h3 style='color: #28a745; margin-top: 0;'>💰 Thông tin thanh toán</h3>
+                <div class='info-row'>
+                    <span class='info-label'>📋 Số hợp đồng:</span>
+                    <span class='info-value'><strong>#{contract.NumberContract}</strong></span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>💵 Số tiền đã thanh toán:</span>
+                    <span class='info-value'><strong>{amount:N0} VNĐ</strong></span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>📊 Loại thanh toán:</span>
+                    <span class='info-value'><span class='success-badge'>{paymentTypeText}</span></span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>🔖 Mã giao dịch:</span>
+                    <span class='info-value'>{transactionId}</span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>🕐 Thời gian:</span>
+                    <span class='info-value'>{transactionDate:dd/MM/yyyy HH:mm:ss}</span>
+                </div>
+                <div class='info-row'>
+                    <span class='info-label'>✅ Trạng thái hợp đồng:</span>
+                    <span class='info-value'><strong>{contract.Status}</strong></span>
+                </div>
+            </div>
+
+            {(recipientType == "customer" ? $@"
+            <div class='customer-info'>
+                <h4 style='margin-top: 0; color: #0066cc;'>👤 Thông tin khách hàng</h4>
+                <p><strong>Tên:</strong> {customer.Name ?? customer.CompanyName}</p>
+                {(!string.IsNullOrEmpty(customer.PhoneNumber) ? $"<p><strong>Số điện thoại:</strong> {customer.PhoneNumber}</p>" : "")}
+                {(!string.IsNullOrEmpty(customer.Email) ? $"<p><strong>Email:</strong> {customer.Email}</p>" : "")}
+            </div>" : "")}
+
+            {(recipientType == "sale" || recipientType == "admin" ? $@"
+            <div class='customer-info'>
+                <h4 style='margin-top: 0; color: #0066cc;'>👤 Thông tin khách hàng</h4>
+                <p><strong>Tên khách hàng:</strong> {customer.Name ?? customer.CompanyName}</p>
+                <p><strong>Loại khách hàng:</strong> {customer.CustomerType}</p>
+                {(!string.IsNullOrEmpty(customer.PhoneNumber) ? $"<p><strong>Số điện thoại:</strong> {customer.PhoneNumber}</p>" : "")}
+                {(!string.IsNullOrEmpty(customer.Email) ? $"<p><strong>Email:</strong> {customer.Email}</p>" : "")}
+            </div>" : "")}
+
+            {(recipientType == "sale" && saleUser != null ? $@"
+            <div class='customer-info'>
+                <h4 style='margin-top: 0; color: #0066cc;'>👨‍💼 Sale phụ trách</h4>
+                <p><strong>Tên:</strong> {saleUser.Name}</p>
+                <p><strong>Email:</strong> {saleUser.Email}</p>
+                {(!string.IsNullOrEmpty(saleUser.PhoneNumber) ? $"<p><strong>Số điện thoại:</strong> {saleUser.PhoneNumber}</p>" : "")}
+            </div>" : "")}
+
+            <div class='thank-you'>
+                {(recipientType == "customer" 
+                    ? "<strong>🙏 Cảm ơn quý khách!</strong><br>Chúng tôi cam kết cung cấp dịch vụ tốt nhất cho quý khách. Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi." 
+                    : recipientType == "sale"
+                    ? "<strong>🎉 Chúc mừng!</strong><br>Khách hàng của bạn đã thanh toán thành công. Vui lòng theo dõi và hỗ trợ khách hàng trong quá trình sử dụng dịch vụ."
+                    : "<strong>📊 Thông báo hệ thống</strong><br>Giao dịch đã được ghi nhận và cập nhật vào hệ thống tự động.")}
+            </div>
+            
+            {(recipientType != "customer" ? $@"
+            <div style='text-align: center;'>
+                <a href='{contractUrl}' class='btn'>📄 Xem chi tiết hợp đồng</a>
+            </div>" : "")}
+        </div>
+        <div class='footer'>
+            <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
+            {(recipientType == "customer" 
+                ? "<p>Nếu có thắc mắc, vui lòng liên hệ với nhân viên sale phụ trách hoặc hotline: [SỐ HOTLINE]</p>" 
+                : "")}
             <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
         </div>
     </div>
