@@ -66,6 +66,112 @@ namespace erp_backend.Controllers
         }
 
 
+		[HttpGet("department/{departmentId}")]
+		[Authorize]
+		public async Task<ActionResult<IEnumerable<User>>> GetUsersByDepartment(int departmentId)
+		{
+			try
+			{
+				// Kiểm tra department có tồn tại không
+				var departmentExists = await _context.Departments.AnyAsync(d => d.Id == departmentId);
+				if (!departmentExists)
+				{
+					return NotFound(new { message = "Không tìm thấy phòng ban" });
+				}
+
+				var users = await _context.Users
+					.Include(u => u.Role)
+					.Include(u => u.Position)
+					.Include(u => u.Department)
+					.Where(u => u.DepartmentId == departmentId)
+					.OrderBy(u => u.Name)
+					.ToListAsync();
+
+				return Ok(users);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi lấy danh sách người dùng theo phòng ban: {DepartmentId}", departmentId);
+				return StatusCode(500, new { message = "Lỗi server khi lấy danh sách người dùng theo phòng ban", error = ex.Message });
+			}
+		}
+
+
+		[HttpGet("departments-with-users")]
+		[Authorize]
+		public async Task<ActionResult<DepartmentsWithUsersListResponse>> GetDepartmentsWithUsers()
+		{
+			try
+			{
+				// Lấy tất cả departments kèm theo users
+				var departments = await _context.Departments
+					.Include(d => d.Resion)
+					.OrderBy(d => d.Name)
+					.ToListAsync();
+
+				var response = new DepartmentsWithUsersListResponse();
+				
+				foreach (var dept in departments)
+				{
+					// Lấy users của từng department
+					var users = await _context.Users
+						.Include(u => u.Role)
+						.Include(u => u.Position)
+						.Where(u => u.DepartmentId == dept.Id)
+						.OrderBy(u => u.Name)
+						.ToListAsync();
+
+					// Chỉ thêm department nếu có users
+					if (users.Any())
+					{
+						var departmentResponse = new DepartmentWithUsersResponse
+						{
+							Id = dept.Id,
+							Name = dept.Name,
+							ResionId = dept.ResionId,
+							ResionName = dept.Resion?.City,
+							TotalUsers = users.Count,
+							CreatedAt = dept.CreatedAt,
+							UpdatedAt = dept.UpdatedAt,
+							Users = users.Select(u => new DepartmentUserInfo
+							{
+								Id = u.Id,
+								Name = u.Name,
+								Email = u.Email,
+								SecondaryEmail = u.SecondaryEmail,
+								PhoneNumber = u.PhoneNumber,
+								Address = u.Address,
+								Status = u.Status,
+								PositionId = u.PositionId,
+								PositionName = u.Position?.PositionName,
+								PositionLevel = u.Position?.Level,
+								RoleId = u.RoleId,
+								RoleName = u.Role?.Name ?? string.Empty,
+								CreatedAt = u.CreatedAt,
+								UpdatedAt = u.UpdatedAt
+							}).ToList()
+						};
+
+						response.Departments.Add(departmentResponse);
+						response.TotalUsers += users.Count;
+					}
+				}
+
+				response.TotalDepartments = response.Departments.Count;
+
+				_logger.LogInformation("Đã lấy {DepartmentCount} phòng ban với {UserCount} người dùng", 
+					response.TotalDepartments, response.TotalUsers);
+
+				return Ok(response);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi lấy danh sách phòng ban kèm người dùng");
+				return StatusCode(500, new { message = "Lỗi server khi lấy danh sách phòng ban kèm người dùng", error = ex.Message });
+			}
+		}
+
+
         [HttpPost]
 		[Authorize]
 		public async Task<ActionResult<User>> CreateUser([FromBody] CreateUserRequest request)

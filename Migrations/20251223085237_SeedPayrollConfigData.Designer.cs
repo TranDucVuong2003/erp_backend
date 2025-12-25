@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251223085237_SeedPayrollConfigData")]
+    partial class SeedPayrollConfigData
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -586,7 +589,7 @@ namespace erp_backend.Migrations
 
                     b.HasIndex("Name");
 
-                    b.ToTable("InsurancePolicy");
+                    b.ToTable("Insurances");
                 });
 
             modelBuilder.Entity("erp_backend.Models.JwtToken", b =>
@@ -886,57 +889,7 @@ namespace erp_backend.Migrations
                     b.HasIndex("Key")
                         .IsUnique();
 
-                    b.ToTable("PayrollConfig", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Key = "MIN_WAGE_REGION_1_2026",
-                            Description = "Lương tối thiểu vùng 1 năm 2026. Dùng để tính SÀN đóng BH và TRẦN BHTN.",
-                            Value = "5310000"
-                        },
-                        new
-                        {
-                            Key = "GOV_BASE_SALARY",
-                            Description = "Lương cơ sở (nhà nước). Dùng để tính TRẦN BHXH và BHYT (x20 lần).",
-                            Value = "2340000"
-                        },
-                        new
-                        {
-                            Key = "TRAINED_WORKER_RATE",
-                            Description = "Tỷ lệ cộng thêm cho lao động qua đào tạo (107% = Lương vùng + 7%).",
-                            Value = "1.07"
-                        },
-                        new
-                        {
-                            Key = "INSURANCE_CAP_RATIO",
-                            Description = "Hệ số trần bảo hiểm (Đóng tối đa trên 20 lần mức lương chuẩn).",
-                            Value = "20"
-                        },
-                        new
-                        {
-                            Key = "PERSONAL_DEDUCTION",
-                            Description = "Mức giảm trừ gia cảnh cho bản thân (15.5 triệu).",
-                            Value = "15500000"
-                        },
-                        new
-                        {
-                            Key = "DEPENDENT_DEDUCTION",
-                            Description = "Mức giảm trừ cho mỗi người phụ thuộc (6.2 triệu).",
-                            Value = "6200000"
-                        },
-                        new
-                        {
-                            Key = "FLAT_TAX_THRESHOLD",
-                            Description = "Ngưỡng thu nhập vãng lai bắt đầu phải khấu trừ 10% (2 triệu).",
-                            Value = "2000000"
-                        },
-                        new
-                        {
-                            Key = "DEFAULT_INSURANCE_MODE",
-                            Description = "Chế độ đóng bảo hiểm mặc định: MINIMAL (Đóng mức sàn) hoặc FULL (Đóng full lương).",
-                            Value = "MINIMAL"
-                        });
+                    b.ToTable("InsuranceStatus");
                 });
 
             modelBuilder.Entity("erp_backend.Models.Payslip", b =>
@@ -947,22 +900,13 @@ namespace erp_backend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("AssessableIncome")
-                        .HasColumnType("decimal(18, 2)");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<decimal>("FamilyDeduction")
-                        .HasColumnType("decimal(18, 2)");
-
                     b.Property<decimal>("GrossSalary")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("InsuranceDeduction")
-                        .HasColumnType("decimal(18, 2)");
 
                     b.Property<int>("Month")
                         .HasColumnType("integer");
@@ -1329,6 +1273,11 @@ namespace erp_backend.Migrations
                     b.Property<decimal>("InsuranceSalary")
                         .HasColumnType("decimal(18,0)");
 
+                    b.Property<bool>("IsStandardInsuranceMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1342,7 +1291,7 @@ namespace erp_backend.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("SalaryContracts");
+                    b.ToTable("SalaryBases");
                 });
 
             modelBuilder.Entity("erp_backend.Models.SaleKpiRecord", b =>

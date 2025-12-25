@@ -112,6 +112,15 @@ namespace erp_backend.Controllers
 							},
 							new
 							{
+								name = "Kế toán",
+								icon = "CurrencyDollarIcon",
+								children = new[]
+								{
+									new { name = "Lương", path = "/accounting/salary" }
+								}
+							},
+							new
+							{
 								name = "Hỗ trợ",
 								icon = "LifebuoyIcon",
 								path = "/helpdesk"

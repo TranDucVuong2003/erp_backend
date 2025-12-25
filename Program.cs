@@ -96,6 +96,9 @@ builder.Services.AddScoped<IAccountActivationService, AccountActivationService>(
 // ✅ Add KPI Calculation Service
 builder.Services.AddScoped<IKpiCalculationService, KpiCalculationService>();
 
+// ✅ Add Password Reset OTP Service
+builder.Services.AddScoped<IPasswordResetOtpService, PasswordResetOtpService>();
+
 // ✅ Add SignalR
 builder.Services.AddSignalR();
 

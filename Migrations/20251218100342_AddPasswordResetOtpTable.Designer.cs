@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251218100342_AddPasswordResetOtpTable")]
+    partial class AddPasswordResetOtpTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -542,53 +545,6 @@ namespace erp_backend.Migrations
                     b.ToTable("Departments");
                 });
 
-            modelBuilder.Entity("erp_backend.Models.InsurancePolicy", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("CapBaseType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<float>("EmployeeRate")
-                        .HasColumnType("real");
-
-                    b.Property<float>("EmployerRate")
-                        .HasColumnType("real");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.HasIndex("Name");
-
-                    b.ToTable("InsurancePolicy");
-                });
-
             modelBuilder.Entity("erp_backend.Models.JwtToken", b =>
                 {
                     b.Property<int>("Id")
@@ -770,46 +726,6 @@ namespace erp_backend.Migrations
                     b.ToTable("MatchedTransactions");
                 });
 
-            modelBuilder.Entity("erp_backend.Models.MonthlyAttendance", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<float>("ActualWorkDays")
-                        .HasColumnType("real");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<int>("Month")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("Month", "Year");
-
-                    b.HasIndex("UserId", "Month", "Year")
-                        .IsUnique();
-
-                    b.ToTable("MonthlyAttendances");
-                });
-
             modelBuilder.Entity("erp_backend.Models.PasswordResetOtp", b =>
                 {
                     b.Property<int>("Id")
@@ -863,154 +779,6 @@ namespace erp_backend.Migrations
                     b.HasIndex("Email", "OtpCode");
 
                     b.ToTable("password_reset_otps");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.PayrollConfig", b =>
-                {
-                    b.Property<string>("Key")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.HasKey("Key");
-
-                    b.HasIndex("Key")
-                        .IsUnique();
-
-                    b.ToTable("PayrollConfig", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Key = "MIN_WAGE_REGION_1_2026",
-                            Description = "Lương tối thiểu vùng 1 năm 2026. Dùng để tính SÀN đóng BH và TRẦN BHTN.",
-                            Value = "5310000"
-                        },
-                        new
-                        {
-                            Key = "GOV_BASE_SALARY",
-                            Description = "Lương cơ sở (nhà nước). Dùng để tính TRẦN BHXH và BHYT (x20 lần).",
-                            Value = "2340000"
-                        },
-                        new
-                        {
-                            Key = "TRAINED_WORKER_RATE",
-                            Description = "Tỷ lệ cộng thêm cho lao động qua đào tạo (107% = Lương vùng + 7%).",
-                            Value = "1.07"
-                        },
-                        new
-                        {
-                            Key = "INSURANCE_CAP_RATIO",
-                            Description = "Hệ số trần bảo hiểm (Đóng tối đa trên 20 lần mức lương chuẩn).",
-                            Value = "20"
-                        },
-                        new
-                        {
-                            Key = "PERSONAL_DEDUCTION",
-                            Description = "Mức giảm trừ gia cảnh cho bản thân (15.5 triệu).",
-                            Value = "15500000"
-                        },
-                        new
-                        {
-                            Key = "DEPENDENT_DEDUCTION",
-                            Description = "Mức giảm trừ cho mỗi người phụ thuộc (6.2 triệu).",
-                            Value = "6200000"
-                        },
-                        new
-                        {
-                            Key = "FLAT_TAX_THRESHOLD",
-                            Description = "Ngưỡng thu nhập vãng lai bắt đầu phải khấu trừ 10% (2 triệu).",
-                            Value = "2000000"
-                        },
-                        new
-                        {
-                            Key = "DEFAULT_INSURANCE_MODE",
-                            Description = "Chế độ đóng bảo hiểm mặc định: MINIMAL (Đóng mức sàn) hoặc FULL (Đóng full lương).",
-                            Value = "MINIMAL"
-                        });
-                });
-
-            modelBuilder.Entity("erp_backend.Models.Payslip", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("AssessableIncome")
-                        .HasColumnType("decimal(18, 2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<decimal>("FamilyDeduction")
-                        .HasColumnType("decimal(18, 2)");
-
-                    b.Property<decimal>("GrossSalary")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("InsuranceDeduction")
-                        .HasColumnType("decimal(18, 2)");
-
-                    b.Property<int>("Month")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("NetSalary")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("StandardWorkDays")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(26);
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("DRAFT");
-
-                    b.Property<decimal>("TaxAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PaidAt");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("Month", "Year");
-
-                    b.HasIndex("UserId", "Month", "Year")
-                        .IsUnique();
-
-                    b.ToTable("Payslips");
                 });
 
             modelBuilder.Entity("erp_backend.Models.Positions", b =>
@@ -1242,7 +1010,7 @@ namespace erp_backend.Migrations
                     b.ToTable("Roles");
                 });
 
-            modelBuilder.Entity("erp_backend.Models.SalaryComponent", b =>
+            modelBuilder.Entity("erp_backend.Models.Salary", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1250,7 +1018,19 @@ namespace erp_backend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount")
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ApprovedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("BasicSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Bonus")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Commission")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
@@ -1261,15 +1041,28 @@ namespace erp_backend.Migrations
                     b.Property<int>("Month")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
-                    b.Property<string>("Type")
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<decimal>("Tax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalInsurance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalSalary")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1280,69 +1073,21 @@ namespace erp_backend.Migrations
                     b.Property<int>("Year")
                         .HasColumnType("integer");
 
+                    b.Property<int>("workdays")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ApprovedBy");
 
                     b.HasIndex("CreatedAt");
 
-                    b.HasIndex("Type");
+                    b.HasIndex("Status");
 
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("UserId", "Month", "Year");
-
-                    b.ToTable("SalaryComponents");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SalaryContracts", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("BaseSalary")
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<string>("ContractType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("OFFICIAL");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<int>("DependentsCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<bool>("HasCommitment08")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<decimal>("InsuranceSalary")
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ContractType");
-
-                    b.HasIndex("UserId")
+                    b.HasIndex("UserId", "Month", "Year")
                         .IsUnique();
 
-                    b.ToTable("SalaryContracts");
+                    b.ToTable("Salaries");
                 });
 
             modelBuilder.Entity("erp_backend.Models.SaleKpiRecord", b =>
@@ -1739,44 +1484,6 @@ namespace erp_backend.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Taxes");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.TaxBracket", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<decimal?>("MaxIncome")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("MinIncome")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<float>("TaxRate")
-                        .HasColumnType("real");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TaxRate");
-
-                    b.HasIndex("MinIncome", "MaxIncome");
-
-                    b.ToTable("TaxBrackets");
                 });
 
             modelBuilder.Entity("erp_backend.Models.Ticket", b =>
@@ -2200,28 +1907,6 @@ namespace erp_backend.Migrations
                     b.Navigation("MatchedByUser");
                 });
 
-            modelBuilder.Entity("erp_backend.Models.MonthlyAttendance", b =>
-                {
-                    b.HasOne("erp_backend.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.Payslip", b =>
-                {
-                    b.HasOne("erp_backend.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("erp_backend.Models.Quote", b =>
                 {
                     b.HasOne("erp_backend.Models.Addon", "Addon")
@@ -2298,24 +1983,20 @@ namespace erp_backend.Migrations
                     b.Navigation("Service");
                 });
 
-            modelBuilder.Entity("erp_backend.Models.SalaryComponent", b =>
+            modelBuilder.Entity("erp_backend.Models.Salary", b =>
                 {
+                    b.HasOne("erp_backend.Models.User", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("erp_backend.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("erp_backend.Models.SalaryContracts", b =>
-                {
-                    b.HasOne("erp_backend.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                    b.Navigation("ApprovedByUser");
 
                     b.Navigation("User");
                 });

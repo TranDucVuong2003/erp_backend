@@ -481,6 +481,154 @@ namespace erp_backend.Controllers
             }
         }
 
+        /// <summary>
+        /// API yêu cầu gửi OTP để đổi mật khẩu
+        /// POST /api/auth/request-change-password-otp
+        /// </summary>
+        [HttpPost("request-change-password-otp")]
+        [AllowAnonymous]
+        public async Task<ActionResult> RequestChangePasswordOtp([FromBody] RequestChangePasswordOtpRequest request)
+        {
+            try
+            {
+                // Validate request
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                // Tìm user
+                var user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Email == request.Email);
+
+                if (user == null)
+                {
+                    // Không trả về lỗi cụ thể để tránh lộ thông tin
+                    _logger.LogWarning("OTP request for non-existent email: {Email}", request.Email);
+                    return Ok(new RequestChangePasswordOtpResponse
+                    {
+                        Message = "Nếu email tồn tại trong hệ thống, mã OTP đã được gửi",
+                        ExpiresAt = DateTime.UtcNow.AddMinutes(5),
+                        Email = request.Email
+                    });
+                }
+
+                // Inject IPasswordResetOtpService và IEmailService
+                var otpService = HttpContext.RequestServices.GetRequiredService<IPasswordResetOtpService>();
+                var emailService = HttpContext.RequestServices.GetRequiredService<IEmailService>();
+
+                // Lấy IP và User Agent
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                var userAgent = Request.Headers["User-Agent"].ToString();
+
+                // Tạo OTP
+                var (success, otp, expiresAt, message) = await otpService.GenerateOtpAsync(
+                    request.Email, 
+                    ipAddress, 
+                    userAgent
+                );
+
+                if (!success)
+                {
+                    return StatusCode(500, new { message });
+                }
+
+                // Gửi email OTP
+                await emailService.SendPasswordResetOtpAsync(
+                    request.Email,
+                    user.Name,
+                    otp,
+                    expiresAt
+                );
+
+                _logger.LogInformation("OTP requested successfully for email: {Email}", request.Email);
+
+                return Ok(new RequestChangePasswordOtpResponse
+                {
+                    Message = "Mã OTP đã được gửi đến email của bạn",
+                    ExpiresAt = expiresAt,
+                    Email = request.Email
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error requesting OTP for email: {Email}", request.Email);
+                return StatusCode(500, new { message = "Lỗi server khi yêu cầu OTP" });
+            }
+        }
+
+        /// <summary>
+        /// API xác thực OTP và đổi mật khẩu
+        /// POST /api/auth/verify-otp-and-change-password
+        /// </summary>
+        [HttpPost("verify-otp-and-change-password")]
+        [AllowAnonymous]
+        public async Task<ActionResult> VerifyOtpAndChangePassword([FromBody] VerifyOtpAndChangePasswordRequest request)
+        {
+            try
+            {
+                // Validate request
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                // Inject IPasswordResetOtpService
+                var otpService = HttpContext.RequestServices.GetRequiredService<IPasswordResetOtpService>();
+
+                // Xác thực OTP
+                var (isValid, message) = await otpService.ValidateOtpAsync(request.Email, request.Otp);
+
+                if (!isValid)
+                {
+                    return BadRequest(new { message });
+                }
+
+                // Tìm user
+                var user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Email == request.Email);
+
+                if (user == null)
+                {
+                    return NotFound(new { message = "Không tìm thấy người dùng" });
+                }
+
+                // Cập nhật mật khẩu
+                user.Password = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                user.UpdatedAt = DateTime.UtcNow;
+
+                // Đánh dấu OTP đã sử dụng
+                await otpService.MarkOtpAsUsedAsync(request.Email, request.Otp);
+
+                // Hủy tất cả các session đang hoạt động của user (để bắt buộc đăng nhập lại)
+                var activeSessions = await _context.JwtTokens
+                    .Where(t => t.UserId == user.Id && !t.IsRevoked && t.Expiration > DateTime.UtcNow)
+                    .ToListAsync();
+
+                foreach (var session in activeSessions)
+                {
+                    session.IsRevoked = true;
+                    session.RevokedAt = DateTime.UtcNow;
+                    session.ReasonRevoked = "Password changed - security measure";
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Password changed successfully for user {UserId} via OTP", user.Id);
+
+                return Ok(new ChangePasswordResponse
+                {
+                    Message = "Đổi mật khẩu thành công. Vui lòng đăng nhập lại với mật khẩu mới",
+                    ChangedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error verifying OTP and changing password for email: {Email}", request.Email);
+                return StatusCode(500, new { message = "Lỗi server khi đổi mật khẩu" });
+            }
+        }
+
 
         private void SetRefreshTokenCookie(string token, DateTime expires)
         {

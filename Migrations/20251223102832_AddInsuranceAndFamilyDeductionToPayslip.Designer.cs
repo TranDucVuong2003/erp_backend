@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using erp_backend.Data;
@@ -11,9 +12,11 @@ using erp_backend.Data;
 namespace erp_backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251223102832_AddInsuranceAndFamilyDeductionToPayslip")]
+    partial class AddInsuranceAndFamilyDeductionToPayslip
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -586,7 +589,7 @@ namespace erp_backend.Migrations
 
                     b.HasIndex("Name");
 
-                    b.ToTable("InsurancePolicy");
+                    b.ToTable("Insurances");
                 });
 
             modelBuilder.Entity("erp_backend.Models.JwtToken", b =>
@@ -1329,6 +1332,11 @@ namespace erp_backend.Migrations
                     b.Property<decimal>("InsuranceSalary")
                         .HasColumnType("decimal(18,0)");
 
+                    b.Property<bool>("IsStandardInsuranceMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1342,7 +1350,7 @@ namespace erp_backend.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("SalaryContracts");
+                    b.ToTable("SalaryBases");
                 });
 
             modelBuilder.Entity("erp_backend.Models.SaleKpiRecord", b =>

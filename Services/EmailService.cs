@@ -14,6 +14,7 @@ namespace erp_backend.Services
         Task SendTicketStatusChangedNotificationAsync(Ticket ticket, User changedBy, string oldStatus, string newStatus);
         Task SendAccountCreationEmailAsync(User user, string plainPassword, string activationLink);
         Task SendPaymentSuccessNotificationAsync(Contract contract, decimal amount, string paymentType, string transactionId, DateTime transactionDate, Customer customer, User? saleUser);
+        Task SendPasswordResetOtpAsync(string email, string userName, string otpCode, DateTime expiresAt);
     }
 
     public class EmailService : IEmailService
@@ -252,7 +253,7 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send payment success notification for contract {ContractId}", contract.Id);
 
-                // Xác định người nhận - sử dụng HashSet để tránh trùng lặp
+                // Xác định người nhận - sử dụng Dictionary để phân biệt loại người nhận
                 var recipients = new Dictionary<string, string>(); // email -> recipient type
 
                 // 1. Email khách hàng
@@ -335,6 +336,67 @@ namespace erp_backend.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending payment notification for contract {ContractId}", contract.Id);
+            }
+        }
+
+        /// <summary>
+        /// Gửi email mã OTP để đổi mật khẩu
+        /// </summary>
+        public async Task SendPasswordResetOtpAsync(string email, string userName, string otpCode, DateTime expiresAt)
+        {
+            try
+            {
+                // Validate email configuration first
+                if (!ValidateEmailConfiguration())
+                {
+                    _logger.LogWarning("Email configuration is incomplete. Skipping OTP email for {Email}", email);
+                    return;
+                }
+
+                _logger.LogInformation("Preparing to send OTP email to {Email}", email);
+
+                // Lấy thông tin SMTP từ config
+                var smtpServer = _configuration["Email:SmtpServer"];
+                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+                var smtpUsername = _configuration["Email:Username"];
+                var smtpPassword = _configuration["Email:Password"];
+                var senderEmail = _configuration["Email:SenderEmail"];
+                var senderName = _configuration["Email:SenderName"];
+
+                // Tính thời gian hết hạn
+                var expiryMinutes = (int)(expiresAt - DateTime.UtcNow).TotalMinutes;
+
+                // Tạo email message
+                var mail = new MailMessage
+                {
+                    From = new MailAddress(senderEmail, senderName),
+                    Subject = "Mã OTP đổi mật khẩu - ERP System",
+                    Body = FormatOtpEmailBody(userName, otpCode, expiresAt, expiryMinutes),
+                    IsBodyHtml = true
+                };
+
+                mail.To.Add(email);
+
+                // Tạo SMTP client và gửi email
+                using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+                {
+                    smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                    smtpClient.EnableSsl = true;
+                    smtpClient.Timeout = 30000; // 30 seconds timeout
+
+                    await smtpClient.SendMailAsync(mail);
+                }
+
+                _logger.LogInformation("OTP email sent successfully to {Email}", email);
+            }
+            catch (SmtpException smtpEx)
+            {
+                _logger.LogError(smtpEx, "SMTP error sending OTP email to {Email}: {StatusCode} - {Message}", 
+                    email, smtpEx.StatusCode, smtpEx.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending OTP email to {Email}", email);
             }
         }
 
@@ -584,6 +646,88 @@ namespace erp_backend.Services
             return $"[Hợp đồng #{contract.NumberContract}] Xác nhận {paymentTypeText} thành công";
         }
 
+        /// <summary>
+        /// Format email body cho OTP đổi mật khẩu
+        /// </summary>
+        private string FormatOtpEmailBody(string userName, string otpCode, DateTime expiresAt, int expiryMinutes)
+        {
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
+        .content {{ padding: 30px; background-color: #f8f9fa; }}
+        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
+        .otp-box {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; margin: 30px 0; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .otp-code {{ font-size: 48px; font-weight: bold; letter-spacing: 10px; margin: 20px 0; font-family: 'Courier New', monospace; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
+        .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+        .icon {{ font-size: 48px; }}
+        .info-box {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #0066cc; }}
+        .timer {{ background-color: #ffc107; color: #333; padding: 10px 20px; border-radius: 20px; display: inline-block; font-weight: bold; margin-top: 10px; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <div class='icon'>🔐</div>
+            <h1 style='margin: 10px 0;'>Đổi mật khẩu</h1>
+            <p style='font-size: 16px; margin: 0;'>Mã OTP xác thực</p>
+        </div>
+        <div class='content'>
+            <p>Xin chào <strong>{userName}</strong>,</p>
+            
+            <p>Bạn đã yêu cầu đổi mật khẩu cho tài khoản ERP của mình. Dưới đây là mã OTP để xác thực:</p>
+            
+            <div class='otp-box'>
+                <div style='font-size: 18px; margin-bottom: 10px;'>Mã OTP của bạn là:</div>
+                <div class='otp-code'>{otpCode}</div>
+                <div class='timer'>⏰ Có hiệu lực trong {expiryMinutes} phút</div>
+            </div>
+
+            <div class='info-box'>
+                <h4 style='margin-top: 0; color: #0066cc;'>📋 Hướng dẫn sử dụng</h4>
+                <ol style='margin: 10px 0; padding-left: 20px;'>
+                    <li>Nhập mã OTP <strong>{otpCode}</strong> vào form đổi mật khẩu</li>
+                    <li>Nhập mật khẩu mới (tối thiểu 8 ký tự)</li>
+                    <li>Xác nhận mật khẩu mới</li>
+                    <li>Nhấn &quot;Đổi mật khẩu&quot; để hoàn tất</li>
+                </ol>
+            </div>
+            
+            <div class='warning-box'>
+                <strong>⚠️ Lưu ý quan trọng:</strong>
+                <ul style='margin: 10px 0; padding-left: 20px;'>
+                    <li>Mã OTP này chỉ có hiệu lực trong <strong>{expiryMinutes} phút</strong></li>
+                    <li>Mã OTP chỉ được sử dụng <strong>một lần duy nhất</strong></li>
+                    <li>Không chia sẻ mã OTP này với bất kỳ ai</li>
+                    <li>Nếu bạn không yêu cầu đổi mật khẩu, vui lòng bỏ qua email này và liên hệ với quản trị viên ngay</li>
+                </ul>
+            </div>
+
+            <div class='info-box'>
+                <p style='margin: 0;'><strong>🕐 Thời gian hết hạn:</strong> {expiresAt:dd/MM/yyyy HH:mm:ss} UTC</p>
+                <p style='margin: 10px 0 0 0; font-size: 12px; color: #666;'>
+                    (Giờ Việt Nam: {expiresAt.AddHours(7):dd/MM/yyyy HH:mm:ss})
+                </p>
+            </div>
+
+            <p style='margin-top: 30px; color: #666;'>
+                Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email hoặc liên hệ với quản trị viên để được hỗ trợ.
+            </p>
+        </div>
+        <div class='footer'>
+            <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
+            <p>Nếu bạn gặp vấn đề khi đổi mật khẩu, vui lòng liên hệ với quản trị viên hệ thống.</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
+        </div>
+    </div>
+</body>
+</html>";
+        }
+
         private string FormatPaymentEmailBody(
             Contract contract, 
             decimal amount, 
@@ -735,6 +879,72 @@ namespace erp_backend.Services
     </div>
 </body>
 </html>";
+        }
+
+        private string FormatPasswordResetEmailBody(string userName, string otpCode, DateTime expiresAt)
+        {
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
+        .content {{ padding: 30px; background-color: #f8f9fa; }}
+        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
+        .otp-box {{ background-color: white; padding: 20px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        .otp-label {{ font-weight: bold; color: #dc3545; display: inline-block; margin-bottom: 10px; }}
+        .otp-code {{ font-size: 24px; letter-spacing: 2px; color: #333; font-weight: bold; }}
+        .btn {{ display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
+        .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+        .icon {{ font-size: 24px; margin-right: 10px; }}
+        .highlight {{ color: #dc3545; font-weight: bold; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h1><span class='icon'>🔐</span>Xác nhận thay đổi mật khẩu</h1>
+        </div>
+        <div class='content'>
+            <p>Xin chào <strong>{userName}</strong>,</p>
+            
+            <p>Chúng tôi đã nhận được yêu cầu thay đổi mật khẩu cho tài khoản của bạn. Vui lòng sử dụng mã xác nhận dưới đây để hoàn tất quá trình:</p>
+            
+            <div class='otp-box'>
+                <span class='otp-label'>Mã xác nhận:</span>
+                <span class='otp-code'>{otpCode}</span>
+            </div>
+            
+            <p>Liên kết này sẽ hết hạn vào <strong>{expiresAt:dd/MM/yyyy HH:mm:ss}</strong>. Vui lòng sử dụng mã xác nhận trong thời gian quy định.</p>
+            
+            <div style='text-align: center;'>
+                <a href='{GetPasswordResetLink(otpCode)}' class='btn'>🔗 Đặt lại mật khẩu của bạn</a>
+            </div>
+            
+            <div class='warning-box'>
+                <strong>⚠️ Lưu ý:</strong>
+                <ul style='margin: 10px 0; padding-left: 20px;'>
+                    <li>Mã xác nhận chỉ có giá trị trong 5 phút.</li>
+                    <li>Nếu bạn không yêu cầu thay đổi mật khẩu, vui lòng bỏ qua email này.</li>
+                </ul>
+            </div>
+        </div>
+        <div class='footer'>
+            <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
+        </div>
+    </div>
+</body>
+</html>";
+        }
+
+        private string GetPasswordResetLink(string otpCode)
+        {
+            // Giả sử link reset password có dạng: /reset-password?token=OTP_CODE
+            return $"/reset-password?token={otpCode}";
         }
     }
 }

@@ -99,14 +99,17 @@ namespace erp_backend.Controllers
 				switch (paymentType)
 				{
 					case "deposit50":
+					//case "test1":
 						expectedAmount = contract.TotalAmount * 0.5m;
 						paymentTypeDescription = "Đặt cọc 50%";
 						break;
 					case "final50":
+					//case "test2":
 						expectedAmount = contract.TotalAmount * 0.5m;
 						paymentTypeDescription = "Thanh toán nốt 50%";
 						break;
 					case "full100":
+					//case "test3":
 					default:
 						expectedAmount = contract.TotalAmount;
 						paymentTypeDescription = "Thanh toán 100%";
@@ -150,16 +153,19 @@ namespace erp_backend.Controllers
 				switch (paymentType)
 				{
 					case "deposit50":
+					//case "test1":
 						contract.Status = "Deposit 50%";
 						_logger.LogInformation("✅ Contract {ContractId} status changed to 'Deposit 50%'", contract.Id);
 						break;
-					
+
 					case "final50":
+					//case "test2":
 						contract.Status = "Paid";
 						_logger.LogInformation("✅ Contract {ContractId} status changed to 'Paid' (Final 50%)", contract.Id);
 						break;
-					
+
 					case "full100":
+					//case "test3":
 						contract.Status = "Paid";
 						_logger.LogInformation("✅ Contract {ContractId} status changed to 'Paid' (Full 100%)", contract.Id);
 						break;
@@ -331,9 +337,10 @@ namespace erp_backend.Controllers
 			}
 
 			// ✅ BACKWARD COMPATIBILITY - OLD PATTERNS
-			
+
 			// Pattern cho đặt cọc 50% (old format)
-			var depositPattern = @"datcoc50%?hopdong(\d+)";
+			//var depositPattern = @"datcoc50%?hopdong(\d+)";
+			var depositPattern = @"test1(\d+)";
 			var depositMatch = Regex.Match(normalizedContent, depositPattern, RegexOptions.IgnoreCase);
 			if (depositMatch.Success && int.TryParse(depositMatch.Groups[1].Value, out int depositContractNumber))
 			{
@@ -342,7 +349,8 @@ namespace erp_backend.Controllers
 			}
 
 			// Pattern cho thanh toán nốt 50% (old format)
-			var finalPattern = @"thanhtoan50%?hopdong(\d+)";
+			//var finalPattern = @"thanhtoan50%?hopdong(\d+)";
+			var finalPattern = @"test2(\d+)";
 			var finalMatch = Regex.Match(normalizedContent, finalPattern, RegexOptions.IgnoreCase);
 			if (finalMatch.Success && int.TryParse(finalMatch.Groups[1].Value, out int finalContractNumber))
 			{
@@ -351,7 +359,8 @@ namespace erp_backend.Controllers
 			}
 
 			// Pattern cho thanh toán 100% (old format)
-			var fullPattern = @"thanhtoanhopdong(\d+)";
+			//var fullPattern = @"thanhtoanhopdong(\d+)";
+			var fullPattern = @"test3(\d+)";
 			var fullMatch = Regex.Match(normalizedContent, fullPattern, RegexOptions.IgnoreCase);
 			if (fullMatch.Success && int.TryParse(fullMatch.Groups[1].Value, out int fullContractNumber))
 			{

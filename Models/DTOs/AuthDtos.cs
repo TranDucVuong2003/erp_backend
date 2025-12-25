@@ -188,4 +188,55 @@ namespace erp_backend.Models.DTOs
 		[Compare("NewPassword", ErrorMessage = "Mật khẩu xác nhận không khớp")]
 		public string ConfirmPassword { get; set; } = string.Empty;
 	}
+
+	/// <summary>
+	/// DTO yêu cầu gửi OTP để đổi mật khẩu
+	/// </summary>
+	public class RequestChangePasswordOtpRequest
+	{
+		[Required(ErrorMessage = "Email là bắt buộc")]
+		[EmailAddress(ErrorMessage = "Email không hợp lệ")]
+		public string Email { get; set; } = string.Empty;
+	}
+
+	/// <summary>
+	/// Response sau khi gửi OTP thành công
+	/// </summary>
+	public class RequestChangePasswordOtpResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public DateTime ExpiresAt { get; set; }
+		public string Email { get; set; } = string.Empty;
+	}
+
+	/// <summary>
+	/// DTO xác thực OTP và đổi mật khẩu
+	/// </summary>
+	public class VerifyOtpAndChangePasswordRequest
+	{
+		[Required(ErrorMessage = "Email là bắt buộc")]
+		[EmailAddress(ErrorMessage = "Email không hợp lệ")]
+		public string Email { get; set; } = string.Empty;
+
+		[Required(ErrorMessage = "Mã OTP là bắt buộc")]
+		[StringLength(6, MinimumLength = 6, ErrorMessage = "Mã OTP phải có 6 chữ số")]
+		public string Otp { get; set; } = string.Empty;
+
+		[Required(ErrorMessage = "Mật khẩu mới là bắt buộc")]
+		[MinLength(8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự")]
+		public string NewPassword { get; set; } = string.Empty;
+
+		[Required(ErrorMessage = "Xác nhận mật khẩu là bắt buộc")]
+		[Compare("NewPassword", ErrorMessage = "Mật khẩu xác nhận không khớp")]
+		public string ConfirmPassword { get; set; } = string.Empty;
+	}
+
+	/// <summary>
+	/// Response sau khi đổi mật khẩu thành công
+	/// </summary>
+	public class ChangePasswordResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public DateTime ChangedAt { get; set; }
+	}
 }
