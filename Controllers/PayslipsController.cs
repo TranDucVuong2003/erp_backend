@@ -1,9 +1,11 @@
 ﻿using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using erp_backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 
 namespace erp_backend.Controllers
 {
@@ -14,11 +16,16 @@ namespace erp_backend.Controllers
 	{
 		private readonly ApplicationDbContext _context;
 		private readonly ILogger<PayslipsController> _logger;
+		private readonly ISalaryReportService _salaryReportService;
 
-		public PayslipsController(ApplicationDbContext context, ILogger<PayslipsController> logger)
+		public PayslipsController(
+			ApplicationDbContext context, 
+			ILogger<PayslipsController> logger,
+			ISalaryReportService salaryReportService)
 		{
 			_context = context;
 			_logger = logger;
+			_salaryReportService = salaryReportService;
 		}
 
 		// Helper method: Tính số công chuẩn (C) - trừ Thứ 7 và Chủ nhật
@@ -1334,6 +1341,95 @@ namespace erp_backend.Controllers
 			{
 				_logger.LogError(ex, "Lỗi khi xóa phiếu lương với ID: {PayslipId}", id);
 				return StatusCode(500, new { message = "Lỗi server khi xóa phiếu lương", error = ex.Message });
+			}
+		}
+
+		// POST: api/Payslips/export-salary-report
+		// API xuất báo cáo thống kê lương ra PDF
+		[HttpPost("export-salary-report")]
+		public async Task<IActionResult> ExportSalaryReport([FromBody] GenerateSalaryReportRequest request)
+		{
+			try
+			{
+				// Validate input
+				if (request.Month < 1 || request.Month > 12)
+				{
+					return BadRequest(new { message = "Tháng phải từ 1-12" });
+				}
+
+				if (request.Year < 2020 || request.Year > 2100)
+				{
+					return BadRequest(new { message = "Năm không hợp lệ" });
+				}
+
+				// Generate PDF
+				var pdfBytes = await _salaryReportService.GenerateSalaryReportPdfAsync(request);
+
+				// Return PDF file
+				var fileName = $"BaoCaoLuong_{request.Month:00}_{request.Year}.pdf";
+				
+				_logger.LogInformation(
+					"Xuất báo cáo lương tháng {Month}/{Year}. File: {FileName}, Size: {Size} bytes",
+					request.Month,
+					request.Year,
+					fileName,
+					pdfBytes.Length
+				);
+
+				return File(pdfBytes, "application/pdf", fileName);
+			}
+			catch (InvalidOperationException ex)
+			{
+				_logger.LogWarning(ex, "Không có dữ liệu để xuất báo cáo tháng {Month}/{Year}", request.Month, request.Year);
+				return NotFound(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi xuất báo cáo lương tháng {Month}/{Year}", request.Month, request.Year);
+				return StatusCode(500, new { message = "Lỗi server khi xuất báo cáo lương", error = ex.Message });
+			}
+		}
+
+		// POST: api/Payslips/preview-salary-report
+		// API preview HTML báo cáo thống kê lương (không xuất PDF)
+		[HttpPost("preview-salary-report")]
+		public async Task<IActionResult> PreviewSalaryReport([FromBody] GenerateSalaryReportRequest request)
+		{
+			try
+			{
+				// Validate input
+				if (request.Month < 1 || request.Month > 12)
+				{
+					return BadRequest(new { message = "Tháng phải từ 1-12" });
+				}
+
+				if (request.Year < 2020 || request.Year > 2100)
+				{
+					return BadRequest(new { message = "Năm không hợp lệ" });
+				}
+
+				// Generate HTML
+				var htmlContent = await _salaryReportService.GenerateSalaryReportHtmlAsync(request);
+				
+				_logger.LogInformation(
+					"Preview báo cáo lương tháng {Month}/{Year}. HTML length: {Length}",
+					request.Month,
+					request.Year,
+					htmlContent.Length
+				);
+
+				// Return HTML content
+				return Content(htmlContent, "text/html", Encoding.UTF8);
+			}
+			catch (InvalidOperationException ex)
+			{
+				_logger.LogWarning(ex, "Không có dữ liệu để preview báo cáo tháng {Month}/{Year}", request.Month, request.Year);
+				return NotFound(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi preview báo cáo lương tháng {Month}/{Year}", request.Month, request.Year);
+				return StatusCode(500, new { message = "Lỗi server khi preview báo cáo lương", error = ex.Message });
 			}
 		}
 	}

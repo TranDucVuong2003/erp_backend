@@ -7,14 +7,6 @@ namespace erp_backend.Models
 	{
 		public int Id { get; set; }
 
-		//[Required]
-		//[StringLength(255)]
-		//public string Name { get; set; } = string.Empty;
-
-		//public int? ServiceId { get; set; } 
-
-		//public int? AddonsId { get; set; } 
-		//public int? TaxId { get; set; } // Liên kết đến bảng Tax
 		[Required]
 		public int SaleOrderId { get; set; }
 
@@ -47,6 +39,9 @@ namespace erp_backend.Models
 
 		[StringLength(2000)]
 		public string? Notes { get; set; } // ✅ THÊM: Ghi chú
+
+		// ✅ THÊM: Đánh dấu có xuất hóa đơn hay không
+		public bool ExtractInvoices { get; set; } = false; // Mặc định là chưa xuất hóa đơn
 
 		// ✅ PDF Storage Fields
 		[StringLength(500)]

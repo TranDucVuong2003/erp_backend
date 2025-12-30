@@ -222,6 +222,7 @@ namespace erp_backend.Controllers
                     TotalAmount = totalAmount,
                     Expiration = request.Expiration,
                     Notes = request.Notes,
+                    ExtractInvoices = request.ExtractInvoices, // ✅ THÊM
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -300,7 +301,8 @@ namespace erp_backend.Controllers
                                       // NumberContract không thể thay đổi khi update
                                       request.Status != existingContract.Status ||
                                       request.PaymentMethod != existingContract.PaymentMethod ||
-                                      request.Expiration != existingContract.Expiration;
+                                      request.Expiration != existingContract.Expiration ||
+                                      request.ExtractInvoices != existingContract.ExtractInvoices; // ✅ THÊM
 
                 if (needsRegenerate && !string.IsNullOrEmpty(existingContract.ContractPdfPath))
                 {
@@ -327,6 +329,7 @@ namespace erp_backend.Controllers
                 existingContract.PaymentMethod = request.PaymentMethod;
                 existingContract.Expiration = request.Expiration;
                 existingContract.Notes = request.Notes;
+                existingContract.ExtractInvoices = request.ExtractInvoices; // ✅ THÊM
                 existingContract.UpdatedAt = DateTime.UtcNow;
 
                 // ✅ Tính lại SubTotal, TaxAmount, TotalAmount nếu SaleOrder thay đổi
@@ -603,6 +606,7 @@ namespace erp_backend.Controllers
                 PaymentMethod = c.PaymentMethod,
                 TotalAmount = c.TotalAmount,
                 Expiration = c.Expiration,
+                ExtractInvoices = c.ExtractInvoices, // ✅ THÊM
                 CreatedAt = c.CreatedAt
             });
 
@@ -677,6 +681,7 @@ namespace erp_backend.Controllers
                 TotalAmount = contract.TotalAmount,
                 Expiration = contract.Expiration,
                 Notes = contract.Notes,
+                ExtractInvoices = contract.ExtractInvoices, // ✅ THÊM
                 CreatedAt = contract.CreatedAt,
                 UpdatedAt = contract.UpdatedAt
             };
@@ -957,14 +962,42 @@ namespace erp_backend.Controllers
 					return NotFound(new { message = "Không tìm thấy hợp đồng" });
 				}
 
-				// 2. Lấy thông tin ngân hàng từ config
-				var bankCode = _configuration["Sepay:BankCode"] ?? "MB";
-				var accountNumber = _configuration["Sepay:AccountNumber"] ?? "";
-				var accountName = _configuration["Sepay:AccountName"] ?? "";
+				// 2. ✅ Lấy thông tin ngân hàng dựa trên ExtractInvoices
+				var banks = _configuration.GetSection("Sepay:Banks").Get<List<BankConfig>>();
+				
+				if (banks == null || !banks.Any())
+				{
+					return BadRequest(new { message = "Chưa cấu hình thông tin tài khoản ngân hàng" });
+				}
+
+				// ✅ Chọn ngân hàng dựa vào ExtractInvoices
+				// - ExtractInvoices = true  -> Lấy MB (index 0)
+				// - ExtractInvoices = false -> Lấy BIDV (index 1)
+				BankConfig selectedBank;
+				if (contract.ExtractInvoices && banks.Count > 0)
+				{
+					selectedBank = banks[0]; // MB Bank
+					_logger.LogInformation("Contract {ContractId} has ExtractInvoices=true, using bank: {BankCode}", id, selectedBank.BankCode);
+				}
+				else if (!contract.ExtractInvoices && banks.Count > 1)
+				{
+					selectedBank = banks[1]; // BIDV Bank
+					_logger.LogInformation("Contract {ContractId} has ExtractInvoices=false, using bank: {BankCode}", id, selectedBank.BankCode);
+				}
+				else
+				{
+					// Fallback: Nếu không đủ 2 bank, lấy bank đầu tiên
+					selectedBank = banks[0];
+					_logger.LogWarning("Only {Count} bank(s) configured. Using first bank: {BankCode}", banks.Count, selectedBank.BankCode);
+				}
+
+				var bankCode = selectedBank.BankCode;
+				var accountNumber = selectedBank.AccountNumber;
+				var accountName = selectedBank.AccountName;
 
 				if (string.IsNullOrEmpty(accountNumber))
 				{
-					return BadRequest(new { message = "Chưa cấu hình thông tin tài khoản ngân hàng" });
+					return BadRequest(new { message = "Thông tin tài khoản ngân hàng không hợp lệ" });
 				}
 
 				// 3. Xác định số tiền và nội dung thanh toán dựa trên paymentType
@@ -972,24 +1005,27 @@ namespace erp_backend.Controllers
 				string contentTemplate;
 				string paymentTypeDisplay;
 
+				// ✅ Lấy template từ bank config đã chọn
+				var templates = selectedBank.PaymentContentTemplates;
+
 				switch (paymentType.ToLower())
 				{
 					case "deposit50":
 						amount = contract.TotalAmount * 0.5m;
-						contentTemplate = _configuration["Sepay:PaymentContentTemplates:Deposit50"] ?? "DatCoc50%HopDong{0}";
+						contentTemplate = templates?.Deposit50 ?? "DatCoc50%HopDong{0}";
 						paymentTypeDisplay = "Đặt cọc 50%";
 						break;
 
 					case "final50":
 						amount = contract.TotalAmount * 0.5m;
-						contentTemplate = _configuration["Sepay:PaymentContentTemplates:Final50"] ?? "ThanhToan50%HopDong{0}";
+						contentTemplate = templates?.Final50 ?? "ThanhToan50%HopDong{0}";
 						paymentTypeDisplay = "Thanh toán nốt 50%";
 						break;
 
 					case "full100":
 					default:
 						amount = contract.TotalAmount;
-						contentTemplate = _configuration["Sepay:PaymentContentTemplates:Full100"] ?? "ThanhToanHopDong{0}";
+						contentTemplate = templates?.Full100 ?? "ThanhToanHopDong{0}";
 						paymentTypeDisplay = "Thanh toán 100%";
 						break;
 				}
@@ -1003,8 +1039,8 @@ namespace erp_backend.Controllers
 				var amountInt = (long)Math.Round(amount);
 				var qrCodeUrl = $"https://qr.sepay.vn/img?acc={accountNumber}&bank={bankCode}&amount={amountInt}&des={encodedDescription}";
 
-				_logger.LogInformation("Generated QR code for Contract {ContractId}, PaymentType: {PaymentType}, Amount: {Amount}", 
-					id, paymentType, amount);
+				_logger.LogInformation("Generated QR code for Contract {ContractId}, Bank: {BankCode}, PaymentType: {PaymentType}, Amount: {Amount}, ExtractInvoices: {ExtractInvoices}", 
+					id, bankCode, paymentType, amount, contract.ExtractInvoices);
 
 				// 6. Trả về thông tin đầy đủ
 				return Ok(new
@@ -1012,6 +1048,7 @@ namespace erp_backend.Controllers
 					success = true,
 					contractId = contract.Id,
 					contractNumber = contract.NumberContract,
+					extractInvoices = contract.ExtractInvoices, // ✅ THÊM thông tin ExtractInvoices
 					paymentType = paymentType.ToLower(),
 					paymentTypeDisplay = paymentTypeDisplay,
 					qrCodeUrl = qrCodeUrl,
@@ -1101,6 +1138,22 @@ namespace erp_backend.Controllers
 			
 			[System.Text.Json.Serialization.JsonPropertyName("supported")]
 			public bool Supported { get; set; }
+		}
+
+		// ✅ DTO classes for Bank Configuration from appsettings.json
+		private class BankConfig
+		{
+			public string BankCode { get; set; } = string.Empty;
+			public string AccountNumber { get; set; } = string.Empty;
+			public string AccountName { get; set; } = string.Empty;
+			public PaymentContentTemplates? PaymentContentTemplates { get; set; }
+		}
+
+		private class PaymentContentTemplates
+		{
+			public string? Deposit50 { get; set; }
+			public string? Final50 { get; set; }
+			public string? Full100 { get; set; }
 		}
 
         // Helper method: Bind dữ liệu Contract vào template
@@ -1266,7 +1319,7 @@ namespace erp_backend.Controllers
 						<td style='text-align: center; border: 1px solid #000'>{taxDisplay}</td>
 						<td style='text-align: center; border: 1px solid #000'>{soa.duration} tháng</td>
 						<td style='text-align: right; border: 1px solid #000'>{soa.UnitPrice:N0}</td>
-						<td style='text-align: right; border: 1px solid #000'>{lineTotal:N0}</td>
+						<td style='text-align: right' border: 1px solid #000>{lineTotal:N0}</td>
 					</tr>");
 				}	
 			}

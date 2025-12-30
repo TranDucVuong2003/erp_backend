@@ -1,5 +1,4 @@
-using System.Diagnostics;
-using System.Text;
+using IronPdf;
 
 namespace erp_backend.Services
 {
@@ -12,119 +11,50 @@ namespace erp_backend.Services
     public class PdfService : IPdfService
     {
         private readonly ILogger<PdfService> _logger;
-        private readonly string _wkhtmltopdfPath;
+        private readonly ChromePdfRenderer _renderer;
 
-        public PdfService(ILogger<PdfService> logger, IWebHostEnvironment env)
+        public PdfService(ILogger<PdfService> logger)
         {
             _logger = logger;
             
-            // Đường dẫn đến wkhtmltopdf.exe
-            _wkhtmltopdfPath = Path.Combine(env.ContentRootPath, "wkhtmltox", "bin", "wkhtmltopdf.exe");
+            // Cấu hình ChromePdfRenderer
+            _renderer = new ChromePdfRenderer();
             
-            if (!File.Exists(_wkhtmltopdfPath))
-            {
-                _logger.LogWarning("wkhtmltopdf.exe not found at: {Path}", _wkhtmltopdfPath);
-            }
+            // Cấu hình rendering options
+            _renderer.RenderingOptions.PaperSize = IronPdf.Rendering.PdfPaperSize.A4;
+            _renderer.RenderingOptions.PaperOrientation = IronPdf.Rendering.PdfPaperOrientation.Portrait;
+            _renderer.RenderingOptions.MarginTop = 10;
+            _renderer.RenderingOptions.MarginBottom = 10;
+            _renderer.RenderingOptions.MarginLeft = 10;
+            _renderer.RenderingOptions.MarginRight = 10;
+            _renderer.RenderingOptions.CssMediaType = IronPdf.Rendering.PdfCssMediaType.Print;
+            _renderer.RenderingOptions.PrintHtmlBackgrounds = true;
+            _renderer.RenderingOptions.EnableJavaScript = false;
+            _renderer.RenderingOptions.Timeout = 60; // 60 seconds timeout
+            
+            _logger.LogInformation("IronPDF PdfService initialized successfully");
         }
 
         public async Task<byte[]> ConvertHtmlToPdfAsync(string htmlContent)
         {
             try
             {
-                if (!File.Exists(_wkhtmltopdfPath))
-                {
-                    throw new FileNotFoundException($"wkhtmltopdf.exe not found at: {_wkhtmltopdfPath}");
-                }
+                _logger.LogInformation("Starting HTML to PDF conversion with IronPDF. HTML length: {Length}", htmlContent.Length);
 
-                // Tạo file HTML tạm thời
-                var tempHtmlFile = Path.Combine(Path.GetTempPath(), $"temp_{Guid.NewGuid()}.html");
-                var tempPdfFile = Path.Combine(Path.GetTempPath(), $"temp_{Guid.NewGuid()}.pdf");
-
-                try
-                {
-                    // Ghi nội dung HTML vào file tạm
-                    await File.WriteAllTextAsync(tempHtmlFile, htmlContent, Encoding.UTF8);
-
-                    // Cấu hình tham số cho wkhtmltopdf
-                    // Xuất ra khổ A4 chuẩn (210mm x 297mm)
-                    var arguments = new StringBuilder();
-                    arguments.Append("--page-size A4 ");
-                    arguments.Append("--orientation portrait ");
-                    arguments.Append("--margin-top 10mm ");
-                    arguments.Append("--margin-right 10mm ");
-                    arguments.Append("--margin-bottom 10mm ");
-                    arguments.Append("--margin-left 10mm ");
-                    arguments.Append("--encoding UTF-8 ");
-                    arguments.Append("--enable-local-file-access ");
-                    arguments.Append("--disable-smart-shrinking ");
-                    arguments.Append("--dpi 96 ");
-                    arguments.Append("--no-stop-slow-scripts ");
-                    arguments.Append("--javascript-delay 1000 ");
-                    arguments.Append("--load-error-handling ignore ");
-                    arguments.Append("--load-media-error-handling ignore ");
-                    arguments.Append($"\"{tempHtmlFile}\" ");
-                    arguments.Append($"\"{tempPdfFile}\"");
-
-                    // Chạy wkhtmltopdf
-                    var processStartInfo = new ProcessStartInfo
-                    {
-                        FileName = _wkhtmltopdfPath,
-                        Arguments = arguments.ToString(),
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        StandardOutputEncoding = Encoding.UTF8,
-                        StandardErrorEncoding = Encoding.UTF8
-                    };
-
-                    using var process = new Process { StartInfo = processStartInfo };
-                    
-                    process.Start();
-
-                    var output = await process.StandardOutput.ReadToEndAsync();
-                    var error = await process.StandardError.ReadToEndAsync();
-
-                    await process.WaitForExitAsync();
-
-                    if (process.ExitCode != 0)
-                    {
-                        _logger.LogError("wkhtmltopdf error: {Error}", error);
-                        throw new Exception($"PDF generation failed: {error}");
-                    }
-
-                    // Đọc file PDF đã tạo
-                    if (!File.Exists(tempPdfFile))
-                    {
-                        throw new Exception("PDF file was not created");
-                    }
-
-                    var pdfBytes = await File.ReadAllBytesAsync(tempPdfFile);
-                    
-                    _logger.LogInformation("PDF generated successfully. Size: {Size} bytes", pdfBytes.Length);
-                    
-                    return pdfBytes;
-                }
-                finally
-                {
-                    // Xóa các file tạm
-                    try
-                    {
-                        if (File.Exists(tempHtmlFile))
-                            File.Delete(tempHtmlFile);
-                        if (File.Exists(tempPdfFile))
-                            File.Delete(tempPdfFile);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete temporary files");
-                    }
-                }
+                // Convert HTML to PDF using IronPDF
+                var pdfDocument = await Task.Run(() => _renderer.RenderHtmlAsPdf(htmlContent));
+                
+                // Convert to byte array
+                var pdfBytes = pdfDocument.BinaryData;
+                
+                _logger.LogInformation("PDF generated successfully with IronPDF. Size: {Size} bytes", pdfBytes.Length);
+                
+                return pdfBytes;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error converting HTML to PDF");
-                throw;
+                _logger.LogError(ex, "Error converting HTML to PDF with IronPDF");
+                throw new Exception($"Failed to generate PDF: {ex.Message}", ex);
             }
         }
 
@@ -132,80 +62,22 @@ namespace erp_backend.Services
         {
             try
             {
-                if (!File.Exists(_wkhtmltopdfPath))
-                {
-                    throw new FileNotFoundException($"wkhtmltopdf.exe not found at: {_wkhtmltopdfPath}");
-                }
+                _logger.LogInformation("Starting URL to PDF conversion with IronPDF. URL: {Url}", url);
 
-                var tempPdfFile = Path.Combine(Path.GetTempPath(), $"temp_{Guid.NewGuid()}.pdf");
-
-                try
-                {
-                    // Cấu hình tham số cho wkhtmltopdf
-                    var arguments = new StringBuilder();
-                    arguments.Append("--page-size A4 ");
-                    arguments.Append("--margin-top 10mm ");
-                    arguments.Append("--margin-right 10mm ");
-                    arguments.Append("--margin-bottom 10mm ");
-                    arguments.Append("--margin-left 10mm ");
-                    arguments.Append("--encoding UTF-8 ");
-                    arguments.Append($"\"{url}\" ");
-                    arguments.Append($"\"{tempPdfFile}\"");
-
-                    // Chạy wkhtmltopdf
-                    var processStartInfo = new ProcessStartInfo
-                    {
-                        FileName = _wkhtmltopdfPath,
-                        Arguments = arguments.ToString(),
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true
-                    };
-
-                    using var process = new Process { StartInfo = processStartInfo };
-                    
-                    process.Start();
-
-                    var output = await process.StandardOutput.ReadToEndAsync();
-                    var error = await process.StandardError.ReadToEndAsync();
-
-                    await process.WaitForExitAsync();
-
-                    if (process.ExitCode != 0)
-                    {
-                        _logger.LogError("wkhtmltopdf error: {Error}", error);
-                        throw new Exception($"PDF generation failed: {error}");
-                    }
-
-                    // Đọc file PDF đã tạo
-                    if (!File.Exists(tempPdfFile))
-                    {
-                        throw new Exception("PDF file was not created");
-                    }
-
-                    var pdfBytes = await File.ReadAllBytesAsync(tempPdfFile);
-                    
-                    return pdfBytes;
-                }
-                finally
-                {
-                    // Xóa file tạm
-                    try
-                    {
-                        if (File.Exists(tempPdfFile))
-                            File.Delete(tempPdfFile);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete temporary PDF file");
-                    }
-                }
+                // Convert URL to PDF using IronPDF
+                var pdfDocument = await Task.Run(() => _renderer.RenderUrlAsPdf(url));
+                
+                // Convert to byte array
+                var pdfBytes = pdfDocument.BinaryData;
+                
+                _logger.LogInformation("PDF generated successfully from URL with IronPDF. Size: {Size} bytes", pdfBytes.Length);
+                
+                return pdfBytes;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generating PDF from URL");
-                throw;
+                _logger.LogError(ex, "Error generating PDF from URL with IronPDF");
+                throw new Exception($"Failed to generate PDF from URL: {ex.Message}", ex);
             }
         }
     }

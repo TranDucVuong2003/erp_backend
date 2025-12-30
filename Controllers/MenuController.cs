@@ -49,6 +49,12 @@ namespace erp_backend.Controllers
 							},
 							new
 							{
+								name = "Thông báo",
+								path = "/notifications",
+								icon = "BellIcon"
+							},
+							new
+							{
 								name = "Khách hàng",
 								path = "/customers",
 								icon = "UsersIcon"
@@ -145,6 +151,12 @@ namespace erp_backend.Controllers
 							},
 							new
 							{
+								name = "Thông báo",
+								path = "/notifications",
+								icon = "BellIcon"
+							},
+							new
+							{
 								name = "Customer",
 								path = "/customers",
 								icon = "UsersIcon"
@@ -193,7 +205,7 @@ namespace erp_backend.Controllers
 				}
 				else
 				{
-			
+					// Menu cho User
 					return Ok(new
 					{
 						role = "User",
@@ -205,6 +217,12 @@ namespace erp_backend.Controllers
 								name = "Dashboard",
 								path = "/",
 								icon = "HomeIcon"
+							},
+							new
+							{
+								name = "Thông báo",
+								path = "/notifications",
+								icon = "BellIcon"
 							},
 							new
 							{

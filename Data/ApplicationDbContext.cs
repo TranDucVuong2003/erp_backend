@@ -67,6 +67,10 @@ namespace erp_backend.Data
         // ✅ Tax Bracket
         public DbSet<TaxBracket> TaxBrackets { get; set; }
 
+        // ✅ Notification Module
+        public DbSet<Notification> Notifications { get; set; }
+        public DbSet<UserNotification> UserNotifications { get; set; }
+
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -1128,6 +1132,59 @@ namespace erp_backend.Data
 				// Indexes
 				entity.HasIndex(e => new { e.MinIncome, e.MaxIncome }); // Tìm kiếm bracket theo thu nhập
 				entity.HasIndex(e => e.TaxRate);
+			});
+
+			// ✅ Configure Notification entity
+			modelBuilder.Entity<Notification>(entity =>
+			{
+				entity.ToTable("notifications");
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+				entity.Property(e => e.Content).IsRequired().HasMaxLength(2000);
+				entity.Property(e => e.IsActive).HasDefaultValue(true);
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				// Foreign key relationship with User (CreatedByUser)
+				entity.HasOne(e => e.CreatedByUser)
+					  .WithMany()
+					  .HasForeignKey(e => e.CreatedByUserId)
+					  .OnDelete(DeleteBehavior.Restrict);
+
+				// Indexes
+				entity.HasIndex(e => e.CreatedByUserId);
+				entity.HasIndex(e => e.IsActive);
+				entity.HasIndex(e => e.CreatedAt);
+			});
+
+			// ✅ Configure UserNotification entity
+			modelBuilder.Entity<UserNotification>(entity =>
+			{
+				entity.ToTable("user_notifications");
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.IsRead).HasDefaultValue(false);
+				entity.Property(e => e.ReadAt).HasColumnType("timestamp with time zone");
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+				// Foreign key relationships
+				entity.HasOne(e => e.Notification)
+					  .WithMany(n => n.UserNotifications)
+					  .HasForeignKey(e => e.NotificationId)
+					  .OnDelete(DeleteBehavior.Cascade);
+
+				entity.HasOne(e => e.User)
+					  .WithMany()
+					  .HasForeignKey(e => e.UserId)
+					  .OnDelete(DeleteBehavior.Cascade);
+
+				// ✅ CRITICAL: Indexes để tối ưu query theo UserId (query cực nhanh)
+				entity.HasIndex(e => e.UserId);
+				entity.HasIndex(e => new { e.UserId, e.IsRead }); // Tìm thông báo chưa đọc của user
+				entity.HasIndex(e => new { e.UserId, e.NotificationId }); // Tìm notification cụ thể của user
+				entity.HasIndex(e => e.NotificationId);
+				entity.HasIndex(e => e.CreatedAt);
 			});
 		}
     }

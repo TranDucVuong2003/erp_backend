@@ -15,6 +15,7 @@ namespace erp_backend.Services
         Task SendAccountCreationEmailAsync(User user, string plainPassword, string activationLink);
         Task SendPaymentSuccessNotificationAsync(Contract contract, decimal amount, string paymentType, string transactionId, DateTime transactionDate, Customer customer, User? saleUser);
         Task SendPasswordResetOtpAsync(string email, string userName, string otpCode, DateTime expiresAt);
+        Task SendNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt);
     }
 
     public class EmailService : IEmailService
@@ -397,6 +398,64 @@ namespace erp_backend.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending OTP email to {Email}", email);
+            }
+        }
+
+        /// <summary>
+        /// Gửi email thông báo notification cho người nhận
+        /// </summary>
+        public async Task SendNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt)
+        {
+            try
+            {
+                // Validate email configuration first
+                if (!ValidateEmailConfiguration())
+                {
+                    _logger.LogWarning("Email configuration is incomplete. Skipping notification email for {Email}", recipientEmail);
+                    return;
+                }
+
+                _logger.LogInformation("Preparing to send notification email to {Email}", recipientEmail);
+
+                // Lấy thông tin SMTP từ config
+                var smtpServer = _configuration["Email:SmtpServer"];
+                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+                var smtpUsername = _configuration["Email:Username"];
+                var smtpPassword = _configuration["Email:Password"];
+                var senderEmail = _configuration["Email:SenderEmail"];
+                var senderName = _configuration["Email:SenderName"];
+
+                // Tạo email message
+                var mail = new MailMessage
+                {
+                    From = new MailAddress(senderEmail, senderName),
+                    Subject = $"[ERP Notification] {notificationTitle}",
+                    Body = FormatNotificationEmailBody(recipientName, notificationTitle, notificationContent, createdAt),
+                    IsBodyHtml = true
+                };
+
+                mail.To.Add(recipientEmail);
+
+                // Tạo SMTP client và gửi email
+                using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+                {
+                    smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                    smtpClient.EnableSsl = true;
+                    smtpClient.Timeout = 30000; // 30 seconds timeout
+
+                    await smtpClient.SendMailAsync(mail);
+                }
+
+                _logger.LogInformation("Notification email sent successfully to {Email}", recipientEmail);
+            }
+            catch (SmtpException smtpEx)
+            {
+                _logger.LogError(smtpEx, "SMTP error sending notification email to {Email}: {StatusCode} - {Message}", 
+                    recipientEmail, smtpEx.StatusCode, smtpEx.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending notification email to {Email}", recipientEmail);
             }
         }
 
@@ -787,7 +846,7 @@ namespace erp_backend.Services
         .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
         .icon {{ font-size: 48px; }}
         .highlight {{ color: #28a745; font-weight: bold; }}
-        .customer-info {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; }}
+        .customer-info {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #0066cc; }}
         .thank-you {{ background-color: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0; border-radius: 4px; }}
     </style>
 </head>
@@ -945,6 +1004,85 @@ namespace erp_backend.Services
         {
             // Giả sử link reset password có dạng: /reset-password?token=OTP_CODE
             return $"/reset-password?token={otpCode}";
+        }
+
+        /// <summary>
+        /// Format email body cho notification
+        /// </summary>
+        private string FormatNotificationEmailBody(string recipientName, string notificationTitle, string notificationContent, DateTime createdAt)
+        {
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            var notificationUrl = $"{frontendUrl}/notifications";
+
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
+        .content {{ padding: 30px; background-color: #f8f9fa; }}
+        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
+        .notification-box {{ background-color: white; padding: 25px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        .notification-title {{ color: #667eea; font-size: 20px; font-weight: bold; margin-bottom: 15px; }}
+        .notification-content {{ color: #333; font-size: 14px; line-height: 1.8; padding: 15px; background-color: #f8f9fa; border-radius: 4px; }}
+        .btn {{ display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
+        .icon {{ font-size: 48px; }}
+        .info-box {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #0066cc; }}
+        .timestamp {{ color: #666; font-size: 12px; margin-top: 10px; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <div class='icon'>🔔</div>
+            <h1 style='margin: 10px 0;'>Thông báo mới</h1>
+            <p style='font-size: 16px; margin: 0;'>ERP System</p>
+        </div>
+        <div class='content'>
+            <p>Xin chào <strong>{recipientName}</strong>,</p>
+            
+            <p>Bạn có một thông báo mới từ hệ thống ERP:</p>
+            
+            <div class='notification-box'>
+                <div class='notification-title'>
+                    📢 {notificationTitle}
+                </div>
+                <div class='notification-content'>
+                    {notificationContent}
+                </div>
+                <div class='timestamp'>
+                    🕐 Thời gian: {createdAt:dd/MM/yyyy HH:mm:ss}
+                </div>
+            </div>
+
+            <div class='info-box'>
+                <p style='margin: 0;'><strong>💡 Lưu ý:</strong></p>
+                <ul style='margin: 10px 0; padding-left: 20px;'>
+                    <li>Đăng nhập vào hệ thống để xem chi tiết và các thông báo khác</li>
+                    <li>Bạn có thể quản lý thông báo của mình trong mục Notifications</li>
+                </ul>
+            </div>
+            
+            <div style='text-align: center;'>
+                <a href='{notificationUrl}' class='btn'>📱 Xem thông báo</a>
+            </div>
+
+            <p style='margin-top: 30px; color: #666; font-size: 14px;'>
+                Email này được gửi tự động khi có thông báo mới trong hệ thống. 
+                Nếu bạn không muốn nhận email thông báo, vui lòng cập nhật trong cài đặt tài khoản.
+            </p>
+        </div>
+        <div class='footer'>
+            <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
+            <p>Nếu có thắc mắc, vui lòng liên hệ với quản trị viên hệ thống.</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
+        </div>
+    </div>
+</body>
+</html>";
         }
     }
 }

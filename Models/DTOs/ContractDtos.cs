@@ -23,6 +23,9 @@ namespace erp_backend.Models.DTOs
 
         [StringLength(2000, ErrorMessage = "Notes không ???c v??t quá 2000 ký t?")]
         public string? Notes { get; set; }
+
+        // 💡 THÊM: Đánh dấu có xuất hóa đơn hay không
+        public bool ExtractInvoices { get; set; } = false;
     }
 
     // ===== RESPONSE DTOs =====
@@ -42,6 +45,7 @@ namespace erp_backend.Models.DTOs
         public decimal TotalAmount { get; set; }
         public DateTime Expiration { get; set; }
         public string? Notes { get; set; }
+        public bool ExtractInvoices { get; set; } // 💡 THÊM
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }
@@ -60,6 +64,7 @@ namespace erp_backend.Models.DTOs
         public string? PaymentMethod { get; set; }
         public decimal TotalAmount { get; set; }
         public DateTime Expiration { get; set; }
+        public bool ExtractInvoices { get; set; } // 💡 THÊM
         public DateTime CreatedAt { get; set; }
     }
 

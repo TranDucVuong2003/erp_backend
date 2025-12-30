@@ -90,6 +90,9 @@ builder.Services.AddScoped<IFileService, FileService>();
 // Add PdfService
 builder.Services.AddScoped<IPdfService, PdfService>();
 
+// Add Salary Report Service
+builder.Services.AddScoped<ISalaryReportService, SalaryReportService>();
+
 // Add Account Activation Service
 builder.Services.AddScoped<IAccountActivationService, AccountActivationService>();
 
@@ -98,6 +101,9 @@ builder.Services.AddScoped<IKpiCalculationService, KpiCalculationService>();
 
 // ✅ Add Password Reset OTP Service
 builder.Services.AddScoped<IPasswordResetOtpService, PasswordResetOtpService>();
+
+// ✅ Add Notification Service
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // ✅ Add SignalR
 builder.Services.AddSignalR();
@@ -183,5 +189,6 @@ app.MapControllers();
 
 // ✅ Map SignalR Hub
 app.MapHub<PaymentHub>("/paymentHub");
+app.MapHub<NotificationHub>("/hubs/notification");
 
 app.Run();

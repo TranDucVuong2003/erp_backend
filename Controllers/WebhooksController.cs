@@ -19,19 +19,22 @@ namespace erp_backend.Controllers
 		private readonly IKpiCalculationService _kpiCalculationService;
 		private readonly IHubContext<PaymentHub> _hubContext;
 		private readonly IEmailService _emailService;
+		private readonly IConfiguration _configuration;
 
 		public WebhooksController(
 			ApplicationDbContext context,
 			ILogger<WebhooksController> logger,
 			IKpiCalculationService kpiCalculationService,
 			IHubContext<PaymentHub> hubContext,
-			IEmailService emailService)
+			IEmailService emailService,
+			IConfiguration configuration)
 		{
 			_context = context;
 			_logger = logger;
 			_kpiCalculationService = kpiCalculationService;
 			_hubContext = hubContext;
 			_emailService = emailService;
+			_configuration = configuration;
 		}
 
 		/// <summary>
@@ -43,8 +46,8 @@ namespace erp_backend.Controllers
 		{
 			try
 			{
-				_logger.LogInformation("✅ Nhận webhook từ Sepay: ID={Id}, Gateway={Gateway}, Amount={Amount}, Content={Content}",
-					payload.Id, payload.Gateway, payload.TransferAmount, payload.Content);
+				_logger.LogInformation("✅ Nhận webhook từ Sepay: ID={Id}, Gateway={Gateway}, Amount={Amount}, Content={Content}, AccountNumber={AccountNumber}",
+					payload.Id, payload.Gateway, payload.TransferAmount, payload.Content, payload.AccountNumber);
 
 				// 1. Chỉ xử lý giao dịch tiền VÀO
 				if (payload.TransferType?.ToLower() != "in")
@@ -92,6 +95,47 @@ namespace erp_backend.Controllers
 					return Ok(new { success = true, processed = false, message = "Contract not found" });
 				}
 
+				// ✅ 4.5. Kiểm tra tài khoản ngân hàng có khớp với Contract không
+				var banks = _configuration.GetSection("Sepay:Banks").Get<List<BankConfig>>();
+				
+				if (banks == null || !banks.Any())
+				{
+					_logger.LogError("❌ Không tìm thấy cấu hình ngân hàng trong appsettings.json");
+					await SaveUnmatchedTransaction(payload, contractNumber.Value);
+					return Ok(new { success = true, processed = false, message = "Bank configuration not found" });
+				}
+
+				// Xác định ngân hàng đúng dựa trên ExtractInvoices
+				BankConfig expectedBank;
+				if (contract.ExtractInvoices && banks.Count > 0)
+				{
+					expectedBank = banks[0]; // MB Bank
+					_logger.LogInformation("Contract {ContractId} expects MB Bank (ExtractInvoices=true)", contract.Id);
+				}
+				else if (!contract.ExtractInvoices && banks.Count > 1)
+				{
+					expectedBank = banks[1]; // BIDV Bank
+					_logger.LogInformation("Contract {ContractId} expects BIDV Bank (ExtractInvoices=false)", contract.Id);
+				}
+				else
+				{
+					// Fallback: Nếu không đủ 2 bank, lấy bank đầu tiên
+					expectedBank = banks[0];
+					_logger.LogWarning("Only {Count} bank(s) configured. Using first bank: {BankCode}", banks.Count, expectedBank.BankCode);
+				}
+
+				// Kiểm tra AccountNumber có khớp không
+				if (payload.AccountNumber != expectedBank.AccountNumber)
+				{
+					_logger.LogWarning("⚠️ Tài khoản ngân hàng không khớp: Expected={Expected} (Bank: {ExpectedBank}), Received={Received} (Gateway: {Gateway}) for Contract {ContractNumber}",
+						expectedBank.AccountNumber, expectedBank.BankCode, payload.AccountNumber, payload.Gateway, contractNumber.Value);
+					await SaveUnmatchedTransaction(payload, contractNumber.Value);
+					return Ok(new { success = true, processed = false, message = "Bank account mismatch" });
+				}
+
+				_logger.LogInformation("✅ Bank account matched: {AccountNumber} ({BankCode}) for Contract {ContractId}", 
+					expectedBank.AccountNumber, expectedBank.BankCode, contract.Id);
+
 				// 5. Xác định số tiền kỳ vọng dựa trên loại thanh toán
 				decimal expectedAmount;
 				string paymentTypeDescription;
@@ -99,17 +143,14 @@ namespace erp_backend.Controllers
 				switch (paymentType)
 				{
 					case "deposit50":
-					//case "test1":
 						expectedAmount = contract.TotalAmount * 0.5m;
 						paymentTypeDescription = "Đặt cọc 50%";
 						break;
 					case "final50":
-					//case "test2":
 						expectedAmount = contract.TotalAmount * 0.5m;
 						paymentTypeDescription = "Thanh toán nốt 50%";
 						break;
 					case "full100":
-					//case "test3":
 					default:
 						expectedAmount = contract.TotalAmount;
 						paymentTypeDescription = "Thanh toán 100%";
@@ -141,7 +182,7 @@ namespace erp_backend.Controllers
 					TransactionContent = payload.Content,
 					BankBrandName = payload.BankBrandName,
 					AccountNumber = payload.AccountNumber,
-					Notes = $"Auto-matched by webhook at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - {paymentTypeDescription}"
+					Notes = $"Auto-matched by webhook at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - {paymentTypeDescription} - Bank: {expectedBank.BankCode}"
 				};
 
 				_context.MatchedTransactions.Add(matchedTransaction);
@@ -153,19 +194,16 @@ namespace erp_backend.Controllers
 				switch (paymentType)
 				{
 					case "deposit50":
-					//case "test1":
 						contract.Status = "Deposit 50%";
 						_logger.LogInformation("✅ Contract {ContractId} status changed to 'Deposit 50%'", contract.Id);
 						break;
 
 					case "final50":
-					//case "test2":
 						contract.Status = "Paid";
 						_logger.LogInformation("✅ Contract {ContractId} status changed to 'Paid' (Final 50%)", contract.Id);
 						break;
 
 					case "full100":
-					//case "test3":
 						contract.Status = "Paid";
 						_logger.LogInformation("✅ Contract {ContractId} status changed to 'Paid' (Full 100%)", contract.Id);
 						break;
@@ -175,8 +213,8 @@ namespace erp_backend.Controllers
 
 				await _context.SaveChangesAsync();
 
-				_logger.LogInformation("🎉 Đã match payment thành công: Contract {ContractId}, Transaction {TransactionId}, Type: {PaymentType}",
-					contract.Id, payload.TransactionId, paymentTypeDescription);
+				_logger.LogInformation("🎉 Đã match payment thành công: Contract {ContractId}, Transaction {TransactionId}, Type: {PaymentType}, Bank: {BankCode}",
+					contract.Id, payload.TransactionId, paymentTypeDescription, expectedBank.BankCode);
 
 				// 🔔 GỬI THÔNG BÁO REAL-TIME ĐẾN CLIENT
 				var groupName = $"Contract_{contract.Id}";
@@ -190,7 +228,8 @@ namespace erp_backend.Controllers
 					status = contract.Status,
 					transactionDate = payload.TransactionDateTime,
 					transactionId = payload.TransactionId,
-					message = $"✅ Thanh toán {paymentTypeDescription} thành công!"
+					bankCode = expectedBank.BankCode,
+					message = $"✅ Thanh toán {paymentTypeDescription} thành công qua {expectedBank.BankCode}!"
 				});
 
 				_logger.LogInformation("📢 Sent SignalR notification to group {GroupName}", groupName);
@@ -229,7 +268,6 @@ namespace erp_backend.Controllers
 				}
 
 				// 9. 🎯 Tự động tính KPI cho deposit 50% HOẶC thanh toán hoàn toàn
-				// ✅ THAY ĐỔI: Trigger KPI calculation cho cả "Deposit 50%" và "Paid"
 				var shouldCalculateKpi = (oldStatus?.ToLower() != "deposit 50%" && contract.Status?.ToLower() == "deposit 50%")
 				                       || (oldStatus?.ToLower() != "paid" && contract.Status?.ToLower() == "paid");
 
@@ -272,7 +310,9 @@ namespace erp_backend.Controllers
 						paymentType = paymentType,
 						paymentTypeDescription = paymentTypeDescription,
 						amount = payload.Amount,
-						contractStatus = contract.Status
+						contractStatus = contract.Status,
+						bankCode = expectedBank.BankCode,
+						bankAccountNumber = expectedBank.AccountNumber
 					}
 				});
 			}
@@ -339,8 +379,7 @@ namespace erp_backend.Controllers
 			// ✅ BACKWARD COMPATIBILITY - OLD PATTERNS
 
 			// Pattern cho đặt cọc 50% (old format)
-			//var depositPattern = @"datcoc50%?hopdong(\d+)";
-			var depositPattern = @"test1(\d+)";
+			var depositPattern = @"datcoc50%?hopdong(\d+)";
 			var depositMatch = Regex.Match(normalizedContent, depositPattern, RegexOptions.IgnoreCase);
 			if (depositMatch.Success && int.TryParse(depositMatch.Groups[1].Value, out int depositContractNumber))
 			{
@@ -349,8 +388,7 @@ namespace erp_backend.Controllers
 			}
 
 			// Pattern cho thanh toán nốt 50% (old format)
-			//var finalPattern = @"thanhtoan50%?hopdong(\d+)";
-			var finalPattern = @"test2(\d+)";
+			var finalPattern = @"thanhtoan50%?hopdong(\d+)";
 			var finalMatch = Regex.Match(normalizedContent, finalPattern, RegexOptions.IgnoreCase);
 			if (finalMatch.Success && int.TryParse(finalMatch.Groups[1].Value, out int finalContractNumber))
 			{
@@ -359,8 +397,7 @@ namespace erp_backend.Controllers
 			}
 
 			// Pattern cho thanh toán 100% (old format)
-			//var fullPattern = @"thanhtoanhopdong(\d+)";
-			var fullPattern = @"test3(\d+)";
+			var fullPattern = @"thanhtoanhopdong(\d+)";
 			var fullMatch = Regex.Match(normalizedContent, fullPattern, RegexOptions.IgnoreCase);
 			if (fullMatch.Success && int.TryParse(fullMatch.Groups[1].Value, out int fullContractNumber))
 			{
@@ -393,11 +430,11 @@ namespace erp_backend.Controllers
 
 			var patterns = new[]
 			{
-				@"hop\s*dong\s*(\d+)",        // hop dong 128
-				@"hopdong\s*(\d+)",           // hopdong128
-				@"hd\s*(\d+)",                // hd 128
-				@"contract\s*(\d+)",          // contract 128
-				@"\b(\d{3,})\b"               // bất kỳ số nào >= 3 chữ số
+				@"hop\s*dong\s*(\d+)",        // hop dong 128
+				@"hopdong\s*(\d+)",           // hopdong128
+				@"hd\s*(\d+)",                // hd 128
+				@"contract\s*(\d+)",          // contract 128
+				@"\b(\d{3,})\b"               // bất kỳ số nào >= 3 chữ số
 			};
 
 			foreach (var pattern in patterns)
@@ -484,11 +521,11 @@ namespace erp_backend.Controllers
 
 				var unmatchedTransaction = new MatchedTransaction
 				{
-					TransactionId = payload.TransactionId, // Đã là string từ computed property
-					ContractId = null, // Chưa match được
+					TransactionId = payload.TransactionId,
+					ContractId = null,
 					Amount = payload.Amount,
 					ReferenceNumber = referenceNumber,
-					Status = "Unmatched", // ✅ Phải có giá trị
+					Status = "Unmatched",
 					TransactionDate = payload.TransactionDateTime,
 					MatchedAt = DateTime.UtcNow,
 					TransactionContent = transactionContent,
@@ -506,10 +543,23 @@ namespace erp_backend.Controllers
 			{
 				_logger.LogError(ex, "❌ Lỗi khi lưu unmatched transaction: {TransactionId}. InnerException: {InnerException}", 
 					payload.TransactionId, ex.InnerException?.Message ?? "N/A");
-				
-				// Không throw exception để không làm webhook fail
-				// Chỉ log lỗi và tiếp tục
 			}
+		}
+
+		// ✅ DTO class for Bank Configuration
+		private class BankConfig
+		{
+			public string BankCode { get; set; } = string.Empty;
+			public string AccountNumber { get; set; } = string.Empty;
+			public string AccountName { get; set; } = string.Empty;
+			public PaymentContentTemplates? PaymentContentTemplates { get; set; }
+		}
+
+		private class PaymentContentTemplates
+		{
+			public string? Deposit50 { get; set; }
+			public string? Final50 { get; set; }
+			public string? Full100 { get; set; }
 		}
 	}
 }
