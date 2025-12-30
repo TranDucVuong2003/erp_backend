@@ -9,7 +9,7 @@ namespace erp_backend.Services
 	public interface ISalaryReportService
 	{
 		Task<byte[]> GenerateSalaryReportPdfAsync(GenerateSalaryReportRequest request);
-		Task<string> GenerateSalaryReportHtmlAsync(GenerateSalaryReportRequest request);
+		Task<string> GenerateSalaryReportPreviewHtmlAsync(GenerateSalaryReportRequest request);
 	}
 
 	public class SalaryReportService : ISalaryReportService
@@ -42,10 +42,12 @@ namespace erp_backend.Services
 				if (request.Year < 2020 || request.Year > 2100)
 					throw new ArgumentException("N?m không h?p l?");
 
-				// 1. Generate HTML content
-				var htmlContent = await GenerateSalaryReportHtmlAsync(request);
+				// 1. Build report data from database
+				var reportData = await BuildReportDataAsync(request);
 
-				// 2. Convert HTML to PDF
+				// 2. Generate PDF from HTML template using PuppeteerSharp
+				_logger.LogInformation("Using HTML template with PuppeteerSharp for PDF generation");
+				var htmlContent = await GenerateHtmlFromTemplateAsync(reportData);
 				var pdfBytes = await _pdfService.ConvertHtmlToPdfAsync(htmlContent);
 
 				_logger.LogInformation(
@@ -64,7 +66,7 @@ namespace erp_backend.Services
 			}
 		}
 
-		public async Task<string> GenerateSalaryReportHtmlAsync(GenerateSalaryReportRequest request)
+		public async Task<string> GenerateSalaryReportPreviewHtmlAsync(GenerateSalaryReportRequest request)
 		{
 			try
 			{
@@ -75,35 +77,90 @@ namespace erp_backend.Services
 				if (request.Year < 2020 || request.Year > 2100)
 					throw new ArgumentException("N?m không h?p l?");
 
-				// 1. Load d? li?u t? database
+				// 1. Build report data from database
 				var reportData = await BuildReportDataAsync(request);
 
-				// 2. Load template HTML
-				var templatePath = Path.Combine(_env.WebRootPath, "Templates", "SalaryReportTemplate.html");
-				if (!File.Exists(templatePath))
-				{
-					throw new FileNotFoundException($"Template không tìm th?y: {templatePath}");
-				}
-
-				var htmlTemplate = await File.ReadAllTextAsync(templatePath, Encoding.UTF8);
-
-				// 3. Replace placeholders
-				var htmlContent = ReplaceTemplatePlaceholders(htmlTemplate, reportData);
+				// 2. Generate HTML from template
+				var html = await GenerateHtmlFromTemplateAsync(reportData);
 
 				_logger.LogInformation(
-					"?ã t?o HTML báo cáo l??ng cho tháng {Month}/{Year}. HTML length: {Length}",
+					"?ã t?o HTML preview báo cáo l??ng cho tháng {Month}/{Year}",
 					request.Month,
-					request.Year,
-					htmlContent.Length
+					request.Year
 				);
 
-				return htmlContent;
+				return html;
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "L?i khi t?o HTML báo cáo l??ng tháng {Month}/{Year}", request.Month, request.Year);
+				_logger.LogError(ex, "L?i khi t?o HTML preview báo cáo l??ng tháng {Month}/{Year}", request.Month, request.Year);
 				throw;
 			}
+		}
+
+		private async Task<string> GenerateHtmlFromTemplateAsync(SalaryReportDto data)
+		{
+			// Load template HTML
+			var templatePath = Path.Combine(_env.WebRootPath, "Templates", "SalaryReportTemplate.html");
+			if (!File.Exists(templatePath))
+			{
+				throw new FileNotFoundException($"Template không tìm th?y: {templatePath}");
+			}
+
+			var htmlTemplate = await File.ReadAllTextAsync(templatePath, Encoding.UTF8);
+
+			// Replace placeholders
+			var htmlContent = ReplaceTemplatePlaceholders(htmlTemplate, data);
+
+			return htmlContent;
+		}
+
+		private string ReplaceTemplatePlaceholders(string htmlTemplate, SalaryReportDto data)
+		{
+			// Replace header info
+			var html = htmlTemplate
+				.Replace("{{PayPeriod}}", data.PayPeriod)
+				.Replace("{{Department}}", data.Department)
+				.Replace("{{ReportDate}}", data.ReportDate)
+				.Replace("{{CreatedBy}}", data.CreatedBy)
+				.Replace("{{GeneratedDateTime}}", data.GeneratedDateTime);
+
+			// Build employee rows
+			var rowsBuilder = new StringBuilder();
+			int index = 1;
+
+			foreach (var emp in data.Employees)
+			{
+				rowsBuilder.AppendLine($@"
+          <tr>
+            <td class=""text-center"">{index}</td>
+            <td>{emp.FullName}</td>
+            <td class=""text-right number-format"">{FormatCurrency(emp.BaseSalary)}</td>
+            <td class=""text-right number-format"">{FormatCurrency(emp.Allowance)}</td>
+            <td class=""text-right number-format"">{FormatCurrency(emp.Bonus)}</td>
+            <td class=""text-right number-format"">{FormatCurrency(emp.Deduction)}</td>
+            <td class=""text-right number-format"">{FormatCurrency(emp.NetSalary)}</td>
+          </tr>");
+				index++;
+			}
+
+			html = html.Replace("{{EmployeeRows}}", rowsBuilder.ToString());
+
+			// Replace summary totals
+			html = html
+				.Replace("{{TotalEmployees}}", data.TotalEmployees.ToString())
+				.Replace("{{TotalBaseSalary}}", FormatCurrency(data.TotalBaseSalary))
+				.Replace("{{TotalAllowance}}", FormatCurrency(data.TotalAllowance))
+				.Replace("{{TotalBonus}}", FormatCurrency(data.TotalBonus))
+				.Replace("{{TotalDeduction}}", FormatCurrency(data.TotalDeduction))
+				.Replace("{{TotalNetSalary}}", FormatCurrency(data.TotalNetSalary));
+
+			return html;
+		}
+
+		private string FormatCurrency(decimal amount)
+		{
+			return amount.ToString("#,##0", new CultureInfo("vi-VN"));
 		}
 
 		private async Task<SalaryReportDto> BuildReportDataAsync(GenerateSalaryReportRequest request)
@@ -214,54 +271,6 @@ namespace erp_backend.Services
 			};
 
 			return report;
-		}
-
-		private string ReplaceTemplatePlaceholders(string htmlTemplate, SalaryReportDto data)
-		{
-			// Replace header info
-			var html = htmlTemplate
-				.Replace("{{PayPeriod}}", data.PayPeriod)
-				.Replace("{{Department}}", data.Department)
-				.Replace("{{ReportDate}}", data.ReportDate)
-				.Replace("{{CreatedBy}}", data.CreatedBy)
-				.Replace("{{GeneratedDateTime}}", data.GeneratedDateTime);
-
-			// Build employee rows
-			var rowsBuilder = new StringBuilder();
-			int index = 1;
-
-			foreach (var emp in data.Employees)
-			{
-				rowsBuilder.AppendLine($@"
-          <tr>
-            <td class=""text-center"">{index}</td>
-            <td>{emp.FullName}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.BaseSalary)}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.Allowance)}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.Bonus)}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.Deduction)}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.NetSalary)}</td>
-          </tr>");
-				index++;
-			}
-
-			html = html.Replace("{{EmployeeRows}}", rowsBuilder.ToString());
-
-			// Replace summary totals
-			html = html
-				.Replace("{{TotalEmployees}}", data.TotalEmployees.ToString())
-				.Replace("{{TotalBaseSalary}}", FormatCurrency(data.TotalBaseSalary))
-				.Replace("{{TotalAllowance}}", FormatCurrency(data.TotalAllowance))
-				.Replace("{{TotalBonus}}", FormatCurrency(data.TotalBonus))
-				.Replace("{{TotalDeduction}}", FormatCurrency(data.TotalDeduction))
-				.Replace("{{TotalNetSalary}}", FormatCurrency(data.TotalNetSalary));
-
-			return html;
-		}
-
-		private string FormatCurrency(decimal amount)
-		{
-			return amount.ToString("#,##0", new CultureInfo("vi-VN"));
 		}
 	}
 }

@@ -1345,7 +1345,7 @@ namespace erp_backend.Controllers
 		}
 
 		// POST: api/Payslips/export-salary-report
-		// API xuất báo cáo thống kê lương ra PDF
+		// API xuất báo cáo thống kê lương ra PDF (sử dụng PuppeteerSharp)
 		[HttpPost("export-salary-report")]
 		public async Task<IActionResult> ExportSalaryReport([FromBody] GenerateSalaryReportRequest request)
 		{
@@ -1362,7 +1362,7 @@ namespace erp_backend.Controllers
 					return BadRequest(new { message = "Năm không hợp lệ" });
 				}
 
-				// Generate PDF
+				// Generate PDF using PuppeteerSharp
 				var pdfBytes = await _salaryReportService.GenerateSalaryReportPdfAsync(request);
 
 				// Return PDF file
@@ -1409,7 +1409,7 @@ namespace erp_backend.Controllers
 				}
 
 				// Generate HTML
-				var htmlContent = await _salaryReportService.GenerateSalaryReportHtmlAsync(request);
+				var htmlContent = await _salaryReportService.GenerateSalaryReportPreviewHtmlAsync(request);
 				
 				_logger.LogInformation(
 					"Preview báo cáo lương tháng {Month}/{Year}. HTML length: {Length}",

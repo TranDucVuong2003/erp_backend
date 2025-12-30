@@ -18,17 +18,20 @@ namespace erp_backend.Controllers
         private readonly ILogger<ContractsController> _logger;
         private readonly IKpiCalculationService _kpiCalculationService;
         private readonly IConfiguration _configuration;
+        private readonly IPdfService _pdfService;
 
         public ContractsController(
             ApplicationDbContext context, 
             ILogger<ContractsController> logger,
             IKpiCalculationService kpiCalculationService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IPdfService pdfService)
         {
             _context = context;
             _logger = logger;
             _kpiCalculationService = kpiCalculationService;
             _configuration = configuration;
+            _pdfService = pdfService;
         }
 
         // GET: api/Contracts
@@ -835,22 +838,9 @@ namespace erp_backend.Controllers
 				// Bước 3: Bind dữ liệu vào template
 				var htmlContent = BindContractDataToTemplate(htmlTemplate, contract);
 
-				// Bước 4: Sử dụng IronPDF để convert HTML sang PDF
-				var renderer = new IronPdf.ChromePdfRenderer();
-
-				// Cấu hình renderer - loại bỏ header/footer
-				renderer.RenderingOptions.PaperSize = IronPdf.Rendering.PdfPaperSize.A4;
-				renderer.RenderingOptions.MarginTop = 0;
-				renderer.RenderingOptions.MarginBottom = 0;
-				renderer.RenderingOptions.MarginLeft = 0;
-				renderer.RenderingOptions.MarginRight = 0;
-				renderer.RenderingOptions.CssMediaType = IronPdf.Rendering.PdfCssMediaType.Print;
-				renderer.RenderingOptions.PrintHtmlBackgrounds = true;
-				renderer.RenderingOptions.CreatePdfFormsFromHtml = false;
-				renderer.RenderingOptions.EnableJavaScript = false;
-
-				// Render HTML thành PDF
-				var pdf = await Task.Run(() => renderer.RenderHtmlAsPdf(htmlContent));
+				// Bước 4: Sử dụng PuppeteerSharp để convert HTML sang PDF
+				_logger.LogInformation("Converting HTML to PDF using PuppeteerSharp for Contract {ContractId}", id);
+				var pdfBytes = await _pdfService.ConvertHtmlToPdfAsync(htmlContent);
 
 				// Bước 5: Lưu file PDF vào thư mục
 				var fileName = $"HopDong_{contract.Id}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
@@ -866,9 +856,6 @@ namespace erp_backend.Controllers
 
 				var relativeFilePath = Path.Combine(relativeFolderPath, fileName);
 				var absoluteFilePath = Path.Combine(absoluteFolderPath, fileName);
-
-				// Lấy PDF bytes
-				var pdfBytes = pdf.BinaryData;
 
 				// Lưu file vào disk
 				await System.IO.File.WriteAllBytesAsync(absoluteFilePath, pdfBytes);

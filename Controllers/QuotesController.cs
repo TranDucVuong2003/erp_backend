@@ -5,6 +5,7 @@ using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
 using System.Text.Json;
+using erp_backend.Services;
 
 namespace erp_backend.Controllers
 {
@@ -15,11 +16,16 @@ namespace erp_backend.Controllers
 	{
 		private readonly ApplicationDbContext _context;
 		private readonly ILogger<QuotesController> _logger;
+		private readonly IPdfService _pdfService;
 
-		public QuotesController(ApplicationDbContext context, ILogger<QuotesController> logger)
+		public QuotesController(
+			ApplicationDbContext context, 
+			ILogger<QuotesController> logger,
+			IPdfService pdfService)
 		{
 			_context = context;
 			_logger = logger;
+			_pdfService = pdfService;
 		}
 
 		// ✅ Helper method: Lấy User ID từ JWT token
@@ -906,19 +912,8 @@ namespace erp_backend.Controllers
 				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
 				var htmlContent = BindQuoteDataToTemplate(htmlTemplate, quote);
 
-				var renderer = new IronPdf.ChromePdfRenderer();
-				renderer.RenderingOptions.PaperSize = IronPdf.Rendering.PdfPaperSize.A4;
-				renderer.RenderingOptions.MarginTop = 8;
-				renderer.RenderingOptions.MarginBottom = 8;
-				renderer.RenderingOptions.MarginLeft = 8;
-				renderer.RenderingOptions.MarginRight = 8;
-				renderer.RenderingOptions.CssMediaType = IronPdf.Rendering.PdfCssMediaType.Print;
-				renderer.RenderingOptions.PrintHtmlBackgrounds = true;
-				renderer.RenderingOptions.CreatePdfFormsFromHtml = false;
-				renderer.RenderingOptions.EnableJavaScript = false;
-
-				var pdf = await Task.Run(() => renderer.RenderHtmlAsPdf(htmlContent));
-				var pdfBytes = pdf.BinaryData;
+				// ✅ Use PuppeteerSharp through IPdfService
+				var pdfBytes = await _pdfService.ConvertHtmlToPdfAsync(htmlContent);
 
 				var fileName = $"BaoGia_{quote.Id}_{DateTime.Now:yyyyMMdd}.pdf";
 				var quotesFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Quotes");

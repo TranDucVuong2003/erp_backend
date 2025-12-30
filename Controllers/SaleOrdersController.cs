@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
-using IronPdf;
 
 namespace erp_backend.Controllers
 {

@@ -7,18 +7,10 @@ using erp_backend.Data;
 using erp_backend.Services;
 using erp_backend.Middleware;
 using erp_backend.Hubs;
-using IronPdf;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Cấu hình IronPDF License Key từ appsettings.json
-var ironPdfLicenseKey = builder.Configuration["IronPdf:LicenseKey"];
-if (!string.IsNullOrEmpty(ironPdfLicenseKey))
-{
-	IronPdf.License.LicenseKey = ironPdfLicenseKey;
-}
 
 // Add services to the container.	
 // ✅ CẤU HÌNH JSON SERIALIZER
@@ -87,8 +79,8 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 // Add FileService
 builder.Services.AddScoped<IFileService, FileService>();
 
-// Add PdfService
-builder.Services.AddScoped<IPdfService, PdfService>();
+// ✅ Add PdfService (using PuppeteerSharp) as Singleton to reuse browser instance
+builder.Services.AddSingleton<IPdfService, PdfService>();
 
 // Add Salary Report Service
 builder.Services.AddScoped<ISalaryReportService, SalaryReportService>();
@@ -162,6 +154,10 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// ✅ Initialize PuppeteerSharp browser on startup
+var pdfService = app.Services.GetRequiredService<IPdfService>();
+await pdfService.InitializeBrowserAsync();
 
 // Ensure static files middleware is included
 app.UseStaticFiles();
