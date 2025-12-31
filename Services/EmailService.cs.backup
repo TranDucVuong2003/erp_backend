@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Configuration;
 using System.Threading.Tasks;
@@ -32,24 +32,24 @@ namespace erp_backend.Services
 
         public async Task SendTicketLogNotificationAsync(Ticket ticket, User actingUser, string logContent)
         {
-            await SendEmailNotificationAsync(ticket, actingUser, "B�nh lu?n m?i", logContent, "comment");
+            await SendEmailNotificationAsync(ticket, actingUser, "Bình luận mới", logContent, "comment");
         }
 
         public async Task SendTicketCreatedNotificationAsync(Ticket ticket, User createdByUser)
         {
-            var content = $"Ticket m?i ?� ???c t?o v?i ti�u ??: {ticket.Title}";
-            await SendEmailNotificationAsync(ticket, createdByUser, "Ticket m?i ???c t?o", content, "created");
+            var content = $"Ticket mới đã được tạo với tiêu đề: {ticket.Title}";
+            await SendEmailNotificationAsync(ticket, createdByUser, "Ticket mới được tạo", content, "created");
         }
 
         public async Task SendTicketAssignedNotificationAsync(Ticket ticket, User assignedBy, string assignmentDetails)
         {
-            await SendEmailNotificationAsync(ticket, assignedBy, "Ph�n c�ng ticket", assignmentDetails, "assigned");
+            await SendEmailNotificationAsync(ticket, assignedBy, "Phân công ticket", assignmentDetails, "assigned");
         }
 
         public async Task SendTicketStatusChangedNotificationAsync(Ticket ticket, User changedBy, string oldStatus, string newStatus)
         {
-            var content = $"Tr?ng th�i ticket ?� ???c thay ??i t? '{oldStatus}' th�nh '{newStatus}'";
-            await SendEmailNotificationAsync(ticket, changedBy, "Thay ??i tr?ng th�i", content, "status_changed");
+            var content = $"Trạng thái ticket đã được thay đổi từ '{oldStatus}' thành '{newStatus}'";
+            await SendEmailNotificationAsync(ticket, changedBy, "Thay đổi trạng thái", content, "status_changed");
         }
 
         public async Task SendAccountCreationEmailAsync(User user, string plainPassword, string activationLink)
@@ -65,7 +65,7 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send account creation email to {Email} for user {UserId}", user.Email, user.Id);
 
-                // L?y th�ng tin SMTP t? config
+                // Lấy thông tin SMTP từ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -73,19 +73,19 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // T?o email message
+                // Tạo email message
                 var mail = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
-                    Subject = "T�i kho?n ERP c?a b?n ?� ???c t?o - Vui l�ng k�ch ho?t",
+                    Subject = "Tài khoản ERP của bạn đã được tạo - Vui lòng kích hoạt",
                     Body = FormatAccountCreationEmailBody(user, plainPassword, activationLink),
                     IsBodyHtml = true
                 };
 
-                // Th�m ng??i nh?n
+                // Thêm người nhận
                 mail.To.Add(user.Email);
 
-                // T?o SMTP client v� g?i email
+                // Tạo SMTP client và gửi email
                 using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
                 {
                     smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
@@ -119,52 +119,52 @@ namespace erp_backend.Services
                     return;
                 }
 
-                // X�c ??nh ng??i nh?n - s? d?ng HashSet ?? tr�nh tr�ng l?p
+                // Xác định người nhận - sử dụng HashSet để tránh trùng lặp
                 var recipients = new HashSet<string>();
 
-                // ?? LOGIC M?I: Ch? g?i cho ng??i KH�C, kh�ng g?i cho ch�nh ng??i th?c hi?n h�nh ??ng
+                // 🔄 LOGIC MỚI: Chỉ gửi cho người KHÁC, không gửi cho chính người thực hiện hành động
                 
-                // Th�m email c?a ng??i t?o ticket (n?u KH�NG ph?i l� ng??i ?ang th?c hi?n h�nh ??ng)
+                // Thêm email của người tạo ticket (nếu KHÔNG phải là người đang thực hiện hành động)
                 if (ticket.CreatedBy != null && 
                     !string.IsNullOrEmpty(ticket.CreatedBy.Email) &&
-                    ticket.CreatedBy.Id != actingUser.Id) // ? Lo?i tr? ng??i th?c hi?n
+                    ticket.CreatedBy.Id != actingUser.Id) // ✅ Loại trừ người thực hiện
                 {
                     recipients.Add(ticket.CreatedBy.Email.Trim().ToLower());
                     _logger.LogDebug("Added CreatedBy email to recipients: {Email} for ticket {TicketId} (acting user: {ActingUserId})", 
                         ticket.CreatedBy.Email, ticket.Id, actingUser.Id);
                 }
 
-                // Th�m email c?a ng??i ???c ph�n c�ng (n?u KH�NG ph?i l� ng??i ?ang th?c hi?n h�nh ??ng)
+                // Thêm email của người được phân công (nếu KHÔNG phải là người đang thực hiện hành động)
                 if (ticket.AssignedTo != null && 
                     !string.IsNullOrEmpty(ticket.AssignedTo.Email) &&
-                    ticket.AssignedTo.Id != actingUser.Id) // ? Lo?i tr? ng??i th?c hi?n
+                    ticket.AssignedTo.Id != actingUser.Id) // ✅ Loại trừ người thực hiện
                 {
                     recipients.Add(ticket.AssignedTo.Email.Trim().ToLower());
                     _logger.LogDebug("Added AssignedTo email to recipients: {Email} for ticket {TicketId} (acting user: {ActingUserId})", 
                         ticket.AssignedTo.Email, ticket.Id, actingUser.Id);
                 }
 
-                // Th�m secondary email c?a ng??i t?o ticket (n?u KH�NG ph?i l� ng??i th?c hi?n)
+                // Thêm secondary email của người tạo ticket (nếu KHÔNG phải là người thực hiện)
                 if (ticket.CreatedBy != null && 
                     !string.IsNullOrEmpty(ticket.CreatedBy.SecondaryEmail) &&
-                    ticket.CreatedBy.Id != actingUser.Id) // ? Lo?i tr? ng??i th?c hi?n
+                    ticket.CreatedBy.Id != actingUser.Id) // ✅ Loại trừ người thực hiện
                 {
                     recipients.Add(ticket.CreatedBy.SecondaryEmail.Trim().ToLower());
                     _logger.LogDebug("Added CreatedBy secondary email to recipients: {Email} for ticket {TicketId} (acting user: {ActingUserId})", 
                         ticket.CreatedBy.SecondaryEmail, ticket.Id, actingUser.Id);
                 }
 
-                // Th�m secondary email c?a ng??i ???c ph�n c�ng (n?u KH�NG ph?i l� ng??i th?c hi?n)
+                // Thêm secondary email của người được phân công (nếu KHÔNG phải là người thực hiện)
                 if (ticket.AssignedTo != null && 
                     !string.IsNullOrEmpty(ticket.AssignedTo.SecondaryEmail) &&
-                    ticket.AssignedTo.Id != actingUser.Id) // ? Lo?i tr? ng??i th?c hi?n
+                    ticket.AssignedTo.Id != actingUser.Id) // ✅ Loại trừ người thực hiện
                 {
                     recipients.Add(ticket.AssignedTo.SecondaryEmail.Trim().ToLower());
                     _logger.LogDebug("Added AssignedTo secondary email to recipients: {Email} for ticket {TicketId} (acting user: {ActingUserId})", 
                         ticket.AssignedTo.SecondaryEmail, ticket.Id, actingUser.Id);
                 }
 
-                // N?u kh�ng c� ng??i nh?n, kh�ng g?i email
+                // Nếu không có người nhận, không gửi email
                 if (!recipients.Any())
                 {
                     _logger.LogInformation("No email recipients for ticket notification on ticket {TicketId} after excluding acting user {ActingUserId}. CreatedBy: {CreatedById}, AssignedTo: {AssignedToId}", 
@@ -178,7 +178,7 @@ namespace erp_backend.Services
                 _logger.LogInformation("Preparing to send email for ticket {TicketId} to {RecipientCount} recipients: {Recipients} (excluding acting user: {ActingUserId})", 
                     ticket.Id, recipients.Count, string.Join(", ", recipients), actingUser.Id);
 
-                // L?y th�ng tin SMTP t? config
+                // Lấy thông tin SMTP từ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -186,7 +186,7 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // T?o email message
+                // Tạo email message
                 var mail = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
@@ -195,7 +195,7 @@ namespace erp_backend.Services
                     IsBodyHtml = true
                 };
 
-                // Th�m ng??i nh?n - chuy?n v? email g?c (kh�ng lowercase)
+                // Thêm người nhận - chuyển về email gốc (không lowercase)
                 foreach (var recipient in recipients)
                 {
                     try
@@ -209,7 +209,7 @@ namespace erp_backend.Services
                     }
                 }
 
-                // T?o SMTP client v� g?i email
+                // Tạo SMTP client và gửi email
                 using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
                 {
                     smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
@@ -230,7 +230,7 @@ namespace erp_backend.Services
             }
             catch (Exception ex)
             {
-                // Log l?i nh?ng kh�ng throw exception ?? kh�ng ?nh h??ng ??n vi?c l?u TicketLog
+                // Log lỗi nhưng không throw exception để không ảnh hưởng đến việc lưu TicketLog
                 _logger.LogError(ex, "Error sending email notification for ticket {TicketId}", ticket.Id);
             }
         }
@@ -255,10 +255,10 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send payment success notification for contract {ContractId}", contract.Id);
 
-                // X�c ??nh ng??i nh?n - s? d?ng Dictionary ?? ph�n bi?t lo?i ng??i nh?n
+                // Xác định người nhận - sử dụng Dictionary để phân biệt loại người nhận
                 var recipients = new Dictionary<string, string>(); // email -> recipient type
 
-                // 1. Email kh�ch h�ng
+                // 1. Email khách hàng
                 if (!string.IsNullOrEmpty(customer.Email))
                 {
                     recipients[customer.Email.Trim().ToLower()] = "customer";
@@ -268,7 +268,7 @@ namespace erp_backend.Services
                     recipients[customer.RepresentativeEmail.Trim().ToLower()] = "customer";
                 }
 
-                // 2. Email sale (ng??i t?o kh�ch h�ng)
+                // 2. Email sale (người tạo khách hàng)
                 if (saleUser != null && !string.IsNullOrEmpty(saleUser.Email))
                 {
                     recipients[saleUser.Email.Trim().ToLower()] = "sale";
@@ -278,7 +278,7 @@ namespace erp_backend.Services
                     recipients[saleUser.SecondaryEmail.Trim().ToLower()] = "sale";
                 }
 
-                // 3. Email admin - l?y t? config ho?c t�m user c� role admin
+                // 3. Email admin - lấy từ config hoặc tìm user có role admin
                 var adminEmail = _configuration["AdminEmail"];
                 if (!string.IsNullOrEmpty(adminEmail))
                 {
@@ -294,7 +294,7 @@ namespace erp_backend.Services
                 _logger.LogInformation("Preparing to send payment notification emails to {RecipientCount} recipients for contract {ContractId}", 
                     recipients.Count, contract.Id);
 
-                // L?y th�ng tin SMTP t? config
+                // Lấy thông tin SMTP từ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -302,7 +302,7 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // G?i email ri�ng cho t?ng lo?i ng??i nh?n
+                // Gửi email riêng cho từng loại người nhận
                 foreach (var recipient in recipients)
                 {
                     try
@@ -342,7 +342,7 @@ namespace erp_backend.Services
         }
 
         /// <summary>
-        /// G?i email m� OTP ?? ??i m?t kh?u
+        /// Gửi email mã OTP để đổi mật khẩu
         /// </summary>
         public async Task SendPasswordResetOtpAsync(string email, string userName, string otpCode, DateTime expiresAt)
         {
@@ -357,7 +357,7 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send OTP email to {Email}", email);
 
-                // L?y th�ng tin SMTP t? config
+                // Lấy thông tin SMTP từ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -365,21 +365,21 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // T�nh th?i gian h?t h?n
+                // Tính thời gian hết hạn
                 var expiryMinutes = (int)(expiresAt - DateTime.UtcNow).TotalMinutes;
 
-                // T?o email message
+                // Tạo email message
                 var mail = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
-                    Subject = "M� OTP ??i m?t kh?u - ERP System",
+                    Subject = "Mã OTP đổi mật khẩu - ERP System",
                     Body = FormatOtpEmailBody(userName, otpCode, expiresAt, expiryMinutes),
                     IsBodyHtml = true
                 };
 
                 mail.To.Add(email);
 
-                // T?o SMTP client v� g?i email
+                // Tạo SMTP client và gửi email
                 using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
                 {
                     smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
@@ -403,7 +403,7 @@ namespace erp_backend.Services
         }
 
         /// <summary>
-        /// G?i email th�ng b�o notification cho ng??i nh?n
+        /// Gửi email thông báo notification cho người nhận
         /// </summary>
         public async Task SendNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt)
         {
@@ -418,7 +418,7 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send notification email to {Email}", recipientEmail);
 
-                // L?y th�ng tin SMTP t? config
+                // Lấy thông tin SMTP từ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -426,7 +426,7 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // T?o email message
+                // Tạo email message
                 var mail = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
@@ -437,7 +437,7 @@ namespace erp_backend.Services
 
                 mail.To.Add(recipientEmail);
 
-                // T?o SMTP client v� g?i email
+                // Tạo SMTP client và gửi email
                 using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
                 {
                     smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
@@ -461,9 +461,15 @@ namespace erp_backend.Services
         }
 
         /// <summary>
-        /// G?i email th�ng b�o cho kh�ch h�ng v?i template ri�ng
+        /// Gửi email thông báo notification cho khách hàng
         /// </summary>
-        public async Task SendCustomerNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt, string customerType)
+        public async Task SendCustomerNotificationEmailAsync(
+            string recipientEmail,
+            string recipientName,
+            string notificationTitle,
+            string notificationContent,
+            DateTime createdAt,
+            string customerType)
         {
             try
             {
@@ -476,7 +482,7 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send customer notification email to {Email}", recipientEmail);
 
-                // L?y th�ng tin SMTP t? config
+                // Lấy thông tin SMTP từ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -484,18 +490,18 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // T?o email message
+                // Tạo email message
                 var mail = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
-                    Subject = $"[Th�ng b�o] {notificationTitle}",
+                    Subject = $"[Thông báo] {notificationTitle}",
                     Body = FormatCustomerNotificationEmailBody(recipientName, notificationTitle, notificationContent, createdAt, customerType),
                     IsBodyHtml = true
                 };
 
                 mail.To.Add(recipientEmail);
 
-                // T?o SMTP client v� g?i email
+                // Tạo SMTP client và gửi email
                 using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
                 {
                     smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
@@ -509,7 +515,7 @@ namespace erp_backend.Services
             }
             catch (SmtpException smtpEx)
             {
-                _logger.LogError(smtpEx, "SMTP error sending customer notification email to {Email}: {StatusCode} - {Message}", 
+                _logger.LogError(smtpEx, "SMTP error sending customer notification email to {Email}: {StatusCode} - {Message}",
                     recipientEmail, smtpEx.StatusCode, smtpEx.Message);
             }
             catch (Exception ex)
@@ -518,254 +524,8 @@ namespace erp_backend.Services
             }
         }
 
-        private bool ValidateEmailConfiguration()
-        {
-            var smtpServer = _configuration["Email:SmtpServer"];
-            var smtpUsername = _configuration["Email:Username"];
-            var smtpPassword = _configuration["Email:Password"];
-            var senderEmail = _configuration["Email:SenderEmail"];
-
-            if (string.IsNullOrEmpty(smtpServer) || 
-                string.IsNullOrEmpty(smtpUsername) || 
-                string.IsNullOrEmpty(smtpPassword) || 
-                string.IsNullOrEmpty(senderEmail))
-            {
-                _logger.LogWarning("Email configuration is incomplete. Missing required settings.");
-                return false;
-            }
-
-            return true;
-        }
-
-        private string GenerateEmailSubject(Ticket ticket, string actionType)
-        {
-            return $"[Ticket #{ticket.Id}] {ticket.Title} - {actionType}";
-        }
-
-        private string FormatEmailBody(Ticket ticket, User actingUser, string actionType, string content, string emailType)
-        {
-            var statusColor = GetStatusColor(ticket.Status);
-            var actionIcon = GetActionIcon(emailType);
-            
-            // L?y frontend URL t? configuration
-            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
-            var ticketUrl = $"{frontendUrl}/helpdesk";
-
-            return $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #f8f9fa; padding: 15px; border-bottom: 3px solid #0066cc; text-align: center; }}
-        .content {{ padding: 20px 0; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px; text-align: center; }}
-        .ticket-info {{ background-color: #f0f7ff; padding: 15px; border-left: 4px solid #0066cc; margin: 15px 0; border-radius: 4px; }}
-        .action-content {{ border-left: 3px solid #28a745; padding-left: 15px; margin: 20px 0; background-color: #f8fff9; padding: 15px; border-radius: 4px; }}
-        .highlight {{ color: #0066cc; font-weight: bold; }}
-        .status {{ padding: 3px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: bold; }}
-        .action-icon {{ font-size: 20px; margin-right: 10px; }}
-        .user-info {{ background-color: #e9ecef; padding: 10px; border-radius: 4px; margin: 10px 0; }}
-        .btn {{ display: inline-block; padding: 10px 20px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 4px; }}
-        .recipients-info {{ background-color: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 4px solid #ffc107; }}
-        .urgency {{ padding: 3px 8px; border-radius: 3px; background-color: #ffc107; color: white; font-size: 12px; font-weight: bold; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h2><span class='action-icon'>{actionIcon}</span>C?p nh?t tr�n Ticket #{ticket.Id}</h2>
-        </div>
-        <div class='content'>
-            <p>Ticket <span class='highlight'>{ticket.Title}</span> v?a c� c?p nh?t m?i.</p>
-            
-            <div class='ticket-info'>
-                <p><strong>Ticket ID:</strong> #{ticket.Id}</p>
-                <p><strong>Ti�u ??:</strong> {ticket.Title}</p>
-                <p><strong>Tr?ng th�i:</strong> <span class='status' style='background-color: {statusColor};'>{ticket.Status}</span></p>
-                <p><strong>M?c ?? kh?n c?p:</strong> <span class='urgency'>{ticket.UrgencyLevel} ?</span></p>
-                <p><strong>Danh m?c:</strong> {ticket.Category?.Name ?? "N/A"}</p>
-                <p><strong>Ng??i t?o:</strong> {ticket.CreatedBy?.Name ?? "N/A"} ({ticket.CreatedBy?.Email ?? "N/A"})</p>
-                <p><strong>Ng??i ???c ph�n c�ng:</strong> {ticket.AssignedTo?.Name ?? "Ch?a ph�n c�ng"} {(ticket.AssignedTo != null ? $"({ticket.AssignedTo.Email})" : "")}</p>
-            </div>
-            
-            <div class='user-info'>
-                <p><strong>?? {actingUser.Name}</strong> ?� th?c hi?n: <strong>{actionType}</strong></p>
-                <p><small>?? {actingUser.Email} | ?? {DateTime.Now:dd/MM/yyyy HH:mm:ss}</small></p>
-            </div>
-            
-            <div class='action-content'>
-                <h4>Chi ti?t c?p nh?t:</h4>
-                <p>{content}</p>
-            </div>
-            
-            <div style='text-align: center; margin: 20px 0;'>
-                <p>Vui l�ng ??ng nh?p v�o h? th?ng ?? xem chi ti?t v� ph?n h?i.</p>
-                <a href='{ticketUrl}' class='btn'>Xem Ticket</a>
-            </div>
-        </div>
-        <div class='footer'>
-            <p>?? Email n�y ???c g?i t? ??ng t? ERP Ticket System, vui l�ng kh�ng tr? l?i.</p>
-            <p>Email ???c g?i t?i ng??i li�n quan (kh�ng bao g?m ng??i th?c hi?n h�nh ??ng)</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l� ticket</p>
-        </div>
-    </div>
-</body>
-</html>";
-        }
-
-        private string GetStatusColor(string? status)
-        {
-            return status?.ToLower() switch
-            {
-                "open" or "new" => "#007bff",
-                "in progress" or "working" => "#fd7e14",
-                "closed" or "completed" or "resolved" => "#28a745",
-                "on hold" or "pending" => "#ffc107",
-                "cancelled" => "#dc3545",
-                _ => "#6c757d"
-            };
-        }
-
-        private string GetActionIcon(string emailType)
-        {
-            return emailType switch
-            {
-                "comment" => "??",
-                "created" => "??",
-                "assigned" => "??",
-                "status_changed" => "??",
-                _ => "??"
-            };
-        }
-
-        private string FormatAccountCreationEmailBody(User user, string plainPassword, string activationLink)
-        {
-            return $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
-        .content {{ padding: 30px; background-color: #f8f9fa; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
-        .credentials-box {{ background-color: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .credential-item {{ padding: 10px 0; border-bottom: 1px solid #eee; }}
-        .credential-item:last-child {{ border-bottom: none; }}
-        .credential-label {{ font-weight: bold; color: #667eea; display: inline-block; width: 150px; }}
-        .credential-value {{ color: #333; font-family: 'Courier New', monospace; background-color: #f0f0f0; padding: 5px 10px; border-radius: 3px; }}
-        .btn {{ display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
-        .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
-        .icon {{ font-size: 24px; margin-right: 10px; }}
-        .highlight {{ color: #667eea; font-weight: bold; }}
-        .welcome-text {{ font-size: 18px; margin: 20px 0; }}
-        .steps {{ background-color: white; padding: 20px; border-radius: 4px; margin: 20px 0; }}
-        .step {{ padding: 10px 0; }}
-        .step-number {{ display: inline-block; width: 30px; height: 30px; background-color: #667eea; color: white; border-radius: 50%; text-align: center; line-height: 30px; margin-right: 10px; font-weight: bold; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h1><span class='icon'>??</span>Ch�o m?ng ??n v?i ERP System!</h1>
-            <p style='font-size: 16px; margin-top: 10px;'>T�i kho?n c?a b?n ?� ???c t?o th�nh c�ng</p>
-        </div>
-        <div class='content'>
-            <p class='welcome-text'>Xin ch�o <strong>{user.Name}</strong>,</p>
-            
-            <p>T�i kho?n ERP c?a b?n ?� ???c t?o th�nh c�ng. D??i ?�y l� th�ng tin ??ng nh?p c?a b?n:</p>
-            
-            <div class='credentials-box'>
-                <h3 style='color: #667eea; margin-top: 0;'>?? Th�ng tin ??ng nh?p</h3>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? Email/T�i kho?n:</span>
-                    <span class='credential-value'>{user.Email}</span>
-                </div>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? M?t kh?u t?m th?i:</span>
-                    <span class='credential-value'>{plainPassword}</span>
-                </div>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? H? t�n:</span>
-                    <span class='credential-value'>{user.Name}</span>
-                </div>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? Ph�ng ban:</span>
-                    <span class='credential-value'>{user.Department?.Name ?? "Ch?a x�c ??nh"}</span>
-                </div>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? Ch?c v?:</span>
-                    <span class='credential-value'>{user.Position?.PositionName ?? "Ch?a x�c ??nh"}</span>
-                </div>
-            </div>
-            
-            <div class='warning-box'>
-                <strong>?? L?u � quan tr?ng:</strong>
-                <ul style='margin: 10px 0; padding-left: 20px;'>
-                    <li>?�y l� m?t kh?u t?m th?i, vui l�ng ??i m?t kh?u ngay sau l?n ??ng nh?p ??u ti�n</li>
-                    <li>Kh�ng chia s? th�ng tin n�y v?i b?t k? ai</li>
-                    <li>Link k�ch ho?t c� hi?u l?c trong 24 gi?</li>
-                </ul>
-            </div>
-
-            <div class='steps'>
-                <h3 style='color: #667eea; margin-top: 0;'>?? C�c b??c th?c hi?n</h3>
-                <div class='step'>
-                    <span class='step-number'>1</span>
-                    <span>Nh?n v�o n�t &quot;K�ch ho?t t�i kho?n&quot; b�n d??i</span>
-                </div>
-                <div class='step'>
-                    <span class='step-number'>2</span>
-                    <span>??ng nh?p b?ng email v� m?t kh?u t?m th?i</span>
-                </div>
-                <div class='step'>
-                    <span class='step-number'>3</span>
-                    <span>Thay ??i m?t kh?u theo y�u c?u h? th?ng</span>
-                </div>
-                <div class='step'>
-                    <span class='step-number'>4</span>
-                    <span>B?t ??u s? d?ng h? th?ng ERP</span>
-                </div>
-            </div>
-            
-            <div style='text-align: center;'>
-                <a href='{activationLink}' class='btn'>?? K�ch ho?t t�i kho?n ngay</a>
-            </div>
-
-            <p style='margin-top: 30px; color: #666;'>
-                N?u n�t kh�ng ho?t ??ng, vui l�ng sao ch�p link d??i ?�y v�o tr�nh duy?t:<br>
-                <a href='{activationLink}' style='color: #667eea; word-break: break-all;'>{activationLink}</a>
-            </p>
-        </div>
-        <div class='footer'>
-            <p>?? Email n�y ???c g?i t? ??ng t? ERP System, vui l�ng kh�ng tr? l?i.</p>
-            <p>N?u b?n kh�ng y�u c?u t?o t�i kho?n n�y, vui l�ng li�n h? v?i qu?n tr? vi�n ngay l?p t?c.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l� doanh nghi?p</p>
-        </div>
-    </div>
-</body>
-</html>";
-        }
-
-        private string GeneratePaymentEmailSubject(Contract contract, string paymentType)
-        {
-            var paymentTypeText = paymentType switch
-            {
-                "deposit50" => "??t c?c 50%",
-                "final50" => "Thanh to�n n?t 50%",
-                "full100" => "Thanh to�n 100%",
-                _ => "Thanh to�n"
-            };
-
-            return $"[H?p ??ng #{contract.NumberContract}] X�c nh?n {paymentTypeText} th�nh c�ng";
-        }
-
         /// <summary>
-        /// Format email body cho OTP ??i m?t kh?u
+        /// Format email body cho OTP đổi mật khẩu
         /// </summary>
         private string FormatOtpEmailBody(string userName, string otpCode, DateTime expiresAt, int expiryMinutes)
         {
@@ -783,111 +543,114 @@ namespace erp_backend.Services
         .otp-code {{ font-size: 48px; font-weight: bold; letter-spacing: 10px; margin: 20px 0; font-family: 'Courier New', monospace; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
         .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
         .icon {{ font-size: 48px; }}
-        .info-box {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #0066cc; }}
-        .timer {{ background-color: #ffc107; color: #333; padding: 10px 20px; border-radius: 20px; display: inline-block; font-weight: bold; margin-top: 10px; }}
+        .highlight {{ color: #667eea; font-weight: bold; }}
+        .welcome-text {{ font-size: 18px; margin: 20px 0; }}
+        .steps {{ background-color: white; padding: 20px; border-radius: 4px; margin: 20px 0; }}
+        .step {{ padding: 10px 0; }}
+        .step-number {{ display: inline-block; width: 30px; height: 30px; background-color: #667eea; color: white; border-radius: 50%; text-align: center; line-height: 30px; margin-right: 10px; font-weight: bold; }}
     </style>
 </head>
 <body>
     <div class='container'>
         <div class='header'>
-            <div class='icon'>??</div>
-            <h1 style='margin: 10px 0;'>??i m?t kh?u</h1>
-            <p style='font-size: 16px; margin: 0;'>M� OTP x�c th?c</p>
+            <h1><span class='icon'>🎉</span>Chào mừng đến với ERP System!</h1>
+            <p style='font-size: 16px; margin-top: 10px;'>Tài khoản của bạn đã được tạo thành công</p>
         </div>
         <div class='content'>
-            <p>Xin ch�o <strong>{userName}</strong>,</p>
+            <p class='welcome-text'>Xin chào <strong>{user.Name}</strong>,</p>
             
-            <p>B?n ?� y�u c?u ??i m?t kh?u cho t�i kho?n ERP c?a m�nh. D??i ?�y l� m� OTP ?? x�c th?c:</p>
+            <p>Tài khoản ERP của bạn đã được tạo thành công. Dưới đây là thông tin đăng nhập của bạn:</p>
             
-            <div class='otp-box'>
-                <div style='font-size: 18px; margin-bottom: 10px;'>M� OTP c?a b?n l�:</div>
-                <div class='otp-code'>{otpCode}</div>
-                <div class='timer'>? C� hi?u l?c trong {expiryMinutes} ph�t</div>
-            </div>
-
-            <div class='info-box'>
-                <h4 style='margin-top: 0; color: #0066cc;'>?? H??ng d?n s? d?ng</h4>
-                <ol style='margin: 10px 0; padding-left: 20px;'>
-                    <li>Nh?p m� OTP <strong>{otpCode}</strong> v�o form ??i m?t kh?u</li>
-                    <li>Nh?p m?t kh?u m?i (t?i thi?u 8 k� t?)</li>
-                    <li>X�c nh?n m?t kh?u m?i</li>
-                    <li>Nh�n &quot;??i m?t kh?u&quot; ?? ho�n t?t</li>
-                </ol>
+            <div class='credentials-box'>
+                <h3 style='color: #667eea; margin-top: 0;'>🔐 Thông tin đăng nhập</h3>
+                <div class='credential-item'>
+                    <span class='credential-label'>📧 Email/Tài khoản:</span>
+                    <span class='credential-value'>{user.Email}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>🔑 Mật khẩu tạm thời:</span>
+                    <span class='credential-value'>{plainPassword}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>👤 Họ tên:</span>
+                    <span class='credential-value'>{user.Name}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>🏢 Phòng ban:</span>
+                    <span class='credential-value'>{user.Department?.Name ?? "Chưa xác định"}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>💼 Chức vụ:</span>
+                    <span class='credential-value'>{user.Position?.PositionName ?? "Chưa xác định"}</span>
+                </div>
             </div>
             
             <div class='warning-box'>
-                <strong>?? L?u � quan tr?ng:</strong>
+                <strong>⚠️ Lưu ý quan trọng:</strong>
                 <ul style='margin: 10px 0; padding-left: 20px;'>
-                    <li>M� OTP n�y ch? c� hi?u l?c trong <strong>{expiryMinutes} ph�t</strong></li>
-                    <li>M� OTP ch? ???c s? d?ng <strong>m?t l?n duy nh?t</strong></li>
-                    <li>Kh�ng chia s? m� OTP n�y v?i b?t k? ai</li>
-                    <li>N?u b?n kh�ng y�u c?u ??i m?t kh?u, vui l�ng b? qua email n�y v� li�n h? v?i qu?n tr? vi�n ngay</li>
+                    <li>Đây là mật khẩu tạm thời, vui lòng đổi mật khẩu ngay sau lần đăng nhập đầu tiên</li>
+                    <li>Không chia sẻ thông tin này với bất kỳ ai</li>
+                    <li>Link kích hoạt có hiệu lực trong 24 giờ</li>
                 </ul>
             </div>
 
-            <div class='info-box'>
-                <p style='margin: 0;'><strong>?? Th?i gian h?t h?n:</strong> {expiresAt:dd/MM/yyyy HH:mm:ss} UTC</p>
-                <p style='margin: 10px 0 0 0; font-size: 12px; color: #666;'>
-                    (Gi? Vi?t Nam: {expiresAt.AddHours(7):dd/MM/yyyy HH:mm:ss})
-                </p>
+            <div class='steps'>
+                <h3 style='color: #667eea; margin-top: 0;'>📋 Các bước thực hiện</h3>
+                <div class='step'>
+                    <span class='step-number'>1</span>
+                    <span>Nhấn vào nút &quot;Kích hoạt tài khoản&quot; bên dưới</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>2</span>
+                    <span>Đăng nhập bằng email và mật khẩu tạm thời</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>3</span>
+                    <span>Thay đổi mật khẩu theo yêu cầu hệ thống</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>4</span>
+                    <span>Bắt đầu sử dụng hệ thống ERP</span>
+                </div>
+            </div>
+            
+            <div style='text-align: center;'>
+                <a href='{activationLink}' class='btn'>🚀 Kích hoạt tài khoản ngay</a>
             </div>
 
             <p style='margin-top: 30px; color: #666;'>
-                N?u b?n kh�ng th?c hi?n y�u c?u n�y, vui l�ng b? qua email ho?c li�n h? v?i qu?n tr? vi�n ?? ???c h? tr?.
+                Nếu nút không hoạt động, vui lòng sao chép link dưới đây vào trình duyệt:<br>
+                <a href='{activationLink}' style='color: #667eea; word-break: break-all;'>{activationLink}</a>
             </p>
         </div>
         <div class='footer'>
-            <p>?? Email n�y ???c g?i t? ??ng t? ERP System, vui l�ng kh�ng tr? l?i.</p>
-            <p>N?u b?n g?p v?n ?? khi ??i m?t kh?u, vui l�ng li�n h? v?i qu?n tr? vi�n h? th?ng.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l� doanh nghi?p</p>
+            <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
+            <p>Nếu bạn không yêu cầu tạo tài khoản này, vui lòng liên hệ với quản trị viên ngay lập tức.</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
         </div>
     </div>
 </body>
 </html>";
         }
 
-        private string FormatPaymentEmailBody(
-            Contract contract, 
-            decimal amount, 
-            string paymentType, 
-            string transactionId, 
-            DateTime transactionDate,
-            Customer customer,
-            User? saleUser,
-            string recipientType)
+        private string GeneratePaymentEmailSubject(Contract contract, string paymentType)
         {
             var paymentTypeText = paymentType switch
             {
-                "deposit50" => "??t c?c 50%",
-                "final50" => "Thanh to�n n?t 50%",
-                "full100" => "Thanh to�n 100%",
-                _ => "Thanh to�n"
+                "deposit50" => "Đặt cọc 50%",
+                "final50" => "Thanh toán nốt 50%",
+                "full100" => "Thanh toán 100%",
+                _ => "Thanh toán"
             };
 
-            var greeting = recipientType switch
-            {
-                "customer" => $"K�nh g?i qu� kh�ch h�ng <strong>{customer.Name ?? customer.CompanyName}</strong>,",
-                "sale" => $"Xin ch�o <strong>{saleUser?.Name}</strong>,",
-                "admin" => "K�nh g?i Qu?n tr? vi�n,",
-                _ => "Xin ch�o,"
-            };
+            return $"[Hợp đồng #{contract.NumberContract}] Xác nhận {paymentTypeText} thành công";
+        }
 
-            var mainMessage = recipientType switch
-            {
-                "customer" => $"Ch�ng t�i x�c nh?n ?� nh?n ???c thanh to�n {paymentTypeText} cho h?p ??ng #{contract.NumberContract} .",
-                "sale" => $"B?n ?� th?c hi?n thanh to�n {paymentTypeText} cho h?p ??ng #{contract.NumberContract} .",
-                "admin" => $"?� c� giao d?ch thanh to�n {paymentTypeText} cho h?p ??ng #{contract.NumberContract} .",
-                _ => $"?� c� giao d?ch thanh to�n {paymentTypeText} cho h?p ??ng #{contract.NumberContract}."
-            };
-
-            var customerInfo = recipientType == "customer" ? 
-                $"<p><strong>Th�ng tin kh�ch h�ng:</strong> {customer.Name} - {customer.Email}</p>" : "";
-
-            var saleInfo = recipientType == "sale" && saleUser != null ? 
-                $"<p><strong>Ng??i t?o:</strong> {saleUser.Name} ({saleUser.Email})</p>" : "";
-
-            var transactionDateText = transactionDate.ToString("dd/MM/yyyy HH:mm:ss");
-
+        /// <summary>
+        /// Format email body cho OTP đổi mật khẩu
+        /// </summary>
+        private string FormatOtpEmailBody(string userName, string otpCode, DateTime expiresAt, int expiryMinutes)
+        {
             return $@"
 <!DOCTYPE html>
 <html>
@@ -895,53 +658,187 @@ namespace erp_backend.Services
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #f8f9fa; padding: 15px; border-bottom: 3px solid #28a745; text-align: center; }}
-        .content {{ padding: 20px 0; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px; text-align: center; }}
-        .contract-info {{ background-color: #e9fbe9; padding: 15px; border-left: 4px solid #28a745; margin: 15px 0; border-radius: 4px; }}
-        .greeting {{ font-size: 18px; font-weight: bold; }}
-        .message {{ margin: 15px 0; }}
-        .btn {{ display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }}
-        .info-box {{ background-color: #f0f8ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #007bff; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
+        .content {{ padding: 30px; background-color: #f8f9fa; }}
+        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
+        .otp-box {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; margin: 30px 0; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .otp-code {{ font-size: 48px; font-weight: bold; letter-spacing: 10px; margin: 20px 0; font-family: 'Courier New', monospace; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
+        .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+        .icon {{ font-size: 48px; }}
+        .highlight {{ color: #667eea; font-weight: bold; }}
+        .welcome-text {{ font-size: 18px; margin: 20px 0; }}
+        .steps {{ background-color: white; padding: 20px; border-radius: 4px; margin: 20px 0; }}
+        .step {{ padding: 10px 0; }}
+        .step-number {{ display: inline-block; width: 30px; height: 30px; background-color: #667eea; color: white; border-radius: 50%; text-align: center; line-height: 30px; margin-right: 10px; font-weight: bold; }}
     </style>
 </head>
 <body>
     <div class='container'>
         <div class='header'>
-            <h2>X�c nh?n thanh to�n</h2>
+            <h1><span class='icon'>🎉</span>Chào mừng đến với ERP System!</h1>
+            <p style='font-size: 16px; margin-top: 10px;'>Tài khoản của bạn đã được tạo thành công</p>
         </div>
         <div class='content'>
-            <div class='greeting'>{
-                greeting
-            }</div>
+            <p class='welcome-text'>Xin chào <strong>{user.Name}</strong>,</p>
             
-            <div class='message'>
-                {mainMessage}
+            <p>Tài khoản ERP của bạn đã được tạo thành công. Dưới đây là thông tin đăng nhập của bạn:</p>
+            
+            <div class='credentials-box'>
+                <h3 style='color: #667eea; margin-top: 0;'>🔐 Thông tin đăng nhập</h3>
+                <div class='credential-item'>
+                    <span class='credential-label'>📧 Email/Tài khoản:</span>
+                    <span class='credential-value'>{user.Email}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>🔑 Mật khẩu tạm thời:</span>
+                    <span class='credential-value'>{plainPassword}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>👤 Họ tên:</span>
+                    <span class='credential-value'>{user.Name}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>🏢 Phòng ban:</span>
+                    <span class='credential-value'>{user.Department?.Name ?? "Chưa xác định"}</span>
+                </div>
+                <div class='credential-item'>
+                    <span class='credential-label'>💼 Chức vụ:</span>
+                    <span class='credential-value'>{user.Position?.PositionName ?? "Chưa xác định"}</span>
+                </div>
             </div>
             
-            <div class='contract-info'>
-                <p><strong>H?p ??ng:</strong> #{contract.NumberContract} </p>
-                <p><strong>S? ti?n:</strong> {amount:N0} VN?</p>
-                <p><strong>Lo?i thanh to�n:</strong> {paymentTypeText}</p>
-                <p><strong>ID giao d?ch:</strong> {transactionId}</p>
-                <p><strong>Th?i gian:</strong> {transactionDateText}</p>
+            <div class='warning-box'>
+                <strong>⚠️ Lưu ý quan trọng:</strong>
+                <ul style='margin: 10px 0; padding-left: 20px;'>
+                    <li>Đây là mật khẩu tạm thời, vui lòng đổi mật khẩu ngay sau lần đăng nhập đầu tiên</li>
+                    <li>Không chia sẻ thông tin này với bất kỳ ai</li>
+                    <li>Link kích hoạt có hiệu lực trong 24 giờ</li>
+                </ul>
             </div>
-            
-            {customerInfo}
-            {saleInfo}
+
+            <div class='steps'>
+                <h3 style='color: #667eea; margin-top: 0;'>📋 Các bước thực hiện</h3>
+                <div class='step'>
+                    <span class='step-number'>1</span>
+                    <span>Nhấn vào nút &quot;Kích hoạt tài khoản&quot; bên dưới</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>2</span>
+                    <span>Đăng nhập bằng email và mật khẩu tạm thời</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>3</span>
+                    <span>Thay đổi mật khẩu theo yêu cầu hệ thống</span>
+                </div>
+                <div class='step'>
+                    <span class='step-number'>4</span>
+                    <span>Bắt đầu sử dụng hệ thống ERP</span>
+                </div>
+            </div>
             
             <div style='text-align: center;'>
-                <a href='{_configuration["FrontendUrl"]}/contracts/{contract.Id}' class='btn'>Xem chi ti?t h?p ??ng</a>
+                <a href='{activationLink}' class='btn'>🚀 Kích hoạt tài khoản ngay</a>
             </div>
+
+            <p style='margin-top: 30px; color: #666;'>
+                Nếu nút không hoạt động, vui lòng sao chép link dưới đây vào trình duyệt:<br>
+                <a href='{activationLink}' style='color: #667eea; word-break: break-all;'>{activationLink}</a>
+            </p>
         </div>
         <div class='footer'>
-            <p>?? Email n�y ???c g?i t? ??ng t? ERP System, vui l�ng kh�ng tr? l?i.</p>
-            <p>N?u b?n c� th?m c�u h?i v? giao d?ch n�y, vui l�ng li?n h? v?i qu?n tr? vi�n.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l� doanh nghi?p</p>
+            <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
+            <p>Nếu bạn không yêu cầu tạo tài khoản này, vui lòng liên hệ với quản trị viên ngay lập tức.</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
         </div>
     </div>
 </body>
 </html>";
+        }
+
+        private string GeneratePaymentEmailSubject(Contract contract, string paymentType)
+        {
+            var paymentTypeText = paymentType switch
+            {
+                "deposit50" => "Đặt cọc 50%",
+                "final50" => "Thanh toán nốt 50%",
+                "full100" => "Thanh toán 100%",
+                _ => "Thanh toán"
+            };
+
+            return $"[Hợp đồng #{contract.NumberContract}] Xác nhận {paymentTypeText} thành công";
+        }
+
+        /// <summary>
+        /// Format email body cho OTP đổi mật khẩu
+        /// </summary>
+        private string FormatOtpEmailBody(string userName, string otpCode, DateTime expiresAt, int expiryMinutes)
+        {
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
+        .content {{ padding: 30px; background-color: #f8f9fa; }}
+        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
+        .otp-box {{ background-color: white; padding: 20px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        .otp-label {{ font-weight: bold; color: #dc3545; display: inline-block; margin-bottom: 10px; }}
+        .otp-code {{ font-size: 24px; letter-spacing: 2px; color: #333; font-weight: bold; }}
+        .btn {{ display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
+        .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+        .icon {{ font-size: 24px; margin-right: 10px; }}
+        .highlight {{ color: #dc3545; font-weight: bold; }}
+        .welcome-text {{ font-size: 18px; margin: 20px 0; }}
+        .steps {{ background-color: white; padding: 20px; border-radius: 4px; margin: 20px 0; }}
+        .step {{ padding: 10px 0; }}
+        .step-number {{ display: inline-block; width: 30px; height: 30px; background-color: #dc3545; color: white; border-radius: 50%; text-align: center; line-height: 30px; margin-right: 10px; font-weight: bold; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h1><span class='icon'>🔐</span>Xác nhận thay đổi mật khẩu</h1>
+        </div>
+        <div class='content'>
+            <p>Xin chào <strong>{userName}</strong>,</p>
+            
+            <p>Chúng tôi đã nhận được yêu cầu thay đổi mật khẩu cho tài khoản của bạn. Vui lòng sử dụng mã xác nhận dưới đây để hoàn tất quá trình:</p>
+            
+            <div class='otp-box'>
+                <span class='otp-label'>Mã xác nhận:</span>
+                <span class='otp-code'>{otpCode}</span>
+            </div>
+            
+            <p>Liên kết này sẽ hết hạn vào <strong>{expiresAt:dd/MM/yyyy HH:mm:ss}</strong>. Vui lòng sử dụng mã xác nhận trong thời gian quy định.</p>
+            
+            <div style='text-align: center;'>
+                <a href='{GetPasswordResetLink(otpCode)}' class='btn'>🔗 Đặt lại mật khẩu của bạn</a>
+            </div>
+            
+            <div class='warning-box'>
+                <strong>⚠️ Lưu ý:</strong>
+                <ul style='margin: 10px 0; padding-left: 20px;'>
+                    <li>Mã xác nhận chỉ có giá trị trong 5 phút.</li>
+                    <li>Nếu bạn không yêu cầu thay đổi mật khẩu, vui lòng bỏ qua email này.</li>
+                </ul>
+            </div>
+        </div>
+        <div class='footer'>
+            <p>📧 Email này được gửi tự động từ ERP System, vui lòng không trả lời.</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
+        </div>
+    </div>
+</body>
+</html>";
+        }
+
+        private string GetPasswordResetLink(string otpCode)
+        {
+            // Giả sử link reset password có dạng: /reset-password?token=OTP_CODE
+            return $"/reset-password?token={otpCode}";
         }
 
         /// <summary>
@@ -965,157 +862,70 @@ namespace erp_backend.Services
         .notification-box {{ background-color: white; padding: 25px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
         .notification-title {{ color: #667eea; font-size: 20px; font-weight: bold; margin-bottom: 15px; }}
         .notification-content {{ color: #333; font-size: 14px; line-height: 1.8; padding: 15px; background-color: #f8f9fa; border-radius: 4px; }}
-        .btn {{ display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
+        .contact-box {{ background-color: #e7f5ff; padding: 20px; border-radius: 4px; margin: 20px 0; border-left: 4px solid #667eea; }}
         .icon {{ font-size: 48px; }}
-        .info-box {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #0066cc; }}
-        .timestamp {{ color: #666; font-size: 12px; margin-top: 10px; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <div class='icon'>??</div>
-            <h1 style='margin: 10px 0;'>Th�ng b�o m?i</h1>
-            <p style='font-size: 16px; margin: 0;'>ERP System</p>
-        </div>
-        <div class='content'>
-            <p>Xin ch�o <strong>{recipientName}</strong>,</p>
-            
-            <p>B?n c� m?t th�ng b�o m?i t? h? th?ng ERP:</p>
-            
-            <div class='notification-box'>
-                <div class='notification-title'>
-                    ?? {notificationTitle}
-                </div>
-                <div class='notification-content'>
-                    {notificationContent}
-                </div>
-                <div class='timestamp'>
-                    ?? Th?i gian: {createdAt:dd/MM/yyyy HH:mm:ss}
-                </div>
-            </div>
-
-            <div class='info-box'>
-                <p style='margin: 0;'><strong>?? L?u �:</strong></p>
-                <ul style='margin: 10px 0; padding-left: 20px;'>
-                    <li>??ng nh?p v�o h? th?ng ?? xem chi ti?t v� c�c th�ng b�o kh�c</li>
-                    <li>B?n c� th? qu?n l� th�ng b�o c?a m�nh trong m?c Notifications</li>
-                </ul>
-            </div>
-            
-            <div style='text-align: center;'>
-                <a href='{notificationUrl}' class='btn'>?? Xem th�ng b�o</a>
-            </div>
-
-            <p style='margin-top: 30px; color: #666; font-size: 14px;'>
-                Email n�y ???c g?i t? ??ng khi c� th�ng b�o m?i trong h? th?ng. 
-                N?u b?n kh�ng mu?n nh?n email th�ng b�o, vui l�ng c?p nh?t trong c�i ??t t�i kho?n.
-            </p>
-        </div>
-        <div class='footer'>
-            <p>?? Email n�y ???c g?i t? ??ng t? ERP System, vui l�ng kh�ng tr? l?i.</p>
-            <p>N?u c� th?c m?c, vui l�ng li�n h? v?i qu?n tr? vi�n h? th?ng.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l� doanh nghi?p</p>
-        </div>
-    </div>
-</body>
-</html>";
-        }
-
-        /// <summary>
-        /// Format email body cho kh�ch h�ng v?i template ri�ng
-        /// </summary>
-        private string FormatCustomerNotificationEmailBody(string recipientName, string notificationTitle, string notificationContent, DateTime createdAt, string customerType)
-        {
-            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
-            var contactEmail = _configuration["Email:SenderEmail"] ?? "support@erpsystem.com";
-            var contactPhone = _configuration["SupportPhone"] ?? "1900-xxxx";
-
-            return $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
-        .content {{ padding: 30px; background-color: #f8f9fa; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
-        .notification-box {{ background-color: white; padding: 25px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .notification-title {{ color: #28a745; font-size: 22px; font-weight: bold; margin-bottom: 20px; }}
-        .notification-content {{ color: #333; font-size: 15px; line-height: 1.8; padding: 20px; background-color: #f8fff9; border-radius: 4px; border: 1px dashed #28a745; }}
-        .icon {{ font-size: 48px; }}
-        .customer-badge {{ background-color: #ffc107; color: #333; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 10px; }}
-        .timestamp {{ color: #666; font-size: 13px; margin-top: 15px; padding: 10px; background-color: #e9ecef; border-radius: 4px; }}
-        .contact-box {{ background-color: #e7f5ff; padding: 20px; border-radius: 4px; margin: 20px 0; border-left: 4px solid #0066cc; }}
+        .timestamp {{ color: #666; font-size: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }}
         .contact-info {{ margin: 10px 0; }}
-        .contact-info strong {{ color: #0066cc; }}
-        .thank-you {{ background-color: #d4edda; border-left: 4px solid #28a745; padding: 20px; margin: 20px 0; border-radius: 4px; text-align: center; }}
-        .company-logo {{ font-size: 32px; margin-bottom: 10px; }}
+        .contact-info strong {{ color: #667eea; }}
+        .thank-you {{ background-color: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0; border-radius: 4px; text-align: center; }}
     </style>
 </head>
 <body>
     <div class='container'>
         <div class='header'>
-            <div class='company-logo'>??</div>
-            <h1 style='margin: 10px 0;'>Th�ng b�o d�nh cho kh�ch h�ng</h1>
+            <div class='icon'>🔔</div>
+            <h1 style='margin: 10px 0;'>Thông báo mới</h1>
             <p style='font-size: 16px; margin: 0;'>ERP System</p>
         </div>
         <div class='content'>
-            <p>K�nh g?i Qu� kh�ch <strong>{recipientName}</strong>,</p>
+            <p>Xin chào <strong>{recipientName}</strong>,</p>
             
-            <div style='text-align: center; margin: 15px 0;'>
-                <span class='customer-badge'>?? Kh�ch h�ng {customerType}</span>
-            </div>
-            
-            <p>Ch�ng t�i c� th�ng b�o quan tr?ng g?i ??n Qu� kh�ch:</p>
+            <p>Bạn có một thông báo mới từ hệ thống ERP:</p>
             
             <div class='notification-box'>
                 <div class='notification-title'>
-                    ?? {notificationTitle}
+                    📢 {notificationTitle}
                 </div>
                 <div class='notification-content'>
                     {notificationContent}
                 </div>
                 <div class='timestamp'>
-                    ?? Th?i gian g?i: {createdAt:dd/MM/yyyy HH:mm:ss}
+                    🕐 Thời gian: {createdAt:dd/MM/yyyy HH:mm:ss}
                 </div>
             </div>
 
             <div class='thank-you'>
-                <strong>?? C?m ?n Qu� kh�ch ?� tin t??ng v� s? d?ng d?ch v? c?a ch�ng t�i!</strong>
-                <p style='margin: 10px 0 0 0; font-size: 14px;'>
-                    Ch�ng t�i lu�n s?n s�ng h? tr? v� ph?c v? Qu� kh�ch t?t nh?t.
-                </p>
+                <strong>🙏 Cảm ơn Quý khách đã tin tưởng và sử dụng dịch vụ của chúng tôi!</strong>
             </div>
-
+            
             <div class='contact-box'>
-                <h4 style='margin-top: 0; color: #0066cc;'>?? Li�n h? v?i ch�ng t�i</h4>
+                <h4 style='margin-top: 0; color: #0066cc;'>📞 Liên hệ hỗ trợ</h4>
                 <div class='contact-info'>
-                    <strong>? Email:</strong> {contactEmail}
+                    <strong>📧 Email:</strong> {contactEmail}
                 </div>
                 <div class='contact-info'>
-                    <strong>? Hotline:</strong> {contactPhone}
+                    <strong>☎️ Hotline:</strong> {contactPhone}
                 </div>
                 <div class='contact-info'>
-                    <strong>? Website:</strong> <a href='{frontendUrl}' style='color: #0066cc;'>{frontendUrl}</a>
+                    <strong>🌐 Website:</strong> <a href='{frontendUrl}' style='color: #0066cc;'>{frontendUrl}</a>
                 </div>
-                <p style='margin: 15px 0 0 0; font-size: 13px; color: #666;'>
-                    N?u Qu� kh�ch c� b?t k? c�u h?i hay y�u c?u h? tr? n�o, xin vui l�ng li�n h? v?i ch�ng t�i. 
-                    ??i ng? c?a ch�ng t�i s?n s�ng ph?c v? 24/7.
+                <p style='margin-top: 15px; color: #666; font-size: 13px;'>
+                    Nếu Quý khách có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi qua thông tin trên. 
+                    Đội ngũ của chúng tôi luôn sẵn sàng hỗ trợ Quý khách 24/7.
                 </p>
             </div>
 
             <p style='margin-top: 30px; color: #666; font-size: 14px; text-align: center;'>
-                Tr�n tr?ng,<br>
-                <strong>??i ng? ERP System</strong>
+                <em>Email này được gửi tự động từ hệ thống ERP. <br>
+                Vui lòng không trả lời trực tiếp email này.</em>
             </p>
         </div>
         <div class='footer'>
-            <p>?? Email n�y ???c g?i t? ??ng t? ERP System.</p>
-            <p>Qu� kh�ch vui l�ng kh�ng tr? l?i email n�y. ?? li�n h?, vui l�ng s? d?ng th�ng tin li�n h? b�n tr�n.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l� doanh nghi?p</p>
+            <p><strong>Trân trọng,</strong></p>
+            <p><strong>Ban Quản Lý ERP System</strong></p>
+            <p style='margin-top: 15px;'>---</p>
+            <p>📧 Email: {contactEmail} | ☎️ Hotline: {contactPhone}</p>
+            <p>&copy; {DateTime.Now.Year} ERP System - Hệ thống quản lý doanh nghiệp</p>
         </div>
     </div>
 </body>

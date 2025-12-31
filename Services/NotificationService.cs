@@ -7,6 +7,16 @@ using erp_backend.Hubs;
 
 namespace erp_backend.Services
 {
+	// DTO ?? truy?n thông tin customer trong background task
+	public class CustomerEmailInfo
+	{
+		public int Id { get; set; }
+		public string Name { get; set; } = string.Empty;
+		public string? Email { get; set; }
+		public string? RepresentativeEmail { get; set; }
+		public string CustomerType { get; set; } = "Standard";
+	}
+
 	public class NotificationService : INotificationService
 	{
 		private readonly ApplicationDbContext _context;
@@ -46,7 +56,85 @@ namespace erp_backend.Services
 
 				_logger.LogInformation("? Created notification {NotificationId} by User {UserId}", notification.Id, createdByUserId);
 
-				// 2. Xác ??nh danh sách UserIds c?n g?i
+				// Check if sending to customers to use appropriate email template
+				var isCustomerTarget = dto.TargetType == "Customer";
+
+				if (isCustomerTarget)
+				{
+					// Ch? g?i email cho customers, không t?o UserNotifications cho sales users
+					if (dto.TargetIds != null && dto.TargetIds.Any())
+					{
+						_logger.LogInformation("?? Searching for customers with IDs: {CustomerIds}", string.Join(", ", dto.TargetIds));
+
+						// Step 1: L?y t?t c? customers theo IDs (không filter)
+						var allCustomers = await _context.Customers
+							.Where(c => dto.TargetIds.Contains(c.Id))
+							.Select(c => new 
+							{ 
+								c.Id, 
+								c.Name, 
+								c.CompanyName, 
+								c.Email, 
+								c.RepresentativeEmail, 
+								c.Status, 
+								c.IsActive,
+								c.CustomerType 
+							})
+							.ToListAsync();
+
+						_logger.LogInformation("?? Found {Count} customers total", allCustomers.Count);
+						
+						foreach (var c in allCustomers)
+						{
+							_logger.LogInformation("?? Customer {Id}: Name={Name}, Email={Email}, RepEmail={RepEmail}, Status={Status}, IsActive={IsActive}", 
+								c.Id, c.Name ?? c.CompanyName, c.Email, c.RepresentativeEmail, c.Status, c.IsActive);
+						}
+
+						// Step 2: Filter customers v?i ?i?u ki?n m?i
+						var customersWithEmail = allCustomers
+							.Where(c => c.IsActive) // Ch? l?y IsActive = true
+							.Where(c => !string.IsNullOrEmpty(c.Email) || !string.IsNullOrEmpty(c.RepresentativeEmail))
+							.Select(c => new CustomerEmailInfo
+							{ 
+								Id = c.Id, 
+								Name = c.Name ?? c.CompanyName ?? "Customer", 
+								Email = c.Email, 
+								RepresentativeEmail = c.RepresentativeEmail,
+								CustomerType = c.CustomerType ?? "Standard"
+							})
+							.ToList();
+
+						_logger.LogInformation("?? After filtering: {Count} customers with email and IsActive=true", customersWithEmail.Count);
+
+						if (customersWithEmail.Any())
+						{
+							_logger.LogInformation("?? Sending notification {NotificationId} directly to {Count} customers", 
+								notification.Id, customersWithEmail.Count);
+
+							// G?i email cho customers (background task)
+							_ = Task.Run(async () =>
+							{
+								try
+								{
+									await SendCustomerEmailNotificationsAsync(notification, customersWithEmail);
+								}
+								catch (Exception ex)
+								{
+									_logger.LogError(ex, "?? Error sending customer email notifications for {NotificationId}", notification.Id);
+								}
+							});
+						}
+						else
+						{
+							_logger.LogWarning("?? No customers with email found for notification {NotificationId}", notification.Id);
+						}
+					}
+
+					await transaction.CommitAsync();
+					return notification;
+				}
+
+				// 2. Xác ??nh danh sách UserIds c?n g?i (cho các target type khác: All, Department, Specific)
 				var targetUserIds = await GetTargetUserIdsAsync(dto.TargetType, dto.TargetIds);
 
 				if (targetUserIds.Count == 0)
@@ -91,12 +179,11 @@ namespace erp_backend.Services
 					}
 					catch (Exception ex)
 					{
-						_logger.LogError(ex, "? Error sending realtime notifications for {NotificationId}", notification.Id);
+						_logger.LogError(ex, "?? Error sending realtime notifications for {NotificationId}", notification.Id);
 					}
 				});
 
 				// 5. G?i email cho t?t c? ng??i nh?n (không ch?n transaction)
-				// Pass usersWithEmail thay vì query trong background task
 				_ = Task.Run(async () =>
 				{
 					try
@@ -128,10 +215,12 @@ namespace erp_backend.Services
 					.Select(u => u.Id)
 					.ToListAsync(),
 
-				"Role" => targetIds != null && targetIds.Any()
-					? await _context.Users
-						.Where(u => u.Status == "active" && targetIds.Contains(u.RoleId))
-						.Select(u => u.Id)
+				"Customer" => targetIds != null && targetIds.Any()
+					? await _context.Customers
+						.Where(c => targetIds.Contains(c.Id) && c.Status == "active")
+						.Where(c => c.CreatedByUserId != null)
+						.Select(c => c.CreatedByUserId!.Value)
+						.Distinct()
 						.ToListAsync()
 					: new List<int>(),
 
@@ -232,6 +321,68 @@ namespace erp_backend.Services
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "?? Error in SendEmailNotificationsAsync for notification {NotificationId}", notification.Id);
+			}
+		}
+
+		private async Task SendCustomerEmailNotificationsAsync(
+			Notification notification, 
+			List<CustomerEmailInfo> customersWithEmail)
+		{
+			try
+			{
+				if (!customersWithEmail.Any())
+				{
+					_logger.LogWarning("?? No customers with email found for notification {NotificationId}", notification.Id);
+					return;
+				}
+
+				_logger.LogInformation("?? Preparing to send customer emails to {Count} customers for notification {NotificationId}", 
+					customersWithEmail.Count, notification.Id);
+
+				// G?i email song song cho t?t c? customers
+				var emailTasks = new List<Task>();
+
+				foreach (var customer in customersWithEmail)
+				{
+					// G?i email chính
+					if (!string.IsNullOrEmpty(customer.Email))
+					{
+						var emailTask = _emailService.SendCustomerNotificationEmailAsync(
+							customer.Email,
+							customer.Name,
+							notification.Title,
+							notification.Content,
+							notification.CreatedAt,
+							customer.CustomerType
+						);
+						emailTasks.Add(emailTask);
+					}
+
+					// G?i thêm email ??i di?n n?u có
+					if (!string.IsNullOrEmpty(customer.RepresentativeEmail) && 
+					    customer.RepresentativeEmail != customer.Email)
+					{
+						var representativeEmailTask = _emailService.SendCustomerNotificationEmailAsync(
+							customer.RepresentativeEmail,
+							customer.Name,
+							notification.Title,
+							notification.Content,
+							notification.CreatedAt,
+							customer.CustomerType
+						);
+						emailTasks.Add(representativeEmailTask);
+					}
+				}
+
+				// ??i t?t c? email g?i xong
+				await Task.WhenAll(emailTasks);
+
+				_logger.LogInformation("?? Completed sending customer emails for notification {NotificationId} to {CustomerCount} customers ({EmailCount} emails)", 
+					notification.Id, customersWithEmail.Count, emailTasks.Count);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "?? Error in SendCustomerEmailNotificationsAsync for notification {NotificationId}", notification.Id);
 			}
 		}
 

@@ -1,4 +1,4 @@
-using erp_backend.Data;
+Ôªøusing erp_backend.Data;
 using erp_backend.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
@@ -37,10 +37,10 @@ namespace erp_backend.Services
 			{
 				// Validate input
 				if (request.Month < 1 || request.Month > 12)
-					throw new ArgumentException("Th·ng ph?i t? 1-12");
+					throw new ArgumentException("Th√°ng ph?i t? 1-12");
 
 				if (request.Year < 2020 || request.Year > 2100)
-					throw new ArgumentException("N?m khÙng h?p l?");
+					throw new ArgumentException("N?m kh√¥ng h?p l?");
 
 				// 1. Build report data from database
 				var reportData = await BuildReportDataAsync(request);
@@ -51,7 +51,7 @@ namespace erp_backend.Services
 				var pdfBytes = await _pdfService.ConvertHtmlToPdfAsync(htmlContent);
 
 				_logger.LogInformation(
-					"?„ t?o b·o c·o l??ng PDF cho th·ng {Month}/{Year}. Size: {Size} bytes",
+					"?√£ t?o b√°o c√°o l??ng PDF cho th√°ng {Month}/{Year}. Size: {Size} bytes",
 					request.Month,
 					request.Year,
 					pdfBytes.Length
@@ -61,7 +61,7 @@ namespace erp_backend.Services
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "L?i khi t?o b·o c·o l??ng PDF th·ng {Month}/{Year}", request.Month, request.Year);
+				_logger.LogError(ex, "L?i khi t?o b√°o c√°o l??ng PDF th√°ng {Month}/{Year}", request.Month, request.Year);
 				throw;
 			}
 		}
@@ -72,10 +72,10 @@ namespace erp_backend.Services
 			{
 				// Validate input
 				if (request.Month < 1 || request.Month > 12)
-					throw new ArgumentException("Th·ng ph?i t? 1-12");
+					throw new ArgumentException("Th√°ng ph?i t? 1-12");
 
 				if (request.Year < 2020 || request.Year > 2100)
-					throw new ArgumentException("N?m khÙng h?p l?");
+					throw new ArgumentException("N?m kh√¥ng h?p l?");
 
 				// 1. Build report data from database
 				var reportData = await BuildReportDataAsync(request);
@@ -84,7 +84,7 @@ namespace erp_backend.Services
 				var html = await GenerateHtmlFromTemplateAsync(reportData);
 
 				_logger.LogInformation(
-					"?„ t?o HTML preview b·o c·o l??ng cho th·ng {Month}/{Year}",
+					"?√£ t?o HTML preview b√°o c√°o l??ng cho th√°ng {Month}/{Year}",
 					request.Month,
 					request.Year
 				);
@@ -93,7 +93,7 @@ namespace erp_backend.Services
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "L?i khi t?o HTML preview b·o c·o l??ng th·ng {Month}/{Year}", request.Month, request.Year);
+				_logger.LogError(ex, "L?i khi t?o HTML preview b√°o c√°o l??ng th√°ng {Month}/{Year}", request.Month, request.Year);
 				throw;
 			}
 		}
@@ -104,7 +104,7 @@ namespace erp_backend.Services
 			var templatePath = Path.Combine(_env.WebRootPath, "Templates", "SalaryReportTemplate.html");
 			if (!File.Exists(templatePath))
 			{
-				throw new FileNotFoundException($"Template khÙng tÏm th?y: {templatePath}");
+				throw new FileNotFoundException($"Template kh√¥ng t√¨m th?y: {templatePath}");
 			}
 
 			var htmlTemplate = await File.ReadAllTextAsync(templatePath, Encoding.UTF8);
@@ -165,13 +165,13 @@ namespace erp_backend.Services
 
 		private async Task<SalaryReportDto> BuildReportDataAsync(GenerateSalaryReportRequest request)
 		{
-			// Load payslips v?i thÙng tin user
+			// Load payslips v?i th√¥ng tin user
 			var query = _context.Payslips
 				.Include(p => p.User)
 					.ThenInclude(u => u!.Department)
 				.Where(p => p.Month == request.Month && p.Year == request.Year);
 
-			// Filter theo phÚng ban n?u cÛ
+			// Filter theo ph√≤ng ban n?u c√≥
 			if (request.DepartmentId.HasValue)
 			{
 				query = query.Where(p => p.User!.DepartmentId == request.DepartmentId.Value);
@@ -181,7 +181,7 @@ namespace erp_backend.Services
 
 			if (payslips.Count == 0)
 			{
-				throw new InvalidOperationException($"KhÙng cÛ d? li?u phi?u l??ng th·ng {request.Month}/{request.Year}");
+				throw new InvalidOperationException($"Kh√¥ng c√≥ d·ªØ li·ªáu l∆∞∆°ng th√°ng {request.Month}/{request.Year}");
 			}
 
 			// Load SalaryContracts ?? l?y BaseSalary
@@ -190,7 +190,7 @@ namespace erp_backend.Services
 				.Where(c => userIds.Contains(c.UserId))
 				.ToDictionaryAsync(c => c.UserId, c => c);
 
-			// Load SalaryComponents ?? tÌnh ph? c?p, th??ng, kh?u tr?
+			// Load SalaryComponents ?? t√≠nh ph? c?p, th??ng, kh?u tr?
 			var components = await _context.SalaryComponents
 				.Where(c => userIds.Contains(c.UserId)
 					&& c.Month == request.Month
@@ -217,17 +217,17 @@ namespace erp_backend.Services
 					? componentsByUser[payslip.UserId]
 					: new List<Models.SalaryComponent>();
 
-				// TÌnh Ph? c?p (c·c kho?n IN lo?i Allowance)
+				// T√≠nh Ph? c?p (c√°c kho?n IN lo?i Allowance)
 				var allowance = userComponents
 					.Where(c => c.Type.ToLower() == "in" && c.Reason.ToLower().Contains("ph? c?p"))
 					.Sum(c => c.Amount);
 
-				// TÌnh Th??ng (c·c kho?n IN khÙng ph?i ph? c?p)
+				// T√≠nh Th??ng (c√°c kho?n IN kh√¥ng ph?i ph? c?p)
 				var bonus = userComponents
 					.Where(c => c.Type.ToLower() == "in" && !c.Reason.ToLower().Contains("ph? c?p"))
 					.Sum(c => c.Amount);
 
-				// TÌnh Kh?u tr? (c·c kho?n OUT + b?o hi?m + thu?)
+				// T√≠nh Kh?u tr? (c√°c kho?n OUT + b?o hi?m + thu?)
 				var deduction = userComponents
 					.Where(c => c.Type.ToLower() == "out")
 					.Sum(c => c.Amount)
@@ -245,8 +245,8 @@ namespace erp_backend.Services
 				});
 			}
 
-			// L?y tÍn phÚng ban
-			string departmentName = "T?t c? phÚng ban";
+			// L?y t√™n ph√≤ng ban
+			string departmentName = "T?t c? ph√≤ng ban";
 			if (request.DepartmentId.HasValue)
 			{
 				var dept = await _context.Departments.FindAsync(request.DepartmentId.Value);
@@ -256,7 +256,7 @@ namespace erp_backend.Services
 			// Build report DTO
 			var report = new SalaryReportDto
 			{
-				PayPeriod = $"Th·ng {request.Month:00}/{request.Year}",
+				PayPeriod = $"Th√°ng {request.Month:00}/{request.Year}",
 				Department = departmentName,
 				ReportDate = DateTime.Now.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
 				CreatedBy = request.CreatedByName,

@@ -755,6 +755,116 @@ namespace erp_backend.Controllers
 				.ToListAsync();
 		}
 
+		/// <summary>
+		/// Lấy danh sách khách hàng đã có ít nhất 1 hợp đồng có trạng thái 'Paid'
+		/// GET: api/Customers/with-paid-contracts
+		/// </summary>
+		[HttpGet("with-paid-contracts")]
+		[Authorize]
+		public async Task<ActionResult<IEnumerable<object>>> GetCustomersWithPaidContracts()
+		{
+			try
+			{
+				// Lấy role từ JWT token
+				var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role);
+				var role = roleClaim?.Value;
+
+				// Lấy UserId từ JWT token
+				var userIdClaim = User.FindFirst("userid")?.Value;
+
+				// Query customers có ít nhất 1 contract với Status = "Paid"
+				var query = _context.Customers
+					.Include(c => c.CreatedByUser)
+					.Where(c => _context.SaleOrders
+						.Any(so => so.CustomerId == c.Id && 
+							_context.Contracts.Any(contract => 
+								contract.SaleOrderId == so.Id && 
+								contract.Status.ToLower() == "paid"
+							)
+						)
+					);
+
+				// Nếu role là "user" thì chỉ lấy khách hàng do user đó tạo
+				if (role != null && role.ToLower() == "user")
+				{
+					if (userIdClaim != null && int.TryParse(userIdClaim, out int userId))
+					{
+						query = query.Where(c => c.CreatedByUserId == userId);
+						_logger.LogInformation("User role detected. Filtering customers with paid contracts for UserId: {UserId}", userId);
+					}
+					else
+					{
+						_logger.LogWarning("User role detected but UserId claim not found");
+						return Forbid();
+					}
+				}
+				else if (role != null && role.ToLower() == "admin")
+				{
+					_logger.LogInformation("Admin role detected. Returning all customers with paid contracts");
+				}
+				else
+				{
+					_logger.LogWarning("Invalid or missing role: {Role}", role);
+					return Forbid();
+				}
+
+				// Lấy danh sách customers và đếm số hợp đồng đã thanh toán
+				var customersWithPaidContracts = await query
+					.Select(c => new
+					{
+						Id = c.Id,
+						Name = c.Name,
+						CompanyName = c.CompanyName,
+						Email = c.Email,
+						PhoneNumber = c.PhoneNumber,
+						CustomerType = c.CustomerType,
+						IsActive = c.IsActive,
+						Status = c.Status,
+						CreatedAt = c.CreatedAt,
+						CreatedByUserId = c.CreatedByUserId,
+						CreatedByUserName = c.CreatedByUser != null ? c.CreatedByUser.Name : null,
+						// Đếm số hợp đồng đã thanh toán
+						PaidContractsCount = _context.SaleOrders
+							.Where(so => so.CustomerId == c.Id)
+							.SelectMany(so => _context.Contracts.Where(contract => 
+								contract.SaleOrderId == so.Id && 
+								contract.Status.ToLower() == "paid"
+							))
+							.Count(),
+						// Tổng giá trị các hợp đồng đã thanh toán
+						TotalPaidAmount = _context.SaleOrders
+							.Where(so => so.CustomerId == c.Id)
+							.SelectMany(so => _context.Contracts.Where(contract => 
+								contract.SaleOrderId == so.Id && 
+								contract.Status.ToLower() == "paid"
+							))
+							.Sum(contract => contract.TotalAmount)
+					})
+					.OrderByDescending(c => c.PaidContractsCount)
+					.ThenByDescending(c => c.TotalPaidAmount)
+					.ToListAsync();
+
+				_logger.LogInformation("Found {Count} customers with paid contracts", customersWithPaidContracts.Count);
+
+				return Ok(new
+				{
+					success = true,
+					totalCustomers = customersWithPaidContracts.Count,
+					data = customersWithPaidContracts
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting customers with paid contracts");
+				return StatusCode(500, new 
+				{ 
+					success = false,
+					message = "Lỗi server khi lấy danh sách khách hàng có hợp đồng đã thanh toán", 
+					error = ex.Message 
+				});
+			}
+		}
+
 		private bool CustomerExists(int id)
 		{
 			return _context.Customers.Any(e => e.Id == id);

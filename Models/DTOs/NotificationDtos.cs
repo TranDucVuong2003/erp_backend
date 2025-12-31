@@ -3,29 +3,29 @@ using System.ComponentModel.DataAnnotations;
 namespace erp_backend.Models.DTOs
 {
 	/// <summary>
-	/// DTO ?? t?o thông báo m?i
+	/// DTO ?? t?o th?ng b?o m?i
 	/// </summary>
 	public class CreateNotificationDto
 	{
-		[Required(ErrorMessage = "Tiêu ?? không ???c ?? tr?ng")]
+		[Required(ErrorMessage = "Ti?u ?? kh?ng ???c ?? tr?ng")]
 		[StringLength(200)]
 		public string Title { get; set; } = string.Empty;
 
-		[Required(ErrorMessage = "N?i dung không ???c ?? tr?ng")]
+		[Required(ErrorMessage = "N?i dung kh?ng ???c ?? tr?ng")]
 		[StringLength(2000)]
 		public string Content { get; set; } = string.Empty;
 
 		/// <summary>
-		/// Target: All, Role, Department, Specific
+		/// Target: All, Customer, Department, Specific
 		/// </summary>
 		[Required]
 		[StringLength(50)]
 		public string TargetType { get; set; } = "All";
 
 		/// <summary>
-		/// Danh sách UserIds (n?u TargetType = Specific)
-		/// Danh sách RoleIds (n?u TargetType = Role)
-		/// Danh sách DepartmentIds (n?u TargetType = Department)
+		/// Danh s?ch UserIds (n?u TargetType = Specific)
+		/// Danh s?ch CustomerIds (n?u TargetType = Customer)
+		/// Danh s?ch DepartmentIds (n?u TargetType = Department)
 		/// </summary>
 		public List<int>? TargetIds { get; set; }
 	}
