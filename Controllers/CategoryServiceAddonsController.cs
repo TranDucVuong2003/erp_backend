@@ -8,6 +8,7 @@ namespace erp_backend.Controllers
 {
 	[ApiController]
 	[Route("api/[controller]")]
+	//[Authorize(Roles = "Admin")]
 	public class CategoryServiceAddonsController : ControllerBase
 	{
 		private readonly ApplicationDbContext _context;
@@ -21,7 +22,7 @@ namespace erp_backend.Controllers
 
 		// GET: api/CategoryServiceAddons
 		[HttpGet]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<IEnumerable<object>>> GetCategories()
 		{
 			var categories = await _context.CategoryServiceAddons
@@ -44,7 +45,7 @@ namespace erp_backend.Controllers
 
 		// GET: api/CategoryServiceAddons/5
 		[HttpGet("{id}")]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<object>> GetCategory(int id)
 		{
 			var category = await _context.CategoryServiceAddons

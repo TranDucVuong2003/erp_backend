@@ -17,15 +17,18 @@ namespace erp_backend.Controllers
         private readonly ApplicationDbContext _context;
         private readonly JwtService _jwtService;
         private readonly ILogger<AuthController> _logger;
+        private readonly IAccountActivationService _activationService;
 
         public AuthController(
             ApplicationDbContext context,
             JwtService jwtService,
-            ILogger<AuthController> logger)
+            ILogger<AuthController> logger,
+            IAccountActivationService activationService)
         {
             _context = context;
             _jwtService = jwtService;
             _logger = logger;
+            _activationService = activationService;
         }
 
         [HttpPost("login")]
@@ -41,21 +44,50 @@ namespace erp_backend.Controllers
 
                 // Find user
                 var user = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.Position)
+                    .Include(u => u.Department)
                     .FirstOrDefaultAsync(u => u.Email == request.Email);
 
                 if (user == null)
                 {
-                    return Unauthorized(new { message = "Email hoặc mật khẩu không chính xác" });
+                    return BadRequest(new { message = "Email hoặc mật khẩu không chính xác" });
                 }
 
                 // Verify password
                 if (!BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
                 {
-                    return Unauthorized(new { message = "Email hoặc mật khẩu không chính xác" });
+                    return BadRequest(new { message = "Email hoặc mật khẩu không chính xác" });
                 }
 
-                // Generate tokens
-                var accessToken = _jwtService.GenerateAccessToken(user);
+                // Check if user account is active
+                if (user.Status != "active")
+                {
+                    return BadRequest(new { message = "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để được hỗ trợ." });
+                }
+
+                // Check or create ActiveAccount record
+                var activeAccount = await _context.ActiveAccounts
+                    .FirstOrDefaultAsync(a => a.UserId == user.Id);
+
+                string message = "Đăng nhập thành công";
+                
+                if (activeAccount.FirstLogin == true)
+                {
+
+                    message = "Bạn phải đổi mật khẩu trước khi đăng nhập vào hệ thống";
+                }
+                else if(activeAccount.FirstLogin.ToString() == "")
+                {
+                    message = "Bạn phải đổi mật khẩu trước khi đăng nhập vào hệ thống";
+                }
+                else
+                {
+					message = "Đăng nhập thành công.";
+				}
+
+                    // Generate tokens
+                    var accessToken = _jwtService.GenerateAccessToken(user);
                 var refreshToken = _jwtService.GenerateRefreshToken();
                 var expiresAt = DateTime.UtcNow.AddDays(7);
 
@@ -81,13 +113,16 @@ namespace erp_backend.Controllers
                 {
                     AccessToken = accessToken,
                     ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtService.AccessTokenExpiryMinutes),
+                    FirstLogin = activeAccount.FirstLogin,
+                    Message = message,
                     User = new UserInfo
                     {
                         Id = user.Id,
                         Name = user.Name,
                         Email = user.Email,
-                        Position = user.Position,
-                        Role = user.Role
+                        Position = user.Position?.PositionName ?? string.Empty,
+                        Role = user.Role?.Name ?? string.Empty,
+                        Status = user.Status
                     }
                 };
 
@@ -115,6 +150,11 @@ namespace erp_backend.Controllers
                 // Get the stored token
                 var storedToken = await _context.JwtTokens
                     .Include(t => t.User)
+                        .ThenInclude(u => u.Role)
+                    .Include(t => t.User)
+                        .ThenInclude(u => u.Position)
+                    .Include(t => t.User)
+                        .ThenInclude(u => u.Department)
                     .FirstOrDefaultAsync(t => 
                         t.Token == refreshToken && 
                         t.Expiration > DateTime.UtcNow && 
@@ -131,6 +171,18 @@ namespace erp_backend.Controllers
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User không tồn tại" });
+                }
+
+                // Check if user account is active
+                if (user.Status != "active")
+                {
+                    // Revoke the current token
+                    storedToken.IsRevoked = true;
+                    storedToken.RevokedAt = DateTime.UtcNow;
+                    storedToken.ReasonRevoked = "User account is inactive";
+                    await _context.SaveChangesAsync();
+                    
+                    return Unauthorized(new { message = "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin để được hỗ trợ." });
                 }
 
                 // Generate new tokens
@@ -213,33 +265,59 @@ namespace erp_backend.Controllers
             }
         }
 
-        [HttpGet("sessions")]
-        [Authorize]
-        public async Task<ActionResult<IEnumerable<SessionInfo>>> GetUserSessions()
+        [HttpGet("admin/all-sessions")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<IEnumerable<SessionInfo>>> GetAllSessions(
+            [FromQuery] int? userId = null,
+            [FromQuery] bool includeRevoked = false,
+            [FromQuery] bool includeExpired = false)
         {
             try
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userId))
+                var query = _context.JwtTokens
+                    .Include(t => t.User)
+                        .ThenInclude(u => u.Role)
+                    .AsQueryable();
+
+                // Filter by specific user if provided
+                if (userId.HasValue)
                 {
-                    return Unauthorized(new { message = "User không xác định" });
+                    query = query.Where(t => t.UserId == userId.Value);
+                }
+
+                // Filter revoked sessions
+                if (!includeRevoked)
+                {
+                    query = query.Where(t => !t.IsRevoked);
+                }
+
+                // Filter expired sessions
+                if (!includeExpired)
+                {
+                    query = query.Where(t => t.Expiration > DateTime.UtcNow);
                 }
 
                 var currentRefreshToken = Request.Cookies["refreshToken"];
 
-                var sessions = await _context.JwtTokens
-                    .Where(t => 
-                        t.UserId.ToString() == userId && 
-                        !t.IsRevoked && 
-                        t.Expiration > DateTime.UtcNow)
+                var sessions = await query
                     .OrderByDescending(t => t.CreatedAt)
                     .Select(t => new SessionInfo
                     {
                         Id = t.Id,
+                        UserId = t.UserId,
+                        UserName = t.User != null ? t.User.Name : string.Empty,
+                        UserEmail = t.User != null ? t.User.Email : string.Empty,
+                        UserRole = t.User != null && t.User.Role != null ? t.User.Role.Name : string.Empty,
                         DeviceInfo = t.DeviceInfo ?? "Unknown Device",
                         IpAddress = t.IpAddress ?? "Unknown IP",
+                        UserAgent = t.UserAgent,
                         CreatedAt = t.CreatedAt,
                         ExpiresAt = t.Expiration,
+                        IsUsed = t.IsUsed,
+                        IsRevoked = t.IsRevoked,
+                        RevokedAt = t.RevokedAt,
+                        ReasonRevoked = t.ReasonRevoked,
+                        IsActive = !t.IsRevoked && t.Expiration > DateTime.UtcNow,
                         IsCurrentSession = t.Token == currentRefreshToken
                     })
                     .ToListAsync();
@@ -248,94 +326,309 @@ namespace erp_backend.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving user sessions");
-                return StatusCode(500, new { message = "Lỗi server khi lấy thông tin phiên đăng nhập", error = ex.Message });
+                _logger.LogError(ex, "Error retrieving all sessions");
+                return StatusCode(500, new { message = "Lỗi server khi lấy thông tin tất cả phiên đăng nhập", error = ex.Message });
             }
         }
 
-        [HttpPost("revoke-session/{id}")]
-        [Authorize]
-        public async Task<ActionResult> RevokeSession(int id)
+        [HttpPost("admin/revoke-session/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult> AdminRevokeSession(int id, [FromBody] RevokeSessionRequest? request = null)
         {
             try
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return Unauthorized(new { message = "User không xác định" });
-                }
-
                 var session = await _context.JwtTokens
-                    .FirstOrDefaultAsync(t => 
-                        t.Id == id && 
-                        t.UserId.ToString() == userId);
+                    .Include(t => t.User)
+                    .FirstOrDefaultAsync(t => t.Id == id);
 
                 if (session == null)
                 {
                     return NotFound(new { message = "Không tìm thấy phiên đăng nhập" });
                 }
 
-                // Check if it's current session
-                var currentRefreshToken = Request.Cookies["refreshToken"];
-                if (session.Token == currentRefreshToken)
-                {
-                    return BadRequest(new { message = "Không thể thu hồi phiên đăng nhập hiện tại. Hãy đăng xuất." });
-                }
-
                 session.IsRevoked = true;
                 session.RevokedAt = DateTime.UtcNow;
-                session.ReasonRevoked = "Manually revoked by user";
+                session.ReasonRevoked = request?.Reason ?? "Revoked by admin";
                 await _context.SaveChangesAsync();
 
-                return Ok(new { message = "Thu hồi phiên đăng nhập thành công" });
+                return Ok(new 
+                { 
+                    message = "Thu hồi phiên đăng nhập thành công",
+                    session = new
+                    {
+                        id = session.Id,
+                        userId = session.UserId,
+                        userName = session.User?.Name,
+                        deviceInfo = session.DeviceInfo,
+                        revokedAt = session.RevokedAt
+                    }
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error revoking session");
+                _logger.LogError(ex, "Error revoking session by admin");
                 return StatusCode(500, new { message = "Lỗi server khi thu hồi phiên đăng nhập", error = ex.Message });
             }
         }
 
-        [HttpPost("revoke-all-sessions")]
-        [Authorize]
-        public async Task<ActionResult> RevokeAllSessions()
+        [HttpGet("verify-activation-token")]
+        [AllowAnonymous]
+        public async Task<ActionResult> VerifyActivationToken([FromQuery] string token)
         {
             try
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userId))
+                if (string.IsNullOrEmpty(token))
                 {
-                    return Unauthorized(new { message = "User không xác định" });
+                    return BadRequest(new { message = "Token không được để trống" });
                 }
 
-                var currentRefreshToken = Request.Cookies["refreshToken"];
+                var (isValid, user, message) = await _activationService.ValidateAndActivateTokenAsync(token);
 
-                // Get all active sessions except current one
-                var sessions = await _context.JwtTokens
-                    .Where(t => 
-                        t.UserId.ToString() == userId && 
-                        !t.IsRevoked &&
-                        t.Token != currentRefreshToken)
+                if (!isValid)
+                {
+                    return BadRequest(new { message });
+                }
+
+                // Trả về thông tin user để frontend hiển thị
+                return Ok(new
+                {
+                    message = "Token hợp lệ",
+                    user = new
+                    {
+                        email = user!.Email,
+                        name = user.Name,
+                        firstLogin = true // Để frontend biết cần đổi mật khẩu
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error verifying activation token");
+                return StatusCode(500, new { message = "Lỗi server khi xác thực token" });
+            }
+        }
+
+        [HttpPost("change-password-first-time")]
+        [Authorize]
+        public async Task<ActionResult> ChangePasswordFirstTime([FromBody] ChangePasswordFirstTimeRequest request)
+        {
+            try
+            {
+                // Lấy user ID từ JWT token
+                var userIdClaim = User.FindFirst("userid")?.Value;
+                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+                {
+                    return Unauthorized(new { message = "Không tìm thấy thông tin người dùng" });
+                }
+
+                // Validate request
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                if (string.IsNullOrEmpty(request.NewPassword))
+                {
+                    return BadRequest(new { message = "Mật khẩu mới không được để trống" });
+                }
+
+                if (request.NewPassword.Length < 8)
+                {
+                    return BadRequest(new { message = "Mật khẩu phải có ít nhất 8 ký tự" });
+                }
+
+                // Tìm user
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null)
+                {
+                    return NotFound(new { message = "Không tìm thấy người dùng" });
+                }
+
+                // Kiểm tra ActiveAccount
+                var activeAccount = await _context.ActiveAccounts
+                    .FirstOrDefaultAsync(a => a.UserId == userId);
+
+                if (activeAccount == null)
+                {
+                    return BadRequest(new { message = "Không tìm thấy thông tin kích hoạt tài khoản" });
+                }
+
+                if (!activeAccount.FirstLogin)
+                {
+                    return BadRequest(new { message = "Tài khoản đã được kích hoạt trước đó" });
+                }
+
+                // Cập nhật mật khẩu
+                user.Password = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                user.UpdatedAt = DateTime.UtcNow;
+
+                // Đánh dấu không còn là lần đăng nhập đầu
+                activeAccount.FirstLogin = false;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("User {UserId} changed password on first login", userId);
+
+                return Ok(new
+                {
+                    message = "Đổi mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password on first login");
+                return StatusCode(500, new { message = "Lỗi server khi đổi mật khẩu" });
+            }
+        }
+
+        /// <summary>
+        /// API yêu cầu gửi OTP để đổi mật khẩu
+        /// POST /api/auth/request-change-password-otp
+        /// </summary>
+        [HttpPost("request-change-password-otp")]
+        [AllowAnonymous]
+        public async Task<ActionResult> RequestChangePasswordOtp([FromBody] RequestChangePasswordOtpRequest request)
+        {
+            try
+            {
+                // Validate request
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                // Tìm user
+                var user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Email == request.Email);
+
+                if (user == null)
+                {
+                    // Không trả về lỗi cụ thể để tránh lộ thông tin
+                    _logger.LogWarning("OTP request for non-existent email: {Email}", request.Email);
+                    return Ok(new RequestChangePasswordOtpResponse
+                    {
+                        Message = "Nếu email tồn tại trong hệ thống, mã OTP đã được gửi",
+                        ExpiresAt = DateTime.UtcNow.AddMinutes(5),
+                        Email = request.Email
+                    });
+                }
+
+                // Inject IPasswordResetOtpService và IEmailService
+                var otpService = HttpContext.RequestServices.GetRequiredService<IPasswordResetOtpService>();
+                var emailService = HttpContext.RequestServices.GetRequiredService<IEmailService>();
+
+                // Lấy IP và User Agent
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                var userAgent = Request.Headers["User-Agent"].ToString();
+
+                // Tạo OTP
+                var (success, otp, expiresAt, message) = await otpService.GenerateOtpAsync(
+                    request.Email, 
+                    ipAddress, 
+                    userAgent
+                );
+
+                if (!success)
+                {
+                    return StatusCode(500, new { message });
+                }
+
+                // Gửi email OTP
+                await emailService.SendPasswordResetOtpAsync(
+                    request.Email,
+                    user.Name,
+                    otp,
+                    expiresAt
+                );
+
+                _logger.LogInformation("OTP requested successfully for email: {Email}", request.Email);
+
+                return Ok(new RequestChangePasswordOtpResponse
+                {
+                    Message = "Mã OTP đã được gửi đến email của bạn",
+                    ExpiresAt = expiresAt,
+                    Email = request.Email
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error requesting OTP for email: {Email}", request.Email);
+                return StatusCode(500, new { message = "Lỗi server khi yêu cầu OTP" });
+            }
+        }
+
+        /// <summary>
+        /// API xác thực OTP và đổi mật khẩu
+        /// POST /api/auth/verify-otp-and-change-password
+        /// </summary>
+        [HttpPost("verify-otp-and-change-password")]
+        [AllowAnonymous]
+        public async Task<ActionResult> VerifyOtpAndChangePassword([FromBody] VerifyOtpAndChangePasswordRequest request)
+        {
+            try
+            {
+                // Validate request
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                // Inject IPasswordResetOtpService
+                var otpService = HttpContext.RequestServices.GetRequiredService<IPasswordResetOtpService>();
+
+                // Xác thực OTP
+                var (isValid, message) = await otpService.ValidateOtpAsync(request.Email, request.Otp);
+
+                if (!isValid)
+                {
+                    return BadRequest(new { message });
+                }
+
+                // Tìm user
+                var user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Email == request.Email);
+
+                if (user == null)
+                {
+                    return NotFound(new { message = "Không tìm thấy người dùng" });
+                }
+
+                // Cập nhật mật khẩu
+                user.Password = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                user.UpdatedAt = DateTime.UtcNow;
+
+                // Đánh dấu OTP đã sử dụng
+                await otpService.MarkOtpAsUsedAsync(request.Email, request.Otp);
+
+                // Hủy tất cả các session đang hoạt động của user (để bắt buộc đăng nhập lại)
+                var activeSessions = await _context.JwtTokens
+                    .Where(t => t.UserId == user.Id && !t.IsRevoked && t.Expiration > DateTime.UtcNow)
                     .ToListAsync();
 
-                // Revoke all sessions
-                foreach (var session in sessions)
+                foreach (var session in activeSessions)
                 {
                     session.IsRevoked = true;
                     session.RevokedAt = DateTime.UtcNow;
-                    session.ReasonRevoked = "Manually revoked by user (bulk action)";
+                    session.ReasonRevoked = "Password changed - security measure";
                 }
 
                 await _context.SaveChangesAsync();
 
-                return Ok(new { message = $"Đã thu hồi {sessions.Count} phiên đăng nhập" });
+                _logger.LogInformation("Password changed successfully for user {UserId} via OTP", user.Id);
+
+                return Ok(new ChangePasswordResponse
+                {
+                    Message = "Đổi mật khẩu thành công. Vui lòng đăng nhập lại với mật khẩu mới",
+                    ChangedAt = DateTime.UtcNow
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error revoking all sessions");
-                return StatusCode(500, new { message = "Lỗi server khi thu hồi tất cả phiên đăng nhập", error = ex.Message });
+                _logger.LogError(ex, "Error verifying OTP and changing password for email: {Email}", request.Email);
+                return StatusCode(500, new { message = "Lỗi server khi đổi mật khẩu" });
             }
         }
+
 
         private void SetRefreshTokenCookie(string token, DateTime expires)
         {

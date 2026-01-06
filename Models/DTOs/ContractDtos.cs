@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace erp_backend.Models.DTOs
 {
@@ -6,23 +6,26 @@ namespace erp_backend.Models.DTOs
     
     public class CreateContractRequest
     {
-        [Required(ErrorMessage = "SaleOrderId l� b?t bu?c")]
+        [Required(ErrorMessage = "SaleOrderId là b?t bu?c")]
         public int SaleOrderId { get; set; }
 
-        [Required(ErrorMessage = "UserId l� b?t bu?c")]
+        [Required(ErrorMessage = "UserId là b?t bu?c")]
         public int UserId { get; set; }
 
-        [StringLength(50, ErrorMessage = "Status kh�ng ???c v??t qu� 50 k� t?")]
-        public string Status { get; set; } = "Draft";
+        [StringLength(50, ErrorMessage = "Status không ???c v??t quá 50 ký t?")]
+        public string Status { get; set; } = "Mới";
 
-        [StringLength(50, ErrorMessage = "PaymentMethod kh�ng ???c v??t qu� 50 k� t?")]
+        [StringLength(50, ErrorMessage = "PaymentMethod không ???c v??t quá 50 ký t?")]
         public string? PaymentMethod { get; set; }
 
-        [Required(ErrorMessage = "Expiration l� b?t bu?c")]
+        [Required(ErrorMessage = "Expiration là b?t bu?c")]
         public DateTime Expiration { get; set; }
 
-        [StringLength(2000, ErrorMessage = "Notes kh�ng ???c v??t qu� 2000 k� t?")]
+        [StringLength(2000, ErrorMessage = "Notes không ???c v??t quá 2000 ký t?")]
         public string? Notes { get; set; }
+
+        // 💡 THÊM: Đánh dấu có xuất hóa đơn hay không
+        public bool ExtractInvoices { get; set; } = false;
     }
 
     // ===== RESPONSE DTOs =====
@@ -34,6 +37,7 @@ namespace erp_backend.Models.DTOs
         public SaleOrderBasicDto? SaleOrder { get; set; }
         public int UserId { get; set; }
         public UserBasicDto? User { get; set; }
+        public int NumberContract { get; set; }
         public string Status { get; set; } = string.Empty;
         public string? PaymentMethod { get; set; }
         public decimal SubTotal { get; set; }
@@ -41,6 +45,7 @@ namespace erp_backend.Models.DTOs
         public decimal TotalAmount { get; set; }
         public DateTime Expiration { get; set; }
         public string? Notes { get; set; }
+        public bool ExtractInvoices { get; set; } // 💡 THÊM
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }
@@ -54,10 +59,12 @@ namespace erp_backend.Models.DTOs
         public string CustomerName { get; set; } = string.Empty;
         public int UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
+        public int NumberContract { get; set; }
         public string Status { get; set; } = string.Empty;
         public string? PaymentMethod { get; set; }
         public decimal TotalAmount { get; set; }
         public DateTime Expiration { get; set; }
+        public bool ExtractInvoices { get; set; } // 💡 THÊM
         public DateTime CreatedAt { get; set; }
     }
 
@@ -71,6 +78,7 @@ namespace erp_backend.Models.DTOs
         public CustomerBasicDto? Customer { get; set; }
         public decimal Value { get; set; }
         public int Probability { get; set; }
+        public string? Notes { get; set; }
         public int? TaxId { get; set; }
         public TaxBasicDto? Tax { get; set; }
         public List<ServiceItemDto> Services { get; set; } = new();
@@ -96,7 +104,7 @@ namespace erp_backend.Models.DTOs
     public class TaxBasicDto
     {
         public int Id { get; set; }
-        public decimal Rate { get; set; }
+        public float Rate { get; set; }
     }
 
     public class ServiceItemDto
@@ -107,6 +115,8 @@ namespace erp_backend.Models.DTOs
         public int? Quantity { get; set; }
         public int? Duration { get; set; }
         public string? Template { get; set; }
+        public int? TaxId { get; set; }
+        public TaxBasicDto? Tax { get; set; }
     }
 
     public class AddonItemDto
@@ -117,5 +127,7 @@ namespace erp_backend.Models.DTOs
         public int? Quantity { get; set; }
         public int? Duration { get; set; }
         public string? Template { get; set; }
+        public int? TaxId { get; set; }
+        public TaxBasicDto? Tax { get; set; }
     }
 }

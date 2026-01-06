@@ -93,5 +93,9 @@ namespace erp_backend.Models
 
 		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 		public DateTime? UpdatedAt { get; set; }
+
+		// Tracking user who created this customer
+		public int? CreatedByUserId { get; set; }
+		public User? CreatedByUser { get; set; }
 	}
 }

@@ -4,12 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
-using IronPdf;
 
 namespace erp_backend.Controllers
 {
 	[ApiController]
 	[Route("api/[controller]")]
+	[Authorize]
 	public class SaleOrdersController : ControllerBase
 	{
 		private readonly ApplicationDbContext _context;
@@ -21,19 +21,54 @@ namespace erp_backend.Controllers
 			_logger = logger;
 		}
 
-		// Lấy danh sách tất cả sale orders
+		// L?y danh sách t?t c? sale orders
 		[HttpGet]
 		[Authorize]
 		public async Task<ActionResult<IEnumerable<object>>> GetSaleOrders()
 		{
-			var saleOrders = await _context.SaleOrders
+			// Lấy role từ JWT token
+			var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role);
+			var role = roleClaim?.Value;
+
+			// Lấy UserId từ JWT token
+			var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == "userid");
+			
+			var query = _context.SaleOrders
 				.Include(so => so.SaleOrderServices)
 					.ThenInclude(sos => sos.Service)
 				.Include(so => so.SaleOrderAddons)
 					.ThenInclude(soa => soa.Addon)
 				.Include(so => so.Customer)
-				.Include(so => so.Tax)
-				.ToListAsync();
+				.Include(so => so.CreatedByUser)
+				.AsQueryable();
+
+			// Nếu role là "user" thì chỉ lấy sale orders do user đó tạo
+			if (role != null && role.ToLower() == "user")
+			{
+				if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+				{
+					query = query.Where(so => so.CreatedByUserId == userId);
+					_logger.LogInformation($"User role detected. Filtering sale orders for UserId: {userId}");
+				}
+				else
+				{
+					_logger.LogWarning("User role detected but UserId claim not found");
+					return Forbid();
+				}
+			}
+			else if (role != null && role.ToLower() == "admin")
+			{
+				// Admin có thể xem tất cả sale orders
+				_logger.LogInformation("Admin role detected. Returning all sale orders");
+			}
+			else
+			{
+				// Nếu không có role hoặc role không hợp lệ
+				_logger.LogWarning($"Invalid or missing role: {role}");
+				return Forbid();
+			}
+
+			var saleOrders = await query.ToListAsync();
 
 			// Map sang response có đầy đủ thông tin
 			var response = saleOrders.Select(so => new
@@ -41,13 +76,21 @@ namespace erp_backend.Controllers
 				so.Id,
 				so.Title,
 				so.CustomerId,
-				Customer = so.Customer != null ? new { so.Customer.Id, so.Customer.Name } : null,
+				Customer = so.Customer != null ? new { 
+					so.Customer.Id, 
+					Name = so.Customer.CustomerType == "company" 
+						? so.Customer.CompanyName 
+						: so.Customer.Name,
+					so.Customer.CustomerType
+				} : null,
 				so.Value,
 				so.Probability,
-				so.TaxId,
-				Tax = so.Tax != null ? new { so.Tax.Id, so.Tax.Rate } : null,
+				so.Status,
+				so.Notes,
 				so.CreatedAt,
 				so.UpdatedAt,
+				so.CreatedByUserId,
+				CreatedByUser = so.CreatedByUser != null ? new { so.CreatedByUser.Id, so.CreatedByUser.Name } : null,
 				SaleOrderServices = so.SaleOrderServices.Select(sos => new
 				{
 					sos.ServiceId,
@@ -69,9 +112,9 @@ namespace erp_backend.Controllers
 			return Ok(response);
 		}
 
-		// Lấy sale orders theo customer ID
+		// L?y sale orders theo customer ID
 		[HttpGet("by-customer/{customerId}")]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<IEnumerable<object>>> GetSaleOrdersByCustomer(int customerId)
 		{
 			var saleOrders = await _context.SaleOrders
@@ -80,7 +123,6 @@ namespace erp_backend.Controllers
 				.Include(so => so.SaleOrderAddons)
 					.ThenInclude(soa => soa.Addon)
 				.Include(so => so.Customer)
-				.Include(so => so.Tax)
 				.Where(d => d.CustomerId == customerId)
 				.ToListAsync();
 
@@ -90,11 +132,17 @@ namespace erp_backend.Controllers
 				so.Id,
 				so.Title,
 				so.CustomerId,
-				Customer = so.Customer != null ? new { so.Customer.Id, so.Customer.Name } : null,
+				Customer = so.Customer != null ? new { 
+					so.Customer.Id, 
+					Name = so.Customer.CustomerType == "company" 
+						? so.Customer.CompanyName 
+						: so.Customer.Name,
+					so.Customer.CustomerType
+				} : null,
 				so.Value,
 				so.Probability,
-				so.TaxId,
-				Tax = so.Tax != null ? new { so.Tax.Id, so.Tax.Rate } : null,
+				so.Status,
+				so.Notes,
 				so.CreatedAt,
 				so.UpdatedAt,
 				SaleOrderServices = so.SaleOrderServices.Select(sos => new
@@ -118,9 +166,9 @@ namespace erp_backend.Controllers
 			return Ok(response);
 		}
 
-		// Thống kê sale orders
+		// Th?ng kê sale orders
 		[HttpGet("statistics")]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<object>> GetSaleOrderStatistics()
 		{
 			var totalSaleOrders = await _context.SaleOrders.CountAsync();
@@ -131,11 +179,11 @@ namespace erp_backend.Controllers
 			var probabilityRanges = saleOrders
 				.GroupBy(d => d.Probability switch
 				{
-					>= 0 and <= 25 => "Thấp (0-25%)",
+					>= 0 and <= 25 => "Th?p (0-25%)",
 					> 25 and <= 50 => "Trung bình (26-50%)",
 					> 50 and <= 75 => "Cao (51-75%)",
-					> 75 and <= 100 => "Rất cao (76-100%)",
-					_ => "Không xác định"
+					> 75 and <= 100 => "R?t cao (76-100%)",
+					_ => "Không xác ??nh"
 				})
 				.Select(g => new
 				{
@@ -154,9 +202,9 @@ namespace erp_backend.Controllers
 			});
 		}
 
-		// Lấy sale order theo ID
+		// L?y sale order theo ID
 		[HttpGet("{id}")]
-		[Authorize]
+		//[Authorize]
 		public async Task<ActionResult<object>> GetSaleOrder(int id)
 		{
 			var saleOrder = await _context.SaleOrders
@@ -165,7 +213,7 @@ namespace erp_backend.Controllers
 				.Include(so => so.SaleOrderAddons)
 					.ThenInclude(soa => soa.Addon)
 				.Include(so => so.Customer)
-				.Include(so => so.Tax)
+				.Include(so => so.CreatedByUser)
 				.FirstOrDefaultAsync(so => so.Id == id);
 
 			if (saleOrder == null)
@@ -179,13 +227,21 @@ namespace erp_backend.Controllers
 				saleOrder.Id,
 				saleOrder.Title,
 				saleOrder.CustomerId,
-				Customer = saleOrder.Customer != null ? new { saleOrder.Customer.Id, saleOrder.Customer.Name } : null,
+				Customer = saleOrder.Customer != null ? new { 
+					saleOrder.Customer.Id, 
+					Name = saleOrder.Customer.CustomerType == "company" 
+						? saleOrder.Customer.CompanyName 
+						: saleOrder.Customer.Name,
+					saleOrder.Customer.CustomerType
+				} : null,
 				saleOrder.Value,
 				saleOrder.Probability,
-				saleOrder.TaxId,
-				Tax = saleOrder.Tax != null ? new { saleOrder.Tax.Id, saleOrder.Tax.Rate } : null,
+				saleOrder.Status,
+				saleOrder.Notes,
 				saleOrder.CreatedAt,
 				saleOrder.UpdatedAt,
+				saleOrder.CreatedByUserId,
+				CreatedByUser = saleOrder.CreatedByUser != null ? new { saleOrder.CreatedByUser.Id, saleOrder.CreatedByUser.Name } : null,
 				SaleOrderServices = saleOrder.SaleOrderServices.Select(sos => new
 				{
 					sos.ServiceId,
@@ -207,9 +263,9 @@ namespace erp_backend.Controllers
 			return Ok(response);
 		}
 
-		// Tạo sale order mới với nhiều services và addons
+		// T?o sale order m?i v?i nhi?u services và addons
 		[HttpPost]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<SaleOrderWithItemsResponse>> CreateSaleOrder([FromBody] CreateSaleOrderWithItemsRequest request)
 		{
 			using var transaction = await _context.Database.BeginTransactionAsync();
@@ -222,14 +278,14 @@ namespace erp_backend.Controllers
 					return BadRequest(ModelState);
 				}
 
-				// Kiểm tra customer tồn tại
+				// Ki?m tra customer t?n t?i
 				var customerExists = await _context.Customers.AnyAsync(c => c.Id == request.CustomerId);
 				if (!customerExists)
 				{
-					return BadRequest(new { message = "Customer không tồn tại" });
+					return BadRequest(new { message = "Customer không t?n t?i" });
 				}
 
-				// Kiểm tra và load services
+				// Ki?m tra và load services
 				List<Service> services = new();
 				if (request.Services.Any())
 				{
@@ -241,11 +297,11 @@ namespace erp_backend.Controllers
 					var missingServiceIds = serviceIds.Except(services.Select(s => s.Id)).ToList();
 					if (missingServiceIds.Any())
 					{
-						return BadRequest(new { message = $"Service IDs không tồn tại: {string.Join(", ", missingServiceIds)}" });
+						return BadRequest(new { message = $"Service IDs không t?n t?i: {string.Join(", ", missingServiceIds)}" });
 					}
 				}
 
-				// Kiểm tra và load addons
+				// Ki?m tra và load addons
 				List<Addon> addons = new();
 				if (request.Addons.Any())
 				{
@@ -257,23 +313,23 @@ namespace erp_backend.Controllers
 					var missingAddonIds = addonIds.Except(addons.Select(a => a.Id)).ToList();
 					if (missingAddonIds.Any())
 					{
-						return BadRequest(new { message = $"Addon IDs không tồn tại: {string.Join(", ", missingAddonIds)}" });
+						return BadRequest(new { message = $"Addon IDs không t?n t?i: {string.Join(", ", missingAddonIds)}" });
 					}
 				}
 
-				// Kiểm tra phải có ít nhất 1 service hoặc addon
+				// Ki?m tra ph?i có ít nh?t 1 service ho?c addon
 				if (!request.Services.Any() && !request.Addons.Any())
 				{
-					return BadRequest(new { message = "Phải có ít nhất 1 service hoặc addon" });
+					return BadRequest(new { message = "Ph?i có ít nh?t 1 service ho?c addon" });
 				}
 
-				// Tính tổng giá trị - Luôn lấy quantity từ Service/Addon
+				// Tính t?ng giá tr? - Luôn l?y quantity t? Service/Addon
 				decimal totalValue = 0;
 				
 				foreach (var serviceDto in request.Services)
 				{
 					var service = services.First(s => s.Id == serviceDto.ServiceId);
-					var quantity = service.Quantity ?? 1; // Luôn lấy từ Service
+					var quantity = service.Quantity ?? 1; // Luôn l?y t? Service
 					var unitPrice = serviceDto.UnitPrice ?? service.Price;
 					totalValue += unitPrice * quantity;
 				}
@@ -281,12 +337,12 @@ namespace erp_backend.Controllers
 				foreach (var addonDto in request.Addons)
 				{
 					var addon = addons.First(a => a.Id == addonDto.AddonId);
-					var quantity = addon.Quantity ?? 1; // Luôn lấy từ Addon
+					var quantity = addon.Quantity ?? 1; // Luôn l?y t? Addon
 					var unitPrice = addonDto.UnitPrice ?? addon.Price;
 					totalValue += unitPrice * quantity;
 				}
 
-				// Tạo SaleOrder
+				// T?o SaleOrder
 				var saleOrder = new SaleOrder
 				{
 					Title = request.Title,
@@ -294,14 +350,35 @@ namespace erp_backend.Controllers
 					Value = totalValue,
 					Probability = request.Probability,
 					Notes = request.Notes,
-					TaxId = request.TaxId,
+					Status = request.Status ?? "Draft",
 					CreatedAt = DateTime.UtcNow
 				};
+
+				// Lấy UserId từ JWT token và gán vào CreatedByUserId
+				var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == "userid");
+				if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+				{
+					// Kiểm tra user có tồn tại không
+					var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+					if (userExists)
+					{
+						saleOrder.CreatedByUserId = userId;
+						_logger.LogInformation($"Setting CreatedByUserId to {userId}");
+					}
+					else
+					{
+						_logger.LogWarning($"User with ID {userId} not found in database");
+					}
+				}
+				else
+				{
+					_logger.LogWarning("UserId claim not found in token");
+				}
 
 				_context.SaleOrders.Add(saleOrder);
 				await _context.SaveChangesAsync();
 
-				// Tạo SaleOrderServices - Luôn lấy quantity từ Service
+				// T?o SaleOrderServices - Luôn l?y quantity t? Service
 				var saleOrderServices = new List<SaleOrderService>();
 				foreach (var serviceDto in request.Services)
 				{
@@ -310,7 +387,7 @@ namespace erp_backend.Controllers
 					{
 						SaleOrderId = saleOrder.Id,
 						ServiceId = serviceDto.ServiceId,
-						Quantity = service.Quantity, // Luôn lấy từ Service
+						Quantity = service.Quantity, // Luôn l?y t? Service
 						UnitPrice = serviceDto.UnitPrice ?? service.Price,
 						Notes = serviceDto.Notes ?? service.Notes,
 						duration = serviceDto.Duration ?? 0,
@@ -321,7 +398,7 @@ namespace erp_backend.Controllers
 					_context.SaleOrderServices.Add(saleOrderService);
 				}
 
-				// Tạo SaleOrderAddons - Luôn lấy quantity từ Addon
+				// T?o SaleOrderAddons - Luôn l?y quantity t? Addon
 				var saleOrderAddons = new List<SaleOrderAddon>();
 				foreach (var addonDto in request.Addons)
 				{
@@ -330,7 +407,7 @@ namespace erp_backend.Controllers
 					{
 						SaleOrderId = saleOrder.Id,
 						AddonId = addonDto.AddonId,
-						Quantity = addon.Quantity, // Luôn lấy từ Addon
+						Quantity = addon.Quantity, // Luôn l?y t? Addon
 						UnitPrice = addonDto.UnitPrice ?? addon.Price,
 						Notes = addonDto.Notes ?? addon.Notes,
 						duration = addonDto.Duration ?? 0,
@@ -344,6 +421,16 @@ namespace erp_backend.Controllers
 				await _context.SaveChangesAsync();
 				await transaction.CommitAsync();
 
+				// Reload sale order with CreatedByUser navigation property
+				var savedSaleOrder = await _context.SaleOrders
+					.Include(so => so.CreatedByUser)
+					.FirstOrDefaultAsync(so => so.Id == saleOrder.Id);
+
+				if (savedSaleOrder?.CreatedByUser == null && savedSaleOrder?.CreatedByUserId != null)
+				{
+					_logger.LogWarning($"CreatedByUser is null even though CreatedByUserId is {savedSaleOrder.CreatedByUserId}");
+				}
+
 				// Tạo response
 				var response = new SaleOrderWithItemsResponse
 				{
@@ -352,7 +439,7 @@ namespace erp_backend.Controllers
 					CustomerId = saleOrder.CustomerId,
 					Value = saleOrder.Value,
 					Probability = saleOrder.Probability,
-					TaxId = saleOrder.TaxId,
+					Status = saleOrder.Status,
 					CreatedAt = saleOrder.CreatedAt,
 					Services = saleOrderServices.Select(sos => new SaleOrderServiceDetailDto
 					{
@@ -377,184 +464,276 @@ namespace erp_backend.Controllers
 			catch (Exception ex)
 			{
 				await transaction.RollbackAsync();
-				_logger.LogError(ex, "Lỗi khi tạo sale order với nhiều items");
-				return StatusCode(500, new { message = "Lỗi server khi tạo sale order", error = ex.Message });
+				_logger.LogError(ex, "L?i khi t?o sale order v?i nhi?u items");
+				return StatusCode(500, new { message = "L?i server khi t?o sale order", error = ex.Message });
 			}
 		}
 
-		// Cập nhật sale order
+		// C?p nh?t sale order v?i ??y ?? thông tin (bao g?m Services và Addons)
 		[HttpPut("{id}")]
-		[Authorize]
-		public async Task<ActionResult<UpdateSaleOrderResponse>> UpdateSaleOrder(int id, [FromBody] Dictionary<string, object?> updateData)
+		//[Authorize]
+		public async Task<ActionResult<SaleOrderWithItemsResponse>> UpdateSaleOrder(int id, [FromBody] UpdateSaleOrderWithItemsRequest request)
 		{
+			using var transaction = await _context.Database.BeginTransactionAsync();
+			
 			try
 			{
-				// Kiểm tra tồn tại
-				var existingSaleOrder = await _context.SaleOrders.FindAsync(id);
-				if (existingSaleOrder == null)
+				// Validate
+				if (!ModelState.IsValid)
 				{
-					return NotFound(new { message = "Không tìm thấy sale order" });
+					return BadRequest(ModelState);
 				}
 
-				// Cập nhật các trường có trong request
-				foreach (var kvp in updateData)
+				// Ki?m tra t?n t?i
+				var existingSaleOrder = await _context.SaleOrders
+					.Include(so => so.SaleOrderServices)
+					.Include(so => so.SaleOrderAddons)
+					.FirstOrDefaultAsync(so => so.Id == id);
+
+				if (existingSaleOrder == null)
 				{
-					var propertyName = kvp.Key;
-					var value = kvp.Value?.ToString();
+					return NotFound(new { message = "Không tìm th?y sale order" });
+				}
 
-					switch (propertyName.ToLower())
+				// C?p nh?t thông tin c? b?n
+				if (!string.IsNullOrEmpty(request.Title))
+				{
+					existingSaleOrder.Title = request.Title;
+				}
+
+				if (request.CustomerId.HasValue)
+				{
+					var customerExists = await _context.Customers.AnyAsync(c => c.Id == request.CustomerId.Value);
+					if (!customerExists)
 					{
-						case "title":
-							if (!string.IsNullOrEmpty(value))
-							{
-								if (value.Length > 255)
-								{
-									return BadRequest(new { message = "Tiêu đề không được vượt quá 255 ký tự" });
-								}
-								existingSaleOrder.Title = value;
-							}
-							break;
+						return BadRequest(new { message = "Customer không t?n t?i" });
+					}
+					existingSaleOrder.CustomerId = request.CustomerId.Value;
+				}
 
-						case "customerid":
-							if (kvp.Value != null && int.TryParse(kvp.Value.ToString(), out int customerId))
-							{
-								var customerExists = await _context.Customers.AnyAsync(c => c.Id == customerId);
-								if (!customerExists)
-								{
-									return BadRequest(new { message = "Customer không tồn tại" });
-								}
-								existingSaleOrder.CustomerId = customerId;
-							}
-							else
-							{
-								return BadRequest(new { message = "Customer ID không hợp lệ" });
-							}
-							break;
+				if (request.Probability.HasValue)
+				{
+					existingSaleOrder.Probability = request.Probability.Value;
+				}
 
-						case "value":
-							if (kvp.Value != null && decimal.TryParse(kvp.Value.ToString(), out decimal saleOrderValue))
-							{
-								if (saleOrderValue < 0)
-								{
-									return BadRequest(new { message = "Giá trị sale order phải lớn hơn hoặc bằng 0" });
-								}
-								existingSaleOrder.Value = saleOrderValue;
-							}
-							else
-							{
-								return BadRequest(new { message = "Giá trị sale order không hợp lệ" });
-							}
-							break;
+				if (request.Notes != null)
+				{
+					existingSaleOrder.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes;
+				}
 
-						case "probability":
-							if (kvp.Value != null && int.TryParse(kvp.Value.ToString(), out int probability))
-							{
-								if (probability < 0 || probability > 100)
-								{
-									return BadRequest(new { message = "Xác suất phải từ 0-100%" });
-								}
-								existingSaleOrder.Probability = probability;
-							}
-							else
-							{
-								return BadRequest(new { message = "Xác suất không hợp lệ" });
-							}
-							break;
+				if (!string.IsNullOrEmpty(request.Status))
+				{
+					existingSaleOrder.Status = request.Status;
+				}
 
-						case "notes":
-							if (value != null)
+				// C?p nh?t Services n?u có trong request
+				List<Service> services = new();
+				if (request.Services != null)
+				{
+					// Xóa các services c?
+					_context.SaleOrderServices.RemoveRange(existingSaleOrder.SaleOrderServices);
+
+					// Thêm services m?i (n?u có)
+					if (request.Services.Any())
+					{
+						var serviceIds = request.Services.Select(s => s.ServiceId).ToList();
+						services = await _context.Services
+							.Where(s => serviceIds.Contains(s.Id))
+							.ToListAsync();
+
+						var missingServiceIds = serviceIds.Except(services.Select(s => s.Id)).ToList();
+						if (missingServiceIds.Any())
+						{
+							await transaction.RollbackAsync();
+							return BadRequest(new { message = $"Service IDs không t?n t?i: {string.Join(", ", missingServiceIds)}" });
+						}
+
+						foreach (var serviceDto in request.Services)
+						{
+							var service = services.First(s => s.Id == serviceDto.ServiceId);
+							var saleOrderService = new SaleOrderService
 							{
-								if (value.Length > 2000)
-								{
-									return BadRequest(new { message = "Ghi chú không được vượt quá 2000 ký tự" });
-								}
-								existingSaleOrder.Notes = string.IsNullOrWhiteSpace(value) ? null : value;
-							}
-							break;
-
-						case "serviceid":
-							if (kvp.Value != null && int.TryParse(kvp.Value.ToString(), out int serviceId))
-							{
-								if (serviceId <= 0)
-								{
-									return BadRequest(new { message = "Service ID phải lớn hơn 0" });
-								}
-
-								var serviceExists = await _context.Services.AnyAsync(s => s.Id == serviceId);
-								if (!serviceExists)
-								{
-									return BadRequest(new { message = "Service không tồn tại" });
-								}
-
-								existingSaleOrder.ServiceId = serviceId;
-							}
-							else
-							{
-								return BadRequest(new { message = "Service ID không hợp lệ" });
-							}
-							break;
-
-						case "addonid":
-							if (kvp.Value != null && int.TryParse(kvp.Value.ToString(), out int addonId))
-							{
-								if (addonId > 0)
-								{
-									var addonExists = await _context.Addons.AnyAsync(a => a.Id == addonId);
-									if (!addonExists)
-									{
-										return BadRequest(new { message = "Addon không tồn tại" });
-									}
-								}
-								existingSaleOrder.AddonId = addonId > 0 ? addonId : null;
-							}
-							else
-							{
-								return BadRequest(new { message = "Addon ID không hợp lệ" });
-							}
-							break;
-
-						case "id":
-						case "createdat":
-						case "updatedat":
-							// Bỏ qua các trường hệ thống
-							break;
-
-						default:
-							// Bỏ qua trường không hỗ trợ
-							break;
+								SaleOrderId = existingSaleOrder.Id,
+								ServiceId = serviceDto.ServiceId,
+								Quantity = service.Quantity,
+								UnitPrice = serviceDto.UnitPrice ?? service.Price,
+								Notes = serviceDto.Notes ?? service.Notes,
+								duration = serviceDto.Duration ?? 0,
+								template = serviceDto.Template ?? string.Empty,
+								CreatedAt = DateTime.UtcNow
+							};
+							_context.SaleOrderServices.Add(saleOrderService);
+						}
+					}
+				}
+				else
+				{
+					// N?u request.Services == null, gi? nguyên services hi?n t?i
+					// Load l?i services ?? tính toán value
+					var serviceIds = existingSaleOrder.SaleOrderServices.Select(s => s.ServiceId).ToList();
+					if (serviceIds.Any())
+					{
+						services = await _context.Services
+							.Where(s => serviceIds.Contains(s.Id))
+							.ToListAsync();
 					}
 				}
 
-				existingSaleOrder.UpdatedAt = DateTime.UtcNow;
-				await _context.SaveChangesAsync();
-
-				var response = new UpdateSaleOrderResponse
+				// C?p nh?t Addons n?u có trong request
+				List<Addon> addons = new();
+				if (request.Addons != null)
 				{
-					Message = "Cập nhật thông tin sale order thành công",
-					SaleOrder = new SaleOrderInfo
+					// Xóa các addons c?
+					_context.SaleOrderAddons.RemoveRange(existingSaleOrder.SaleOrderAddons);
+
+					// Thêm addons m?i (n?u có)
+					if (request.Addons.Any())
 					{
-						Id = existingSaleOrder.Id,
-						Title = existingSaleOrder.Title,
-						CustomerId = existingSaleOrder.CustomerId,
-						Value = existingSaleOrder.Value,
-						Probability = existingSaleOrder.Probability,
-						Notes = existingSaleOrder.Notes,
-						ServiceId = existingSaleOrder.ServiceId,
-						AddonId = existingSaleOrder.AddonId
-					},
-					UpdatedAt = existingSaleOrder.UpdatedAt.Value
+						var addonIds = request.Addons.Select(a => a.AddonId).ToList();
+						addons = await _context.Addons
+							.Where(a => addonIds.Contains(a.Id))
+							.ToListAsync();
+
+						var missingAddonIds = addonIds.Except(addons.Select(a => a.Id)).ToList();
+						if (missingAddonIds.Any())
+						{
+							await transaction.RollbackAsync();
+							return BadRequest(new { message = $"Addon IDs không t?n t?i: {string.Join(", ", missingAddonIds)}" });
+						}
+
+						foreach (var addonDto in request.Addons)
+						{
+							var addon = addons.First(a => a.Id == addonDto.AddonId);
+							var saleOrderAddon = new SaleOrderAddon
+							{
+								SaleOrderId = existingSaleOrder.Id,
+								AddonId = addonDto.AddonId,
+								Quantity = addon.Quantity,
+								UnitPrice = addonDto.UnitPrice ?? addon.Price,
+								Notes = addonDto.Notes ?? addon.Notes,
+								duration = addonDto.Duration ?? 0,
+								template = addonDto.Template ?? string.Empty,
+								CreatedAt = DateTime.UtcNow
+							};
+							_context.SaleOrderAddons.Add(saleOrderAddon);
+						}
+					}
+				}
+				else
+				{
+					// N?u request.Addons == null, gi? nguyên addons hi?n t?i
+					// Load l?i addons ?? tính toán value
+					var addonIds = existingSaleOrder.SaleOrderAddons.Select(a => a.AddonId).ToList();
+					if (addonIds.Any())
+					{
+						addons = await _context.Addons
+							.Where(a => addonIds.Contains(a.Id))
+							.ToListAsync();
+					}
+				}
+
+				// Tính l?i giá tr? t?ng
+				decimal totalValue = 0;
+
+				// Tính t? services
+				if (request.Services != null && request.Services.Any())
+				{
+					foreach (var serviceDto in request.Services)
+					{
+						var service = services.First(s => s.Id == serviceDto.ServiceId);
+						var quantity = service.Quantity ?? 1;
+						var unitPrice = serviceDto.UnitPrice ?? service.Price;
+						totalValue += unitPrice * quantity;
+					}
+				}
+				else if (request.Services == null)
+				{
+					// Gi? nguyên services c?
+					foreach (var sos in existingSaleOrder.SaleOrderServices)
+					{
+						var service = services.FirstOrDefault(s => s.Id == sos.ServiceId);
+						var quantity = service?.Quantity ?? 1;
+						totalValue += sos.UnitPrice * quantity;
+					}
+				}
+
+				// Tính t? addons
+				if (request.Addons != null && request.Addons.Any())
+				{
+					foreach (var addonDto in request.Addons)
+					{
+						var addon = addons.First(a => a.Id == addonDto.AddonId);
+						var quantity = addon.Quantity ?? 1;
+						var unitPrice = addonDto.UnitPrice ?? addon.Price;
+						totalValue += unitPrice * quantity;
+					}
+				}
+				else if (request.Addons == null)
+				{
+					// Gi? nguyên addons c?
+					foreach (var soa in existingSaleOrder.SaleOrderAddons)
+					{
+						var addon = addons.FirstOrDefault(a => a.Id == soa.AddonId);
+						var quantity = addon?.Quantity ?? 1;
+						totalValue += soa.UnitPrice * quantity;
+					}
+				}
+
+				existingSaleOrder.Value = totalValue;
+				existingSaleOrder.UpdatedAt = DateTime.UtcNow;
+
+				await _context.SaveChangesAsync();
+				await transaction.CommitAsync();
+
+				// Load l?i ?? l?y ??y ?? thông tin
+				var updatedSaleOrder = await _context.SaleOrders
+					.Include(so => so.SaleOrderServices)
+						.ThenInclude(sos => sos.Service)
+					.Include(so => so.SaleOrderAddons)
+						.ThenInclude(soa => soa.Addon)
+					.FirstOrDefaultAsync(so => so.Id == id);
+
+				// T?o response
+				var response = new SaleOrderWithItemsResponse
+				{
+					Id = updatedSaleOrder!.Id,
+					Title = updatedSaleOrder.Title,
+					CustomerId = updatedSaleOrder.CustomerId,
+					Value = updatedSaleOrder.Value,
+					Probability = updatedSaleOrder.Probability,
+					Notes = updatedSaleOrder.Notes,
+					Status = updatedSaleOrder.Status,
+					CreatedAt = updatedSaleOrder.CreatedAt,
+					Services = updatedSaleOrder.SaleOrderServices.Select(sos => new SaleOrderServiceDetailDto
+					{
+						ServiceId = sos.ServiceId,
+						ServiceName = sos.Service?.Name ?? string.Empty,
+						UnitPrice = sos.UnitPrice,
+						Duration = sos.duration,
+						Template = sos.template
+					}).ToList(),
+					Addons = updatedSaleOrder.SaleOrderAddons.Select(soa => new SaleOrderAddonDetailDto
+					{
+						AddonId = soa.AddonId,
+						AddonName = soa.Addon?.Name ?? string.Empty,
+						UnitPrice = soa.UnitPrice,
+						Duration = soa.duration,
+						Template = soa.template
+					}).ToList(),
+					Message = "C?p nh?t sale order thành công"
 				};
 
 				return Ok(response);
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Lỗi khi cập nhật sale order với ID: {SaleOrderId}", id);
-				return StatusCode(500, new { message = "Lỗi server khi cập nhật sale order", error = ex.Message });
+				await transaction.RollbackAsync();
+				_logger.LogError(ex, "L?i khi c?p nh?t sale order v?i ID: {SaleOrderId}", id);
+				return StatusCode(500, new { message = "L?i server khi c?p nh?t sale order", error = ex.Message });
 			}
 		}
 
-		// Cập nhật xác suất sale order
+		// C?p nh?t xác su?t sale order
 		[HttpPatch("{id}/probability")]
 		[Authorize]
 		public async Task<IActionResult> UpdateSaleOrderProbability(int id, [FromBody] Dictionary<string, int> request)
@@ -563,20 +742,20 @@ namespace erp_backend.Controllers
 			{
 				if (!request.ContainsKey("probability"))
 				{
-					return BadRequest(new { message = "Thiếu trường probability" });
+					return BadRequest(new { message = "Thi?u tr??ng probability" });
 				}
 
 				var probability = request["probability"];
 
 				if (probability < 0 || probability > 100)
 				{
-					return BadRequest(new { message = "Xác suất phải từ 0-100%" });
+					return BadRequest(new { message = "Xác su?t ph?i t? 0-100%" });
 				}
 
 				var saleOrder = await _context.SaleOrders.FindAsync(id);
 				if (saleOrder == null)
 				{
-					return NotFound(new { message = "Không tìm thấy sale order" });
+					return NotFound(new { message = "Không tìm th?y sale order" });
 				}
 
 				saleOrder.Probability = probability;
@@ -585,7 +764,7 @@ namespace erp_backend.Controllers
 
 				return Ok(new
 				{
-					message = "Cập nhật xác suất thành công",
+					message = "C?p nh?t xác su?t thành công",
 					id = saleOrder.Id,
 					probability = saleOrder.Probability,
 					updatedAt = saleOrder.UpdatedAt
@@ -593,8 +772,8 @@ namespace erp_backend.Controllers
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Lỗi khi cập nhật xác suất sale order với ID: {SaleOrderId}", id);
-				return StatusCode(500, new { message = "Lỗi server khi cập nhật xác suất", error = ex.Message });
+				_logger.LogError(ex, "L?i khi c?p nh?t xác su?t sale order v?i ID: {SaleOrderId}", id);
+				return StatusCode(500, new { message = "L?i server khi c?p nh?t xác su?t", error = ex.Message });
 			}
 		}
 
@@ -608,7 +787,7 @@ namespace erp_backend.Controllers
 				var saleOrder = await _context.SaleOrders.FindAsync(id);
 				if (saleOrder == null)
 				{
-					return NotFound(new { message = "Không tìm thấy sale order" });
+					return NotFound(new { message = "Không tìm th?y sale order" });
 				}
 
 				var deletedSaleOrderInfo = new SaleOrderInfo
@@ -620,7 +799,8 @@ namespace erp_backend.Controllers
 					Probability = saleOrder.Probability,
 					Notes = saleOrder.Notes,
 					ServiceId = saleOrder.ServiceId,
-					AddonId = saleOrder.AddonId
+					AddonId = saleOrder.AddonId,
+					Status = saleOrder.Status
 				};
 
 				_context.SaleOrders.Remove(saleOrder);
@@ -637,295 +817,10 @@ namespace erp_backend.Controllers
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Lỗi khi xóa sale order với ID: {SaleOrderId}", id);
-				return StatusCode(500, new { message = "Lỗi server khi xóa sale order", error = ex.Message });
+				_logger.LogError(ex, "L?i khi xóa sale order v?i ID: {SaleOrderId}", id);
+				return StatusCode(500, new { message = "L?i server khi xóa sale order", error = ex.Message });
 			}
 		}
-
-		//// Xuất hợp đồng PDF
-		//[HttpGet("{id}/export-contract")]
-		//public async Task<IActionResult> ExportContract(int id)
-		//{
-		//	try
-		//	{
-		//		// Bước 1: Lấy dữ liệu SaleOrder
-		//		var saleOrder = await _context.SaleOrders.FindAsync(id);
-
-		//		if (saleOrder == null)
-		//		{
-		//			return NotFound(new { message = "Không tìm thấy sale order" });
-		//		}
-
-		//		// Load Customer
-		//		var customer = await _context.Customers.FindAsync(saleOrder.CustomerId);
-		//		if (customer == null)
-		//		{
-		//			return NotFound(new { message = "Không tìm thấy thông tin customer" });
-		//		}
-
-		//		// Load Service (bắt buộc)
-		//		var service = await _context.Services.FindAsync(saleOrder.ServiceId);
-		//		if (service == null)
-		//		{
-		//			return NotFound(new { message = "Không tìm thấy thông tin service" });
-		//		}
-
-		//		// Load Addon nếu có
-		//		Addon? addon = null;
-		//		if (saleOrder.AddonId.HasValue)
-		//		{
-		//			addon = await _context.Addons.FindAsync(saleOrder.AddonId.Value);
-		//		}
-
-		//		// Bước 2: Đọc HTML template dựa vào loại khách hàng
-		//		var templateFileName = customer.CustomerType?.ToLower() == "individual" 
-		//			? "generate_contract_individual.html" 
-		//			: "generate_contract_business.html";
-				
-		//		var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Templates", templateFileName);
-				
-		//		if (!System.IO.File.Exists(templatePath))
-		//		{
-		//			return NotFound(new { message = $"Không tìm thấy template hợp đồng: {templateFileName}" });
-		//		}
-
-		//		var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
-
-		//		// Bước 3: Bind dữ liệu vào template
-		//		var htmlContent = BindDataToTemplate(htmlTemplate, saleOrder, customer, service, addon);
-
-		//		// Bước 4: Sử dụng IronPDF để convert HTML sang PDF
-		//		var renderer = new ChromePdfRenderer();
-				
-		//		// Cấu hình renderer - loại bỏ header/footer
-		//		renderer.RenderingOptions.PaperSize = IronPdf.Rendering.PdfPaperSize.A4;
-		//		renderer.RenderingOptions.MarginTop = 0;
-		//		renderer.RenderingOptions.MarginBottom = 0;
-		//		renderer.RenderingOptions.MarginLeft = 0;
-		//		renderer.RenderingOptions.MarginRight = 0;
-		//		renderer.RenderingOptions.CssMediaType = IronPdf.Rendering.PdfCssMediaType.Print;
-		//		renderer.RenderingOptions.PrintHtmlBackgrounds = true;
-		//		renderer.RenderingOptions.CreatePdfFormsFromHtml = false;
-		//		renderer.RenderingOptions.EnableJavaScript = false;
-
-		//		// Render HTML thành PDF
-		//		var pdf = await Task.Run(() => renderer.RenderHtmlAsPdf(htmlContent));
-
-		//		// Bước 5: Lấy PDF bytes
-		//		var pdfBytes = pdf.BinaryData;
-
-		//		// Bước 6: Trả về file PDF
-		//		var fileName = $"HopDong_{saleOrder.Id}_{DateTime.Now:yyyyMMdd}.pdf";
-		//		return File(pdfBytes, "application/pdf", fileName);
-		//	}
-		//	catch (Exception ex)
-		//	{
-		//		_logger.LogError(ex, "Lỗi khi xuất hợp đồng PDF cho SaleOrder ID: {SaleOrderId}", id);
-		//		return StatusCode(500, new { message = "Lỗi server khi xuất hợp đồng", error = ex.Message });
-		//	}
-		//}
-
-		//// Helper method: Bind dữ liệu vào template
-		//private string BindDataToTemplate(string template, SaleOrder saleOrder, Customer customer, Service? service, Addon? addon)
-		//{
-		//	var now = DateTime.Now;
-
-		//	//// Convert ảnh thành Base64
-		//	//var backgroundImageBase64 = GetImageAsBase64("wwwroot/Templates/assets/img/File_mau003.png");
-		//	//var logoImageBase64 = GetImageAsBase64("wwwroot/Templates/assets/img/logo.webp");
-
-		//	//// Thay thế đường dẫn ảnh bằng Base64
-		//	//template = template
-		//	//	.Replace("./assets/img/File_mau003.png", $"data:image/png;base64,{backgroundImageBase64}")
-		//	//	.Replace("./assets/img/logo.webp", $"data:image/webp;base64,{logoImageBase64}");
-
-		//	// Thông tin hợp đồng cơ bản
-		//	template = template
-		//		.Replace("{{ContractNumber}}", saleOrder.Id.ToString())
-		//		.Replace("{{ContractYear}}", now.Year.ToString())
-		//		.Replace("{{Day}}", now.Day.ToString())
-		//		.Replace("{{Month}}", now.Month.ToString())
-		//		.Replace("{{Year}}", now.Year.ToString())
-		//		.Replace("{{Location}}", "Hà Nội");
-
-
-		//	// Thông tin Bên A (Khách hàng)
-		//	template = template
-		//		.Replace("{{CompanyBName}}", customer.CompanyName ?? customer.Name ?? "")
-		//		.Replace("{{CompanyBAddress}}", customer.CompanyAddress ?? customer.Address ?? "")
-		//		.Replace("{{CompanyBTaxCode}}", customer.TaxCode ?? "")
-		//		.Replace("{{CompanyBRepName}}", customer.RepresentativeName ?? customer.Name ?? "")
-		//		.Replace("{{CompanyBRepPosition}}", customer.RepresentativePosition ?? "")
-		//		.Replace("{{CompanyBRepID}}", customer.RepresentativeIdNumber ?? customer.IdNumber ?? "")
-		//		.Replace("{{CompanyBPhone}}", customer.RepresentativePhone ?? customer.PhoneNumber ?? "")
-		//		.Replace("{{CompanyBEmail}}", customer.RepresentativeEmail ?? customer.Email ?? "")
-		//		.Replace("{{CustomerBirthDay}}", customer.BirthDate.Value.Day.ToString())
-		//		.Replace("{{CustomerBirthMonth}}", customer.BirthDate.Value.Month.ToString())
-		//		.Replace("{{CustomerBirthYear}}", customer.BirthDate.Value.Year.ToString());
-		//	;
-
-		//	// Thông tin giá trị
-		//	var totalValue = saleOrder.Value;
-		//	var vatRate = 10; // 10% VAT
-		//	var vatAmount = totalValue * vatRate / 100;
-		//	var netAmount = totalValue + vatAmount;
-
-		//	template = template
-		//		.Replace("{{SubTotal}}", totalValue.ToString("N0"))
-		//		.Replace("{{Discount}}", "0")
-		//		.Replace("{{VATRate}}", vatRate.ToString())
-		//		.Replace("{{VATAmount}}", vatAmount.ToString("N0"))
-		//		.Replace("{{NetAmount}}", netAmount.ToString("N0"))
-		//		.Replace("{{AmountInWords}}", ConvertNumberToWords(netAmount))
-		//		.Replace("{{PaymentMethod}}", "Chuyển khoản");
-
-		//	// Tạo bảng items
-		//	var itemsHtml = GenerateItemsTable(saleOrder, service, addon);
-		//	template = template.Replace("{{Items}}", itemsHtml);
-
-		//	return template;
-		//}
-
-		//// Helper method: Convert ảnh thành Base64
-		//private string GetImageAsBase64(string relativePath)
-		//{
-		//	try
-		//	{
-		//		var imagePath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-		//		if (System.IO.File.Exists(imagePath))
-		//		{
-		//			var imageBytes = System.IO.File.ReadAllBytes(imagePath);
-		//			return Convert.ToBase64String(imageBytes);
-		//		}
-		//		_logger.LogWarning($"Không tìm thấy ảnh tại: {imagePath}");
-		//		return string.Empty;
-		//	}
-		//	catch (Exception ex)
-		//	{
-		//		_logger.LogError(ex, $"Lỗi khi đọc ảnh: {relativePath}");
-		//		return string.Empty;
-		//	}
-		//}
-
-		// Helper method: Tạo bảng danh sách dịch vụ
-		//private string GenerateItemsTable(SaleOrder saleOrder, Service? service, Addon? addon)
-		//{
-		//	var items = new System.Text.StringBuilder();
-		//	var index = 1;
-
-		//	// Thêm Service nếu có
-		//	if (service != null)
-		//	{
-		//		items.AppendLine($@"
-		//			<tr>
-		//				<td style='text-align: center;'>{index++}</td>
-		//				<td>{service.Name}</td>
-		//				<td>{service.Description ?? ""}</td>
-		//				<td style='text-align: center;'>1</td>
-		//				<td style='text-align: right;'>{service.Price:N0}</td>
-		//				<td style='text-align: right;'>{service.Price:N0}</td>
-		//			</tr>");
-		//	}
-
-		//	// Thêm Addon nếu có
-		//	if (addon != null)
-		//	{
-		//		items.AppendLine($@"
-		//			<tr>
-		//				<td style='text-align: center;'>{index++}</td>
-		//				<td>{addon.Name}</td>
-		//				<td>{addon.Description ?? ""}</td>
-		//				<td style='text-align: center;'>1</td>
-		//				<td style='text-align: right;'>{addon.Price:N0}</td>
-		//				<td style='text-align: right;'>{addon.Price:N0}</td>
-		//			</tr>");
-		//	}
-
-		//	// Nếu không có service/addon, hiển thị title
-		//	if (service == null && addon == null)
-		//	{
-		//		items.AppendLine($@"
-		//			<tr>
-		//				<td style='text-align: center;'>1</td>
-		//				<td>{saleOrder.Title}</td>
-		//				<td>{saleOrder.Notes ?? ""}</td>
-		//				<td style='text-align: center;'>1</td>
-		//				<td style='text-align: right;'>{saleOrder.Value:N0}</td>
-		//				<td style='text-align: right;'>{saleOrder.Value:N0}</td>
-		//			</tr>");
-		//	}
-
-		//	return items.ToString();
-		//}
-
-		//// Helper method: Convert số thành chữ (tiếng Việt)
-		//private string ConvertNumberToWords(decimal number)
-		//{
-		//	if (number == 0) return "Không đồng";
-
-		//	var units = new[] { "", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín" };
-		//	var scales = new[] { "", "nghìn", "triệu", "tỷ" };
-
-		//	var numStr = ((long)number).ToString();
-		//	var result = new System.Text.StringBuilder();
-		//	var scaleIndex = 0;
-
-		//	while (numStr.Length > 0)
-		//	{
-		//		var groupSize = Math.Min(3, numStr.Length);
-		//		var group = numStr.Substring(numStr.Length - groupSize);
-		//		numStr = numStr.Substring(0, numStr.Length - groupSize);
-
-		//		if (int.Parse(group) > 0)
-		//		{
-		//			var groupWords = ConvertGroupToWords(int.Parse(group), units);
-		//			if (result.Length > 0)
-		//				result.Insert(0, " ");
-		//			result.Insert(0, scales[scaleIndex]);
-		//			result.Insert(0, " ");
-		//			result.Insert(0, groupWords);
-		//		}
-
-		//		scaleIndex++;
-		//	}
-
-		//	return char.ToUpper(result[0]) + result.ToString().Substring(1).Trim() + " đồng chẵn";
-		//}
-
-		//private string ConvertGroupToWords(int number, string[] units)
-		//{
-		//	var hundred = number / 100;
-		//	var ten = (number % 100) / 10;
-		//	var unit = number % 10;
-
-		//	var result = new System.Text.StringBuilder();
-
-		//	if (hundred > 0)
-		//	{
-		//		result.Append(units[hundred]);
-		//		result.Append(" trăm");
-		//	}
-
-		//	if (ten > 1)
-		//	{
-		//		if (result.Length > 0) result.Append(" ");
-		//		result.Append(units[ten]);
-		//		result.Append(" mươi");
-		//	}
-		//	else if (ten == 1)
-		//	{
-		//		if (result.Length > 0) result.Append(" ");
-		//		result.Append("mười");
-		//	}
-
-		//	if (unit > 0)
-		//	{
-		//		if (result.Length > 0) result.Append(" ");
-		//		result.Append(units[unit]);
-		//	}
-
-		//	return result.ToString();
-		//}
 
 		private bool SaleOrderExists(int id)
 		{

@@ -1,4 +1,5 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace erp_backend.Models
 {
@@ -19,24 +20,45 @@ namespace erp_backend.Models
         [StringLength(255)]
         public string Password { get; set; } = string.Empty;
 
-        [StringLength(100)]
-        public string Position { get; set; } = string.Empty;
-        
-        [StringLength(20)]
+        public int PositionId { get; set; } 
+
+        public int DepartmentId { get; set; }
+
+		[StringLength(20)]
         public string PhoneNumber { get; set; } = string.Empty;
 
         [StringLength(500)]
         public string Address { get; set; } = string.Empty;
 
-        [StringLength(50)]
-        public string Role { get; set; } = string.Empty;
+        public int RoleId { get; set; } 
+
+        // Foreign key tự tham chiếu - Quản lý trực tiếp
+        public int? ManagerId { get; set; }
 
         [EmailAddress]
         [StringLength(150)]
         public string? SecondaryEmail { get; set; }
 
+        [StringLength(50)]
+        public string Status { get; set; } = "active";
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
         public DateTime? UpdatedAt { get; set; }
-    }
+
+        //public bool firstLogin { get; set; }
+
+        // Navigation properties
+        public Roles? Role { get; set; }
+        public Positions? Position { get; set; }
+        public Departments? Department { get; set; }
+        
+        // Navigation cho quản lý
+        [JsonIgnore]
+        public User? Manager { get; set; }
+        
+        // Danh sách nhân viên cấp dưới
+        [JsonIgnore]
+        public ICollection<User>? Subordinates { get; set; }
+	}
 }

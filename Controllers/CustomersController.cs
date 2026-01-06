@@ -25,7 +25,45 @@ namespace erp_backend.Controllers
 		[Authorize]
 		public async Task<ActionResult<IEnumerable<Customer>>> GetCustomers()
 		{
-			return await _context.Customers.ToListAsync();
+			// Lấy role từ JWT token
+			var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role);
+			var role = roleClaim?.Value;
+
+			// Lấy UserId từ JWT token
+			var userIdClaim = User.FindFirst("userid")?.Value;
+
+			var query = _context.Customers.Include(c => c.CreatedByUser).AsQueryable();
+
+			// Nếu role là "user" thì chỉ lấy khách hàng do user đó tạo
+			if (role != null && role.ToLower() == "user")
+			{
+
+				if (userIdClaim != null)
+				{
+					var userId= int.Parse(userIdClaim);
+					query = query.Where(c => c.CreatedByUserId == userId);
+					_logger.LogInformation($"User role detected. Filtering customers for UserId: {userId}");
+
+				}
+				else
+				{
+					_logger.LogWarning("User role detected but UserId claim not found");
+					return null;
+				}
+			}
+			else if (role != null && role.ToLower() == "admin")
+			{
+				// Admin có thể xem tất cả khách hàng
+				_logger.LogInformation("Admin role detected. Returning all customers");
+			}
+			else
+			{
+				// Nếu không có role hoặc role không hợp lệ
+				_logger.LogWarning($"Invalid or missing role: {role}");
+				return Forbid();
+			}
+
+			return await query.ToListAsync();
 		}
 
 		// Lấy khách hàng đang hoạt động
@@ -41,7 +79,9 @@ namespace erp_backend.Controllers
 		[Authorize]
 		public async Task<ActionResult<Customer>> GetCustomer(int id)
 		{
-			var customer = await _context.Customers.FindAsync(id);
+			var customer = await _context.Customers
+				.Include(c => c.CreatedByUser)
+				.FirstOrDefaultAsync(c => c.Id == id);
 
 			if (customer == null)
 			{
@@ -78,8 +118,8 @@ namespace erp_backend.Controllers
 			{
 				if (string.IsNullOrWhiteSpace(customer.Name))
 					return BadRequest("Tên là bắt buộc cho khách hàng cá nhân");
-				if (string.IsNullOrWhiteSpace(customer.Email))
-					return BadRequest("Email là bắt buộc cho khách hàng cá nhân");
+				//if (string.IsNullOrWhiteSpace(customer.Email))
+				//	return BadRequest("Email là bắt buộc cho khách hàng cá nhân");
 				if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
 					return BadRequest("Số điện thoại là bắt buộc cho khách hàng cá nhân");
 			}
@@ -89,8 +129,8 @@ namespace erp_backend.Controllers
 					return BadRequest("Tên công ty là bắt buộc");
 				if (string.IsNullOrWhiteSpace(customer.RepresentativeName))
 					return BadRequest("Tên người đại diện là bắt buộc");
-				if (string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
-					return BadRequest("Email người đại diện là bắt buộc");
+				//if (string.IsNullOrWhiteSpace(customer.RepresentativeEmail))
+				//	return BadRequest("Email người đại diện là bắt buộc");
 				if (string.IsNullOrWhiteSpace(customer.RepresentativePhone))
 					return BadRequest("Số điện thoại người đại diện là bắt buộc");
 			}
@@ -113,6 +153,28 @@ namespace erp_backend.Controllers
 					return BadRequest("Email người đại diện đã tồn tại");
 			}
 
+			// Lấy UserId từ JWT token - SỬA: Dùng ClaimTypes.NameIdentifier thay vì "UserId"
+			var userIdClaim = User.FindFirst("userid")?.Value;
+			if (userIdClaim != null)
+			{
+				var userId = int.Parse(userIdClaim);
+				// Kiểm tra user có tồn tại không
+				var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+				if (userExists)
+				{
+					customer.CreatedByUserId = userId;
+					_logger.LogInformation($"Setting CreatedByUserId to {userId}");
+				}
+				else
+				{
+					_logger.LogWarning($"User with ID {userId} not found in database");
+				}
+			}
+			else
+			{
+				_logger.LogWarning("UserId claim not found in token");
+			}
+
 			// Gán thời gian tạo UTC
 			customer.CreatedAt = DateTime.UtcNow;
 
@@ -126,7 +188,17 @@ namespace erp_backend.Controllers
 			_context.Customers.Add(customer);
 			await _context.SaveChangesAsync();
 
-			return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, customer);
+			// Reload customer with CreatedByUser navigation property
+			var savedCustomer = await _context.Customers
+				.Include(c => c.CreatedByUser)
+				.FirstOrDefaultAsync(c => c.Id == customer.Id);
+
+			if (savedCustomer?.CreatedByUser == null && savedCustomer?.CreatedByUserId != null)
+			{
+				_logger.LogWarning($"CreatedByUser is null even though CreatedByUserId is {savedCustomer.CreatedByUserId}");
+			}
+
+			return CreatedAtAction(nameof(GetCustomer), new { id = savedCustomer.Id }, savedCustomer);
 		}
 
 		// Cập nhật khách hàng
@@ -369,7 +441,7 @@ namespace erp_backend.Controllers
 								var techContactEmail = value.ToString();
 								if (techContactEmail.Length > 150)
 								{
-									return BadRequest(new { message = "Email liên hệ kỹ thuật không được vượt quá 150 ký tự" });
+									return BadRequest(new { message = "Email liên hệ kỹ thuật không được vượt qua 150 ký tự" });
 								}
 								if (!System.Text.RegularExpressions.Regex.IsMatch(techContactEmail, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
 								{
@@ -683,6 +755,116 @@ namespace erp_backend.Controllers
 				.ToListAsync();
 		}
 
+		/// <summary>
+		/// Lấy danh sách khách hàng đã có ít nhất 1 hợp đồng có trạng thái 'Paid'
+		/// GET: api/Customers/with-paid-contracts
+		/// </summary>
+		[HttpGet("with-paid-contracts")]
+		[Authorize]
+		public async Task<ActionResult<IEnumerable<object>>> GetCustomersWithPaidContracts()
+		{
+			try
+			{
+				// Lấy role từ JWT token
+				var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role);
+				var role = roleClaim?.Value;
+
+				// Lấy UserId từ JWT token
+				var userIdClaim = User.FindFirst("userid")?.Value;
+
+				// Query customers có ít nhất 1 contract với Status = "Paid"
+				var query = _context.Customers
+					.Include(c => c.CreatedByUser)
+					.Where(c => _context.SaleOrders
+						.Any(so => so.CustomerId == c.Id && 
+							_context.Contracts.Any(contract => 
+								contract.SaleOrderId == so.Id && 
+								contract.Status.ToLower() == "paid"
+							)
+						)
+					);
+
+				// Nếu role là "user" thì chỉ lấy khách hàng do user đó tạo
+				if (role != null && role.ToLower() == "user")
+				{
+					if (userIdClaim != null && int.TryParse(userIdClaim, out int userId))
+					{
+						query = query.Where(c => c.CreatedByUserId == userId);
+						_logger.LogInformation("User role detected. Filtering customers with paid contracts for UserId: {UserId}", userId);
+					}
+					else
+					{
+						_logger.LogWarning("User role detected but UserId claim not found");
+						return Forbid();
+					}
+				}
+				else if (role != null && role.ToLower() == "admin")
+				{
+					_logger.LogInformation("Admin role detected. Returning all customers with paid contracts");
+				}
+				else
+				{
+					_logger.LogWarning("Invalid or missing role: {Role}", role);
+					return Forbid();
+				}
+
+				// Lấy danh sách customers và đếm số hợp đồng đã thanh toán
+				var customersWithPaidContracts = await query
+					.Select(c => new
+					{
+						Id = c.Id,
+						Name = c.Name,
+						CompanyName = c.CompanyName,
+						Email = c.Email,
+						PhoneNumber = c.PhoneNumber,
+						CustomerType = c.CustomerType,
+						IsActive = c.IsActive,
+						Status = c.Status,
+						CreatedAt = c.CreatedAt,
+						CreatedByUserId = c.CreatedByUserId,
+						CreatedByUserName = c.CreatedByUser != null ? c.CreatedByUser.Name : null,
+						// Đếm số hợp đồng đã thanh toán
+						PaidContractsCount = _context.SaleOrders
+							.Where(so => so.CustomerId == c.Id)
+							.SelectMany(so => _context.Contracts.Where(contract => 
+								contract.SaleOrderId == so.Id && 
+								contract.Status.ToLower() == "paid"
+							))
+							.Count(),
+						// Tổng giá trị các hợp đồng đã thanh toán
+						TotalPaidAmount = _context.SaleOrders
+							.Where(so => so.CustomerId == c.Id)
+							.SelectMany(so => _context.Contracts.Where(contract => 
+								contract.SaleOrderId == so.Id && 
+								contract.Status.ToLower() == "paid"
+							))
+							.Sum(contract => contract.TotalAmount)
+					})
+					.OrderByDescending(c => c.PaidContractsCount)
+					.ThenByDescending(c => c.TotalPaidAmount)
+					.ToListAsync();
+
+				_logger.LogInformation("Found {Count} customers with paid contracts", customersWithPaidContracts.Count);
+
+				return Ok(new
+				{
+					success = true,
+					totalCustomers = customersWithPaidContracts.Count,
+					data = customersWithPaidContracts
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting customers with paid contracts");
+				return StatusCode(500, new 
+				{ 
+					success = false,
+					message = "Lỗi server khi lấy danh sách khách hàng có hợp đồng đã thanh toán", 
+					error = ex.Message 
+				});
+			}
+		}
+
 		private bool CustomerExists(int id)
 		{
 			return _context.Customers.Any(e => e.Id == id);
@@ -696,6 +878,41 @@ namespace erp_backend.Controllers
 			if (dateTime.Kind == DateTimeKind.Local)
 				return dateTime.ToUniversalTime();
 			return dateTime;
+		}
+
+		// ✅ ENDPOINT TEST - Kiểm tra xem User có load được không
+		[HttpGet("test-user-load/{customerId}")]
+		[Authorize]
+		public async Task<IActionResult> TestUserLoad(int customerId)
+		{
+			var customer = await _context.Customers
+				.Include(c => c.CreatedByUser)
+				.FirstOrDefaultAsync(c => c.Id == customerId);
+
+			if (customer == null)
+				return NotFound("Customer not found");
+
+			var result = new
+			{
+				CustomerId = customer.Id,
+				CustomerName = customer.Name,
+				CreatedByUserId = customer.CreatedByUserId,
+				CreatedByUserExists = customer.CreatedByUser != null,
+				CreatedByUserName = customer.CreatedByUser?.Name ?? "NULL",
+				CreatedByUserEmail = customer.CreatedByUser?.Email ?? "NULL",
+				
+				// Kiểm tra user tồn tại trong DB
+				UserExistsInDb = customer.CreatedByUserId.HasValue 
+					? await _context.Users.AnyAsync(u => u.Id == customer.CreatedByUserId.Value)
+					: false,
+				
+				// Load user riêng lẻ
+				UserLoadedSeparately = customer.CreatedByUserId.HasValue
+					? (await _context.Users.FindAsync(customer.CreatedByUserId.Value))?.Name ?? "NOT FOUND"
+					: "NO USER ID"
+			};
+
+			return Ok(result);
 		}
 	}
 }

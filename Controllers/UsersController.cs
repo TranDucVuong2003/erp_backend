@@ -1,6 +1,8 @@
 ﻿using erp_backend.Data;
+using erp_backend.DTO;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
+using erp_backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,15 +11,27 @@ namespace erp_backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    //[Authorize(Roles = "Admin")]
     public class UsersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<UsersController> _logger;
+        private readonly IEmailService _emailService;
+        private readonly IConfiguration _configuration;
+        private readonly IAccountActivationService _activationService;
 
-        public UsersController(ApplicationDbContext context, ILogger<UsersController> logger)
+        public UsersController(
+            ApplicationDbContext context, 
+            ILogger<UsersController> logger,
+            IEmailService emailService,
+            IConfiguration configuration,
+            IAccountActivationService activationService)
         {
             _context = context;
             _logger = logger;
+            _emailService = emailService;
+            _configuration = configuration;
+            _activationService = activationService;
         }
 
 
@@ -25,7 +39,11 @@ namespace erp_backend.Controllers
 		[Authorize]
 		public async Task<ActionResult<IEnumerable<User>>> GetUsers()
         {
-            return await _context.Users.ToListAsync();
+            return await _context.Users
+                .Include(u => u.Role)
+                .Include(u => u.Position)
+                .Include(u => u.Department)
+                .ToListAsync();
         }
 
 
@@ -33,7 +51,11 @@ namespace erp_backend.Controllers
 		[Authorize]
 		public async Task<ActionResult<User>> GetUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .Include(u => u.Position)
+                .Include(u => u.Department)
+                .FirstOrDefaultAsync(u => u.Id == id);
 
             if (user == null)
             {
@@ -44,14 +66,137 @@ namespace erp_backend.Controllers
         }
 
 
+		[HttpGet("department/{departmentId}")]
+		[Authorize]
+		public async Task<ActionResult<IEnumerable<User>>> GetUsersByDepartment(int departmentId)
+		{
+			try
+			{
+				// Kiểm tra department có tồn tại không
+				var departmentExists = await _context.Departments.AnyAsync(d => d.Id == departmentId);
+				if (!departmentExists)
+				{
+					return NotFound(new { message = "Không tìm thấy phòng ban" });
+				}
+
+				var users = await _context.Users
+					.Include(u => u.Role)
+					.Include(u => u.Position)
+					.Include(u => u.Department)
+					.Where(u => u.DepartmentId == departmentId)
+					.OrderBy(u => u.Name)
+					.ToListAsync();
+
+				return Ok(users);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi lấy danh sách người dùng theo phòng ban: {DepartmentId}", departmentId);
+				return StatusCode(500, new { message = "Lỗi server khi lấy danh sách người dùng theo phòng ban", error = ex.Message });
+			}
+		}
+
+
+		[HttpGet("departments-with-users")]
+		[Authorize]
+		public async Task<ActionResult<DepartmentsWithUsersListResponse>> GetDepartmentsWithUsers()
+		{
+			try
+			{
+				// Lấy tất cả departments kèm theo users
+				var departments = await _context.Departments
+					.Include(d => d.Resion)
+					.OrderBy(d => d.Name)
+					.ToListAsync();
+
+				var response = new DepartmentsWithUsersListResponse();
+				
+				foreach (var dept in departments)
+				{
+					// Lấy users của từng department
+					var users = await _context.Users
+						.Include(u => u.Role)
+						.Include(u => u.Position)
+						.Where(u => u.DepartmentId == dept.Id)
+						.OrderBy(u => u.Name)
+						.ToListAsync();
+
+					// Chỉ thêm department nếu có users
+					if (users.Any())
+					{
+						var departmentResponse = new DepartmentWithUsersResponse
+						{
+							Id = dept.Id,
+							Name = dept.Name,
+							ResionId = dept.ResionId,
+							ResionName = dept.Resion?.City,
+							TotalUsers = users.Count,
+							CreatedAt = dept.CreatedAt,
+							UpdatedAt = dept.UpdatedAt,
+							Users = users.Select(u => new DepartmentUserInfo
+							{
+								Id = u.Id,
+								Name = u.Name,
+								Email = u.Email,
+								SecondaryEmail = u.SecondaryEmail,
+								PhoneNumber = u.PhoneNumber,
+								Address = u.Address,
+								Status = u.Status,
+								PositionId = u.PositionId,
+								PositionName = u.Position?.PositionName,
+								PositionLevel = u.Position?.Level,
+								RoleId = u.RoleId,
+								RoleName = u.Role?.Name ?? string.Empty,
+								CreatedAt = u.CreatedAt,
+								UpdatedAt = u.UpdatedAt
+							}).ToList()
+						};
+
+						response.Departments.Add(departmentResponse);
+						response.TotalUsers += users.Count;
+					}
+				}
+
+				response.TotalDepartments = response.Departments.Count;
+
+				_logger.LogInformation("Đã lấy {DepartmentCount} phòng ban với {UserCount} người dùng", 
+					response.TotalDepartments, response.TotalUsers);
+
+				return Ok(response);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Lỗi khi lấy danh sách phòng ban kèm người dùng");
+				return StatusCode(500, new { message = "Lỗi server khi lấy danh sách phòng ban kèm người dùng", error = ex.Message });
+			}
+		}
+
+
         [HttpPost]
 		[Authorize]
-		public async Task<ActionResult<User>> CreateUser(User user)
-        {
+		public async Task<ActionResult<User>> CreateUser([FromBody] CreateUserRequest request)
+		{
             try
             {
-                // Validate required fields
-                if (!ModelState.IsValid)
+				var user = new User
+				{
+					Name = request.Name,
+					Email = request.Email,
+					Password = request.Password,
+					PositionId = request.PositionId,
+					DepartmentId = request.DepartmentId,
+					RoleId = request.RoleId,
+					PhoneNumber = request.PhoneNumber,
+					Address = request.Address,
+					SecondaryEmail = request.SecondaryEmail,
+					Status = request.Status
+				};
+				
+				// Lưu mật khẩu gốc để gửi email (trước khi hash)
+				var plainPassword = user.Password;
+
+				// Validate required fields
+				if (!ModelState.IsValid)
                 {
                     return BadRequest(ModelState);
                 }
@@ -95,18 +240,99 @@ namespace erp_backend.Controllers
                     user.SecondaryEmail = null;
                 }
 
-                // Hash password trước khi lưu
-                if (!string.IsNullOrEmpty(user.Password))
-                {
-                    user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
-                }
+				// Hash password
+				if (!string.IsNullOrEmpty(user.Password))
+				{
+					user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
+				}
 
-                user.CreatedAt = DateTime.UtcNow;
-                _context.Users.Add(user);
-                await _context.SaveChangesAsync();
+				user.CreatedAt = DateTime.UtcNow;
 
-                return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
-            }
+				// Sử dụng transaction để đảm bảo tính nhất quán
+				using var transaction = await _context.Database.BeginTransactionAsync();
+				try
+				{
+					_context.Users.Add(user);
+					await _context.SaveChangesAsync();
+
+					// Kiểm tra xem đã có ActiveAccount chưa
+					var existingActiveAccount = await _context.ActiveAccounts
+						.FirstOrDefaultAsync(a => a.UserId == user.Id);
+
+					if (existingActiveAccount == null)
+					{
+						var active = new ActiveAccount
+						{
+							UserId = user.Id,
+							FirstLogin = request.FirstLogin   // lấy từ DTO
+						};
+
+						_context.ActiveAccounts.Add(active);
+						await _context.SaveChangesAsync();
+					}
+
+					await transaction.CommitAsync();
+
+					// Load navigation properties để trả về
+					await _context.Entry(user)
+						.Reference(u => u.Role)
+						.LoadAsync();
+					await _context.Entry(user)
+						.Reference(u => u.Position)
+						.LoadAsync();
+					await _context.Entry(user)
+						.Reference(u => u.Department)
+						.LoadAsync();
+
+					// Gửi email thông báo tạo tài khoản
+					try
+					{
+						// Tạo activation token
+						var activationToken = await _activationService.GenerateActivationTokenAsync(user.Id, expiryHours: 24);
+						
+						// Lấy base URL từ config hoặc request
+						var baseUrl = _configuration["FrontendUrl"] ?? "https://erpsystem.click";
+						var activationLink = $"{baseUrl}/activate-account?token={Uri.EscapeDataString(activationToken)}";
+						
+						// Gửi email không đồng bộ
+						_ = Task.Run(async () =>
+						{
+							try
+							{
+								await _emailService.SendAccountCreationEmailAsync(user, plainPassword, activationLink);
+							}
+							catch (Exception emailEx)
+							{
+								_logger.LogError(emailEx, "Lỗi khi gửi email tạo tài khoản cho user {UserId}", user.Id);
+							}
+						});
+
+						_logger.LogInformation("Email tạo tài khoản đã được lên lịch gửi cho user {UserId}", user.Id);
+					}
+					catch (Exception emailEx)
+					{
+						// Log lỗi nhưng không throw để không ảnh hưởng đến việc tạo user
+						_logger.LogError(emailEx, "Lỗi khi lên lịch gửi email cho user {UserId}", user.Id);
+					}
+
+					return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
+				}
+				catch (Exception ex)
+				{
+					await transaction.RollbackAsync();
+					_logger.LogError(ex, "Lỗi khi tạo user và ActiveAccount cho userId: {UserId}", user.Id);
+					throw;
+				}
+			}
+			catch (DbUpdateException dbEx)
+			{
+				_logger.LogError(dbEx, "Lỗi database khi tạo user mới: {Message}", dbEx.InnerException?.Message ?? dbEx.Message);
+				return StatusCode(500, new { 
+					message = "Lỗi cơ sở dữ liệu khi tạo người dùng", 
+					error = dbEx.InnerException?.Message ?? dbEx.Message,
+					detail = "Có thể do conflict với dữ liệu hiện có. Vui lòng kiểm tra database."
+				});
+			}
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Lỗi khi tạo user mới");
@@ -192,7 +418,7 @@ namespace erp_backend.Controllers
 							{
 								if (value.Length > 150)
 								{
-									return BadRequest(new { message = "Email không được vượt quá 150 ký tự" });
+									return BadRequest(new { message = "Email không được vượt qua 150 ký tự" });
 								}
 
 								// Validate email format
@@ -232,13 +458,44 @@ namespace erp_backend.Controllers
 							break;
 
 						case "position":
-							if (value != null)
+						case "positionid":
+							if (value != null && int.TryParse(value, out int positionId))
 							{
-								if (value.Length > 100)
+								// Kiểm tra Position có tồn tại không
+								var positionExists = await _context.Positions.AnyAsync(p => p.Id == positionId);
+								if (!positionExists)
 								{
-									return BadRequest(new { message = "Chức vụ không được vượt quá 100 ký tự" });
+									return BadRequest(new { message = "Chức vụ không tồn tại" });
 								}
-								existingUser.Position = value;
+								existingUser.PositionId = positionId;
+							}
+							break;
+
+						case "department":
+						case "departmentid":
+							if (value != null && int.TryParse(value, out int departmentId))
+							{
+								// Kiểm tra Department có tồn tại không
+								var departmentExists = await _context.Departments.AnyAsync(d => d.Id == departmentId);
+								if (!departmentExists)
+								{
+									return BadRequest(new { message = "Phòng ban không tồn tại" });
+								}
+								existingUser.DepartmentId = departmentId;
+							}
+							break;
+
+						case "role":
+						case "roleid":
+							if (value != null && int.TryParse(value, out int roleId))
+							{
+								// Kiểm tra Role có tồn tại không
+								var roleExists = await _context.Roles.AnyAsync(r => r.Id == roleId);
+								if (!roleExists)
+								{
+									return BadRequest(new { message = "Vai trò không tồn tại" });
+								}
+								existingUser.RoleId = roleId;
 							}
 							break;
 
@@ -261,17 +518,6 @@ namespace erp_backend.Controllers
 									return BadRequest(new { message = "Địa chỉ không được vượt quá 500 ký tự" });
 								}
 								existingUser.Address = value;
-							}
-							break;
-
-						case "role":
-							if (value != null)
-							{
-								if (value.Length > 50)
-								{
-									return BadRequest(new { message = "Vai trò không được vượt quá 50 ký tự" });
-								}
-								existingUser.Role = value;
 							}
 							break;
 
@@ -319,6 +565,17 @@ namespace erp_backend.Controllers
 							}
 							break;
 
+						case "status":
+							if (!string.IsNullOrEmpty(value))
+							{
+								if (value.Length > 50)
+								{
+									return BadRequest(new { message = "Trạng thái không được vượt quá 50 ký tự" });
+								}
+								existingUser.Status = value;
+							}
+							break;
+
 						case "id":
 						case "createdat":
 						case "updatedat":
@@ -336,6 +593,14 @@ namespace erp_backend.Controllers
 
 				await _context.SaveChangesAsync();
 
+				// Load lại navigation properties để trả về response
+				await _context.Entry(existingUser)
+					.Reference(u => u.Role)
+					.LoadAsync();
+				await _context.Entry(existingUser)
+					.Reference(u => u.Position)
+					.LoadAsync();
+
 				// Tạo response
 				var response = new UpdateUserResponse
 				{
@@ -345,8 +610,9 @@ namespace erp_backend.Controllers
 						Id = existingUser.Id,
 						Name = existingUser.Name,
 						Email = existingUser.Email,
-						Position = existingUser.Position,
-						Role = existingUser.Role
+						Position = existingUser.Position?.PositionName ?? string.Empty,
+						Role = existingUser.Role?.Name ?? string.Empty,
+						Status = existingUser.Status
 					},
 					UpdatedAt = existingUser.UpdatedAt.Value
 				};
@@ -377,7 +643,11 @@ namespace erp_backend.Controllers
         {
             try
             {
-                var user = await _context.Users.FindAsync(id);
+                var user = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.Position)
+                    .FirstOrDefaultAsync(u => u.Id == id);
+                    
                 if (user == null)
                 {
                     return NotFound(new { message = "Không tìm thấy người dùng" });
@@ -389,8 +659,9 @@ namespace erp_backend.Controllers
                     Id = user.Id,
                     Name = user.Name,
                     Email = user.Email,
-                    Position = user.Position,
-                    Role = user.Role
+                    Position = user.Position?.PositionName ?? string.Empty,
+                    Role = user.Role?.Name ?? string.Empty,
+                    Status = user.Status
                 };
 
                 _context.Users.Remove(user);

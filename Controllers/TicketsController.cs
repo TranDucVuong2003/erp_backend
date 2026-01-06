@@ -5,12 +5,13 @@ using erp_backend.Models;
 using erp_backend.Models.DTOs;
 using erp_backend.Services;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization; // ✅ THÊM
+using Microsoft.AspNetCore.Authorization;
 
 namespace erp_backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class TicketsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -28,12 +29,10 @@ namespace erp_backend.Controllers
         /// <summary>
         /// Lấy danh sách tickets theo role của user
         /// - Admin: Thấy tất cả tickets
-        /// - User: Chỉ thấy tickets được phân công cho mình (AssignedToId = userId)
+        /// - User: Thấy tickets được phân công cho mình (AssignedToId = userId) HOẶC tickets do mình tạo (CreatedById = userId)
         /// </summary>
         [HttpGet("my-tickets")]
-        [Authorize]
         public async Task<ActionResult<IEnumerable<Ticket>>> GetMyTickets(
-            [FromQuery] string? priority,
             [FromQuery] string? status,
             [FromQuery] int? urgencyLevel,
             [FromQuery] int? categoryId)
@@ -55,17 +54,14 @@ namespace erp_backend.Controllers
                     .Include(t => t.CreatedBy)
                     .AsQueryable();
 
-                // ✅ PHÂN QUYỀN: Nếu không phải Admin, chỉ lấy tickets được phân công
+                // ✅ PHÂN QUYỀN: Nếu không phải Admin, chỉ lấy tickets được phân công HOẶC tickets do mình tạo
                 var isAdmin = IsCurrentUserAdmin();
                 if (!isAdmin)
                 {
-                    query = query.Where(t => t.AssignedToId == currentUserId);
+                    query = query.Where(t => t.AssignedToId == currentUserId || t.CreatedById == currentUserId);
                 }
 
                 // Apply filters
-                if (!string.IsNullOrEmpty(priority))
-                    query = query.Where(t => t.Priority.ToLower() == priority.ToLower());
-
                 if (!string.IsNullOrEmpty(status))
                     query = query.Where(t => t.Status.ToLower() == status.ToLower());
 
@@ -102,7 +98,6 @@ namespace erp_backend.Controllers
             [FromQuery] int? customerId,
             [FromQuery] int? categoryId,
             [FromQuery] int? assignedToId,
-            [FromQuery] string? priority,
             [FromQuery] string? status,
             [FromQuery] int? urgencyLevel)
         {
@@ -122,9 +117,6 @@ namespace erp_backend.Controllers
 
             if (assignedToId.HasValue)
                 query = query.Where(t => t.AssignedToId == assignedToId.Value);
-
-            if (!string.IsNullOrEmpty(priority))
-                query = query.Where(t => t.Priority.ToLower() == priority.ToLower());
 
             if (!string.IsNullOrEmpty(status))
                 query = query.Where(t => t.Status.ToLower() == status.ToLower());
@@ -347,7 +339,7 @@ namespace erp_backend.Controllers
                 var normalizedStatus = NormalizeStatus(request.Status);
                 if (!IsValidStatus(normalizedStatus))
                 {
-                    return BadRequest($"Status '{request.Status}' không hợp lệ. Các giá trị hợp lệ: Open, In Progress, Closed, On Hold, Cancelled");
+                    return BadRequest($"Status '{request.Status}' không hợp lệ. Các giá trị hợp lệ: Open, In Progress, Closed, On Hold, Cancelled, Archived");
                 }
 
                 // Get current user for logging
@@ -392,13 +384,21 @@ namespace erp_backend.Controllers
         {
             try
             {
-                // Normalize status
-                ticket.Status = NormalizeStatus(ticket.Status);
+                // Set default status to "New" if not provided
+                if (string.IsNullOrWhiteSpace(ticket.Status))
+                {
+                    ticket.Status = "New";
+                }
+                else
+                {
+                    // Normalize status
+                    ticket.Status = NormalizeStatus(ticket.Status);
+                }
 
                 // Validate status
                 if (!IsValidStatus(ticket.Status))
                 {
-                    return BadRequest($"Status '{ticket.Status}' không hợp lệ. Các giá trị hợp lệ: Open, In Progress, Closed, On Hold, Cancelled");
+                    return BadRequest($"Status '{ticket.Status}' không hợp lệ. Các giá trị hợp lệ: New, Processing, Closed, Archived");
                 }
 
                 // Verify required foreign keys exist
@@ -521,7 +521,7 @@ namespace erp_backend.Controllers
 
         private int GetCurrentUserId()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            var userIdClaim = User.FindFirst("userid")?.Value
                              ?? User.FindFirst("sub")?.Value
                              ?? User.FindFirst("UserId")?.Value
                              ?? User.FindFirst("id")?.Value;
@@ -554,15 +554,14 @@ namespace erp_backend.Controllers
         private string NormalizeStatus(string status)
         {
             if (string.IsNullOrWhiteSpace(status))
-                return "Open";
+                return "New";
 
             return status.Trim().ToLower() switch
             {
-                "open" or "new" => "Open",
-                "in progress" or "working" or "inprogress" or "in_progress" => "In Progress",
+                "new" => "New",
+                "processing" or "in progress" or "working" or "inprogress" or "in_progress" or "open" => "Processing",
                 "closed" or "completed" or "resolved" or "done" => "Closed",
-                "on hold" or "pending" or "onhold" => "On Hold",
-                "cancelled" or "canceled" => "Cancelled",
+                "archived" => "Archived",
                 _ => status.Trim() // Return original if no match
             };
         }
@@ -572,7 +571,7 @@ namespace erp_backend.Controllers
         /// </summary>
         private bool IsValidStatus(string status)
         {
-            var validStatuses = new[] { "Open", "In Progress", "Closed", "On Hold", "Cancelled" };
+            var validStatuses = new[] { "New", "Processing", "Closed", "Archived" };
             return validStatuses.Contains(status);
         }
 
@@ -583,7 +582,7 @@ namespace erp_backend.Controllers
         {
             return status?.ToLower() switch
             {
-                "closed" or "completed" or "resolved" or "done" => true,
+                "closed" or "completed" or "resolved" or "done" or "archived" => true,
                 _ => false
             };
         }

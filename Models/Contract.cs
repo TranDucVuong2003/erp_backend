@@ -7,14 +7,6 @@ namespace erp_backend.Models
 	{
 		public int Id { get; set; }
 
-		//[Required]
-		//[StringLength(255)]
-		//public string Name { get; set; } = string.Empty;
-
-		//public int? ServiceId { get; set; } 
-
-		//public int? AddonsId { get; set; } 
-		//public int? TaxId { get; set; } // Liên kết đến bảng Tax
 		[Required]
 		public int SaleOrderId { get; set; }
 
@@ -22,7 +14,10 @@ namespace erp_backend.Models
 		//public int CustomerId { get; set; } 
 
 		[Required]
-		public int UserId { get; set; } 
+		public int UserId { get; set; }
+
+		// ✅ THÊM: Số hợp đồng - Tự động tăng
+		public int NumberContract { get; set; }
 
 		[StringLength(50)]
 		public string Status { get; set; } = "Draft"; // Default status
@@ -45,6 +40,17 @@ namespace erp_backend.Models
 		[StringLength(2000)]
 		public string? Notes { get; set; } // ✅ THÊM: Ghi chú
 
+		// ✅ THÊM: Đánh dấu có xuất hóa đơn hay không
+		public bool ExtractInvoices { get; set; } = false; // Mặc định là chưa xuất hóa đơn
+
+		// ✅ PDF Storage Fields
+		[StringLength(500)]
+		public string? ContractPdfPath { get; set; } // Đường dẫn file PDF
+
+		public DateTime? PdfGeneratedAt { get; set; } // Thời điểm tạo PDF
+
+		public long? PdfFileSize { get; set; } // Kích thước file (bytes)
+
 		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
 		public DateTime? UpdatedAt { get; set; }
@@ -52,5 +58,9 @@ namespace erp_backend.Models
 		// Navigation properties (NO JsonIgnore - we handle it in DTOs)
 		public User? User { get; set; }
 		public SaleOrder? SaleOrder { get; set; }
+		
+		// ✅ THÊM: Navigation property đến MatchedTransactions
+		[JsonIgnore] // Tránh circular reference khi serialize
+		public ICollection<MatchedTransaction>? MatchedTransactions { get; set; }
 	}
 }

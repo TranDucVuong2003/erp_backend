@@ -19,6 +19,7 @@ namespace erp_backend.Models.DTOs
 		public string AccessToken { get; set; } = string.Empty;
 		public DateTime ExpiresAt { get; set; }
 		public UserInfo User { get; set; } = new UserInfo();
+		public bool FirstLogin { get; set; }
 		public string Message { get; set; } = "Đăng nhập thành công";
 	}
 
@@ -31,13 +32,28 @@ namespace erp_backend.Models.DTOs
 	public class SessionInfo
 	{
 		public int Id { get; set; }
+		public int UserId { get; set; }
+		public string UserName { get; set; } = string.Empty;
+		public string UserEmail { get; set; } = string.Empty;
+		public string UserRole { get; set; } = string.Empty;
 		public string DeviceInfo { get; set; } = string.Empty;
 		public string IpAddress { get; set; } = string.Empty;
+		public string? UserAgent { get; set; }
 		public DateTime CreatedAt { get; set; }
 		public DateTime ExpiresAt { get; set; }
+		public bool IsUsed { get; set; }
+		public bool IsRevoked { get; set; }
+		public DateTime? RevokedAt { get; set; }
+		public string? ReasonRevoked { get; set; }
+		public bool IsActive { get; set; }
 		public bool IsCurrentSession { get; set; }
 	}
 	
+	public class RevokeSessionRequest
+	{
+		public string? Reason { get; set; }
+	}
+
 	public class UserInfo
 	{
 		public int Id { get; set; }
@@ -45,6 +61,7 @@ namespace erp_backend.Models.DTOs
 		public string Email { get; set; } = string.Empty;
 		public string Position { get; set; } = string.Empty;
 		public string Role { get; set; } = string.Empty;
+		public string Status { get; set; } = string.Empty;
 	}
 
 	public class RegisterRequest
@@ -111,32 +128,6 @@ namespace erp_backend.Models.DTOs
 		public DateTime UpdatedAt { get; set; }
 	}
 
-	public class SaleOrderInfo
-	{
-		public int Id { get; set; }
-		public string Title { get; set; } = string.Empty;
-		public int CustomerId { get; set; }
-		public decimal Value { get; set; }
-		public int Probability { get; set; }
-		public string? Notes { get; set; }
-		public int? ServiceId { get; set; }
-		public int? AddonId { get; set; }
-	}
-
-	public class UpdateSaleOrderResponse
-	{
-		public string Message { get; set; } = string.Empty;
-		public SaleOrderInfo SaleOrder { get; set; } = null!;
-		public DateTime UpdatedAt { get; set; }
-	}
-
-	public class DeleteSaleOrderResponse
-	{
-		public string Message { get; set; } = string.Empty;
-		public SaleOrderInfo DeletedSaleOrder { get; set; } = null!;
-		public DateTime DeletedAt { get; set; }
-	}
-
 	public class ServiceInfo
 	{
 		public int Id { get; set; }
@@ -144,7 +135,6 @@ namespace erp_backend.Models.DTOs
 		public string? Description { get; set; }
 		public decimal Price { get; set; }
 		public int? Quantity { get; set; }
-		public string? Category { get; set; }
 		public bool IsActive { get; set; }
 		public string? Notes { get; set; }
 	}
@@ -170,7 +160,6 @@ namespace erp_backend.Models.DTOs
 		public string? Description { get; set; }
 		public decimal Price { get; set; }
 		public int? Quantity { get; set; }
-		public string? Type { get; set; }
 		public bool IsActive { get; set; }
 		public string? Notes { get; set; }
 	}
@@ -187,5 +176,67 @@ namespace erp_backend.Models.DTOs
 		public string Message { get; set; } = string.Empty;
 		public AddonInfo DeletedAddon { get; set; } = null!;
 		public DateTime DeletedAt { get; set; }
+	}
+
+	public class ChangePasswordFirstTimeRequest
+	{
+		[Required(ErrorMessage = "Mật khẩu mới là bắt buộc")]
+		[MinLength(8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự")]
+		public string NewPassword { get; set; } = string.Empty;
+		
+		[Required(ErrorMessage = "Xác nhận mật khẩu là bắt buộc")]
+		[Compare("NewPassword", ErrorMessage = "Mật khẩu xác nhận không khớp")]
+		public string ConfirmPassword { get; set; } = string.Empty;
+	}
+
+	/// <summary>
+	/// DTO yêu cầu gửi OTP để đổi mật khẩu
+	/// </summary>
+	public class RequestChangePasswordOtpRequest
+	{
+		[Required(ErrorMessage = "Email là bắt buộc")]
+		[EmailAddress(ErrorMessage = "Email không hợp lệ")]
+		public string Email { get; set; } = string.Empty;
+	}
+
+	/// <summary>
+	/// Response sau khi gửi OTP thành công
+	/// </summary>
+	public class RequestChangePasswordOtpResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public DateTime ExpiresAt { get; set; }
+		public string Email { get; set; } = string.Empty;
+	}
+
+	/// <summary>
+	/// DTO xác thực OTP và đổi mật khẩu
+	/// </summary>
+	public class VerifyOtpAndChangePasswordRequest
+	{
+		[Required(ErrorMessage = "Email là bắt buộc")]
+		[EmailAddress(ErrorMessage = "Email không hợp lệ")]
+		public string Email { get; set; } = string.Empty;
+
+		[Required(ErrorMessage = "Mã OTP là bắt buộc")]
+		[StringLength(6, MinimumLength = 6, ErrorMessage = "Mã OTP phải có 6 chữ số")]
+		public string Otp { get; set; } = string.Empty;
+
+		[Required(ErrorMessage = "Mật khẩu mới là bắt buộc")]
+		[MinLength(8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự")]
+		public string NewPassword { get; set; } = string.Empty;
+
+		[Required(ErrorMessage = "Xác nhận mật khẩu là bắt buộc")]
+		[Compare("NewPassword", ErrorMessage = "Mật khẩu xác nhận không khớp")]
+		public string ConfirmPassword { get; set; } = string.Empty;
+	}
+
+	/// <summary>
+	/// Response sau khi đổi mật khẩu thành công
+	/// </summary>
+	public class ChangePasswordResponse
+	{
+		public string Message { get; set; } = string.Empty;
+		public DateTime ChangedAt { get; set; }
 	}
 }

@@ -5,20 +5,27 @@ using erp_backend.Data;
 using erp_backend.Models;
 using erp_backend.Models.DTOs;
 using System.Text.Json;
+using erp_backend.Services;
 
 namespace erp_backend.Controllers
 {
 	[ApiController]
 	[Route("api/[controller]")]
+	[Authorize]
 	public class QuotesController : ControllerBase
 	{
 		private readonly ApplicationDbContext _context;
 		private readonly ILogger<QuotesController> _logger;
+		private readonly IPdfService _pdfService;
 
-		public QuotesController(ApplicationDbContext context, ILogger<QuotesController> logger)
+		public QuotesController(
+			ApplicationDbContext context, 
+			ILogger<QuotesController> logger,
+			IPdfService pdfService)
 		{
 			_context = context;
 			_logger = logger;
+			_pdfService = pdfService;
 		}
 
 		// ✅ Helper method: Lấy User ID từ JWT token
@@ -35,18 +42,59 @@ namespace erp_backend.Controllers
 
 		// GET: api/Quotes
 		[HttpGet]
-		//[Authorize]
+		[Authorize]
 		public async Task<ActionResult<IEnumerable<object>>> GetQuotes()
 		{
-			var quotes = await _context.Quotes
+			// Lấy role từ JWT token
+			var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role);
+			var role = roleClaim?.Value;
+
+			// Lấy UserId từ JWT token
+			var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == "userid");
+			
+			var query = _context.Quotes
 				.Include(q => q.Customer)
 				.Include(q => q.CreatedByUser)
+					.ThenInclude(u => u.Position)
 				.Include(q => q.CategoryServiceAddon)
 				.Include(q => q.QuoteServices)
 					.ThenInclude(qs => qs.Service)
+						.ThenInclude(s => s!.Tax)
+				.Include(q => q.QuoteServices)
+					.ThenInclude(qs => qs.Service)
+						.ThenInclude(s => s!.CategoryServiceAddons)
 				.Include(q => q.QuoteAddons)
 					.ThenInclude(qa => qa.Addon)
-				.ToListAsync();
+				.AsQueryable();
+
+			// Nếu role là "user" thì chỉ lấy báo giá do user đó tạo
+			if (role != null && role.ToLower() == "user")
+			{
+				if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+				{
+					// Lọc theo CreatedByUserId
+					query = query.Where(q => q.CreatedByUserId == userId);
+					_logger.LogInformation($"User role detected. Filtering quotes for UserId: {userId}");
+				}
+				else
+				{
+					_logger.LogWarning("User role detected but UserId claim not found");
+					return Forbid();
+				}
+			}
+			else if (role != null && role.ToLower() == "admin")
+			{
+				// Admin có thể xem tất cả báo giá
+				_logger.LogInformation("Admin role detected. Returning all quotes");
+			}
+			else
+			{
+				// Nếu không có role hoặc role không hợp lệ
+				_logger.LogWarning($"Invalid or missing role: {role}");
+				return Forbid();
+			}
+
+			var quotes = await query.ToListAsync();
 
 			var response = quotes.Select(q => new
 			{		
@@ -73,14 +121,31 @@ namespace erp_backend.Controllers
 					qs.Id,
 					qs.ServiceId,
 					ServiceName = qs.Service?.Name,
-					UnitPrice = qs.Service?.Price ?? 0
+					UnitPrice = qs.UnitPrice,
+					qs.Quantity,
+					qs.Notes,
+					Service = qs.Service != null ? new
+					{
+						qs.Service.Id,
+						qs.Service.Name,
+						qs.Service.Description,
+						qs.Service.Price,
+						qs.Service.IsActive,
+						Tax = qs.Service.Tax != null ? new
+						{
+							qs.Service.Tax.Id,
+							qs.Service.Tax.Rate
+						} : null
+					} : null
 				}).ToList(),
 				Addons = q.QuoteAddons.Select(qa => new
 				{
 					qa.Id,
 					qa.AddonId,
 					AddonName = qa.Addon?.Name,
-					UnitPrice = qa.Addon?.Price ?? 0
+					UnitPrice = qa.UnitPrice,
+					qa.Quantity,
+					qa.Notes
 				}).ToList(),
 				q.CustomService,
 				q.FilePath,
@@ -100,6 +165,7 @@ namespace erp_backend.Controllers
 			var quote = await _context.Quotes
 				.Include(q => q.Customer)
 				.Include(q => q.CreatedByUser)
+					.ThenInclude(u => u.Position)
 				.Include(q => q.CategoryServiceAddon)
 				.Include(q => q.QuoteServices)
 					.ThenInclude(qs => qs.Service)
@@ -310,8 +376,9 @@ namespace erp_backend.Controllers
 						{
 							var unitPrice = svc.UnitPrice > 0 ? svc.UnitPrice : service.Price;
 							var lineTotal = unitPrice * svc.Quantity;
-							var vatRate = service.Tax?.Rate ?? 10;
-							calculatedAmount += lineTotal * (1 + vatRate / 100);
+							// ✅ Get tax rate from Service.Tax, default to 0 if not set
+							var vatRate = service.Tax?.Rate ?? 0f;
+							calculatedAmount += lineTotal * (1 + (decimal)vatRate / 100);
 						}
 					}
 				}
@@ -331,8 +398,9 @@ namespace erp_backend.Controllers
 						{
 							var unitPrice = addonDto.UnitPrice > 0 ? addonDto.UnitPrice : addon.Price;
 							var lineTotal = unitPrice * addonDto.Quantity;
-							var vatRate = addon.Tax?.Rate ?? 10;
-							calculatedAmount += lineTotal * (1 + vatRate / 100);
+							// ✅ Get tax rate from Addon.Tax, default to 0 if not set
+							var vatRate = addon.Tax?.Rate ?? 0f;
+							calculatedAmount += lineTotal * (1 + (decimal)vatRate / 100);
 						}
 					}
 				}
@@ -534,8 +602,9 @@ namespace erp_backend.Controllers
 						{
 							var unitPrice = svc.UnitPrice > 0 ? svc.UnitPrice : service.Price;
 							var lineTotal = unitPrice * svc.Quantity;
-							var vatRate = service.Tax?.Rate ?? 10;
-							calculatedAmount += lineTotal * (1 + vatRate / 100);
+							// ✅ Get tax rate from Service.Tax, default to 0 if not set
+							var vatRate = service.Tax?.Rate ?? 0f;
+							calculatedAmount += lineTotal * (1 + (decimal)vatRate / 100);
 						}
 					}
 				}
@@ -555,17 +624,48 @@ namespace erp_backend.Controllers
 						{
 							var unitPrice = addonDto.UnitPrice > 0 ? addonDto.UnitPrice : addon.Price;
 							var lineTotal = unitPrice * addonDto.Quantity;
-							var vatRate = addon.Tax?.Rate ?? 10;
-							calculatedAmount += lineTotal * (1 + vatRate / 100);
+							// ✅ Get tax rate from Addon.Tax, default to 0 if not set
+							var vatRate = addon.Tax?.Rate ?? 0f;
+							calculatedAmount += lineTotal * (1 + (decimal)vatRate / 100);
 						}
 					}
+				}
+
+				// ✅ Invalidate PDF cache nếu có thay đổi quan trọng
+				bool needsRegenerate = dto.CustomerId != existingQuote.CustomerId ||
+							  dto.CreatedByUserId != existingQuote.CreatedByUserId ||
+							  dto.CategoryServiceAddonId != existingQuote.CategoryServiceAddonId ||
+							  calculatedAmount != existingQuote.Amount ||
+							  (dto.Services?.Count ?? 0) != existingQuote.QuoteServices.Count ||
+							  (dto.Addons?.Count ?? 0) != existingQuote.QuoteAddons.Count;
+
+				if (needsRegenerate && !string.IsNullOrEmpty(existingQuote.FilePath))
+				{
+					// Xóa file PDF cũ
+					var relativePath = existingQuote.FilePath.TrimStart('/');
+					var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
+					
+					if (System.IO.File.Exists(oldFilePath))
+					{
+						try
+						{
+							System.IO.File.Delete(oldFilePath);
+							_logger.LogInformation("Đã xóa file PDF cũ do cập nhật Quote: {FilePath}", existingQuote.FilePath);
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Không thể xóa file PDF cũ: {FilePath}", existingQuote.FilePath);
+						}
+					}
+
+					// Reset thông tin PDF
+					existingQuote.FilePath = null;
 				}
 
 				existingQuote.CustomerId = dto.CustomerId;
 				existingQuote.CustomServiceJson = dto.CustomService != null 
 					? JsonSerializer.Serialize(dto.CustomService) 
 					: null;
-				existingQuote.FilePath = dto.FilePath;
 				existingQuote.Amount = calculatedAmount; // ✅ CHỈ tính từ Services + Addons (BAO GỒM VAT)
 				existingQuote.CreatedByUserId = dto.CreatedByUserId;
 				existingQuote.CategoryServiceAddonId = dto.CategoryServiceAddonId;
@@ -684,6 +784,28 @@ namespace erp_backend.Controllers
 					return NotFound(new { message = "Không tìm thấy báo giá" });
 				}
 
+				// ✅ Xóa file PDF nếu tồn tại
+				if (!string.IsNullOrEmpty(quote.FilePath))
+				{
+					// Remove leading slash if exists
+					var relativePath = quote.FilePath.TrimStart('/');
+					var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
+					
+					if (System.IO.File.Exists(filePath))
+					{
+						try
+						{
+							System.IO.File.Delete(filePath);
+							_logger.LogInformation("Đã xóa file PDF báo giá: {FilePath}", quote.FilePath);
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Không thể xóa file PDF báo giá: {FilePath}", quote.FilePath);
+							// Tiếp tục xóa record trong database dù file không xóa được
+						}
+					}
+				}
+
 				_context.Quotes.Remove(quote);
 				await _context.SaveChangesAsync();
 
@@ -712,11 +834,14 @@ namespace erp_backend.Controllers
 				var quote = await _context.Quotes
 					.Include(q => q.Customer)
 					.Include(q => q.CreatedByUser)
+						.ThenInclude(u => u.Position)
 					.Include(q => q.CategoryServiceAddon)
 					.Include(q => q.QuoteServices)
 						.ThenInclude(qs => qs.Service)
+							.ThenInclude(s => s!.Tax)
 					.Include(q => q.QuoteAddons)
 						.ThenInclude(qa => qa.Addon)
+							.ThenInclude(a => a!.Tax)
 					.FirstOrDefaultAsync(q => q.Id == id);
 
 				if (quote == null)
@@ -725,18 +850,15 @@ namespace erp_backend.Controllers
 				if (quote.Customer == null)
 					return BadRequest(new { message = "Customer không tồn tại" });
 
-				var templatePath = Path.Combine(
-					Directory.GetCurrentDirectory(), 
-					"wwwroot", 
-					"Templates", 
-					"QuoteTemplate.html"
-				);
-				
-				if (!System.IO.File.Exists(templatePath))
-					return NotFound(new { message = "Không tìm thấy template báo giá" });
+				// ✅ Lấy template từ database thay vì file
+				var template = await _context.DocumentTemplates
+					.Where(t => t.Code == "QUOTE_DEFAULT" && t.IsActive)
+					.FirstOrDefaultAsync();
 
-				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
-				var htmlContent = BindQuoteDataToTemplate(htmlTemplate, quote);
+				if (template == null)
+					return NotFound(new { message = "Không tìm thấy template báo giá trong database" });
+
+				var htmlContent = BindQuoteDataToTemplate(template.HtmlContent, quote);
 
 				return Content(htmlContent, "text/html");
 			}
@@ -758,6 +880,7 @@ namespace erp_backend.Controllers
 				var quote = await _context.Quotes
 					.Include(q => q.Customer)
 					.Include(q => q.CreatedByUser)
+						.ThenInclude(u => u.Position)
 					.Include(q => q.CategoryServiceAddon)
 					.Include(q => q.QuoteServices)
 						.ThenInclude(qs => qs.Service)
@@ -773,32 +896,18 @@ namespace erp_backend.Controllers
 				if (quote.Customer == null)
 					return BadRequest(new { message = "Customer không tồn tại" });
 
-				var templatePath = Path.Combine(
-					Directory.GetCurrentDirectory(), 
-					"wwwroot", 
-					"Templates", 
-					"QuoteTemplate.html"
-				);
+				// ✅ Lấy template từ database thay vì file
+				var template = await _context.DocumentTemplates
+					.Where(t => t.Code == "QUOTE_DEFAULT" && t.IsActive)
+					.FirstOrDefaultAsync();
 
-				if (!System.IO.File.Exists(templatePath))
-					return NotFound(new { message = "Không tìm thấy template báo giá" });
+				if (template == null)
+					return NotFound(new { message = "Không tìm thấy template báo giá trong database" });
 
-				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
-				var htmlContent = BindQuoteDataToTemplate(htmlTemplate, quote);
+				var htmlContent = BindQuoteDataToTemplate(template.HtmlContent, quote);
 
-				var renderer = new IronPdf.ChromePdfRenderer();
-				renderer.RenderingOptions.PaperSize = IronPdf.Rendering.PdfPaperSize.A4;
-				renderer.RenderingOptions.MarginTop = 8;
-				renderer.RenderingOptions.MarginBottom = 8;
-				renderer.RenderingOptions.MarginLeft = 8;
-				renderer.RenderingOptions.MarginRight = 8;
-				renderer.RenderingOptions.CssMediaType = IronPdf.Rendering.PdfCssMediaType.Print;
-				renderer.RenderingOptions.PrintHtmlBackgrounds = true;
-				renderer.RenderingOptions.CreatePdfFormsFromHtml = false;
-				renderer.RenderingOptions.EnableJavaScript = false;
-
-				var pdf = await Task.Run(() => renderer.RenderHtmlAsPdf(htmlContent));
-				var pdfBytes = pdf.BinaryData;
+				// ✅ Use PuppeteerSharp through IPdfService
+				var pdfBytes = await _pdfService.ConvertHtmlToPdfAsync(htmlContent);
 
 				var fileName = $"BaoGia_{quote.Id}_{DateTime.Now:yyyyMMdd}.pdf";
 				var quotesFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Quotes");
@@ -826,6 +935,9 @@ namespace erp_backend.Controllers
 
 		private string BindQuoteDataToTemplate(string template, Quote quote)
 		{
+			// ✅ Decode escape characters từ database
+			template = System.Text.RegularExpressions.Regex.Unescape(template);
+
 			var customer = quote.Customer!;
 			var now = DateTime.Now;
 
@@ -843,7 +955,7 @@ namespace erp_backend.Controllers
 					.Replace("{{nguoi_tao_quote}}", createdByUser.Name ?? "")
 					.Replace("{{email_nguoi_tao}}", createdByUser.Email ?? "")
 					.Replace("{{sdt_nguoi_tao}}", createdByUser.PhoneNumber ?? "")
-					.Replace("{{chuc_vu_nguoi_tao}}", createdByUser.Position ?? "");
+					.Replace("{{chuc_vu_nguoi_tao}}", createdByUser.Position?.PositionName ?? "");
 			}
 			else
 			{
@@ -893,8 +1005,9 @@ namespace erp_backend.Controllers
 				if (service == null) continue;
 
 				var lineTotal = qs.UnitPrice * qs.Quantity;
-				var vatRate = service.Tax?.Rate ?? 10;
-				var totalWithVat = lineTotal + (lineTotal * vatRate / 100);
+				// ✅ Get tax rate from Service.Tax, default to 0 if not set
+				var vatRate = service.Tax?.Rate ?? 0f;
+				var totalWithVat = lineTotal * (1 + (decimal)vatRate / 100);
 
 				items.AppendLine($@"
                 <tr>
@@ -926,8 +1039,9 @@ namespace erp_backend.Controllers
 				if (addon == null) continue;
 
 				var lineTotal = qa.UnitPrice * qa.Quantity;
-				var vatRate = addon.Tax?.Rate ?? 10;
-				var totalWithVat = lineTotal + (lineTotal * vatRate / 100);
+				// ✅ Get tax rate from Addon.Tax, default to 0 if not set
+				var vatRate = addon.Tax?.Rate ?? 0f;
+				var totalWithVat = lineTotal * (1 + (decimal)vatRate / 100);
 
 				items.AppendLine($@"
                 <tr>
@@ -969,13 +1083,34 @@ namespace erp_backend.Controllers
 			// ✅ Process Custom Services ONLY - This is the ONLY section in Detail Table
 			if (quote.CustomService != null && quote.CustomService.Any())
 			{
+				// ✅ Create a lookup dictionary for services to get their tax rates
+				var serviceTaxLookup = quote.QuoteServices
+					.Where(qs => qs.Service != null)
+					.ToDictionary(
+						qs => qs.Service!.Name, 
+						qs => qs.Service!.Tax?.Rate ?? 0f
+					);
+
 				foreach (var customService in quote.CustomService)
 				{
 					var categoryName = quote.CategoryServiceAddon?.Name ?? 
 						(!string.IsNullOrEmpty(customService.RelatedService) ? customService.RelatedService : "Dịch vụ tùy chỉnh");
 					
 					var lineTotal = customService.UnitPrice * customService.Quantity;
-					var totalWithVat = lineTotal * (1 + customService.Tax / 100);
+					
+					// ✅ Get tax rate from the custom service, or try to match with related service
+					float vatRate = customService.Tax;
+					
+					// If tax is 0 and there's a related service, try to get tax from that service
+					if (vatRate == 0 && !string.IsNullOrEmpty(customService.RelatedService))
+					{
+						if (serviceTaxLookup.TryGetValue(customService.RelatedService, out var relatedTax))
+						{
+							vatRate = relatedTax;
+						}
+					}
+					
+					var totalWithVat = lineTotal * (1 + (decimal)vatRate / 100);
 
 					items.AppendLine($@"
                     <tr>
@@ -995,7 +1130,7 @@ namespace erp_backend.Controllers
                             {customService.Quantity}
                         </td>
                         <td style='border: 1px solid #ddd; padding: 8px; text-align: right; vertical-align: top; font-size: 11px;'>
-                            {customService.Tax:N2}
+                            {vatRate:N2}
                         </td>
                         <td style='border: 1px solid #ddd; padding: 8px; text-align: right; vertical-align: top; font-size: 11px;'>
                             {totalWithVat:N0}
@@ -1019,8 +1154,9 @@ namespace erp_backend.Controllers
 				if (service == null) continue;
 
 				var lineTotal = qs.UnitPrice * qs.Quantity;
-				var vatRate = service.Tax?.Rate ?? 10;
-				total += lineTotal * (1 + vatRate / 100);
+				// ✅ Get tax rate from Service.Tax, default to 0 if not set
+				var vatRate = service.Tax?.Rate ?? 0f;
+				total += lineTotal * (1 + (decimal)vatRate / 100);
 			}
 
 			// Process Addons ONLY
@@ -1030,8 +1166,9 @@ namespace erp_backend.Controllers
 				if (addon == null) continue;
 
 				var lineTotal = qa.UnitPrice * qa.Quantity;
-				var vatRate = addon.Tax?.Rate ?? 10;
-				total += lineTotal * (1 + vatRate / 100);
+				// ✅ Get tax rate from Addon.Tax, default to 0 if not set
+				var vatRate = addon.Tax?.Rate ?? 0f;
+				total += lineTotal * (1 + (decimal)vatRate / 100);
 			}
 
 			// ❌ DO NOT include CustomService in grand total

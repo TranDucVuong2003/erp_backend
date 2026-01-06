@@ -22,9 +22,23 @@ namespace erp_backend.Services
 		public JwtService(IConfiguration configuration)
 		{
 			_configuration = configuration;
-			_keyBytes = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"] ?? "YourSecureKeyWithAtLeast32Characters");
-			_issuer = _configuration["Jwt:Issuer"] ?? string.Empty;
-			_audience = _configuration["Jwt:Audience"] ?? string.Empty;
+			
+			// L?y JWT Key t? configuration, throw exception n?u thi?u
+			var jwtKey = _configuration["Jwt:Key"];
+			if (string.IsNullOrWhiteSpace(jwtKey))
+			{
+				throw new InvalidOperationException("JWT Key is not configured in appsettings.json. Please add Jwt:Key configuration.");
+			}
+
+			// Ki?m tra ?? dài key t?i thi?u
+			if (jwtKey.Length < 32)
+			{
+				throw new InvalidOperationException("JWT Key must be at least 32 characters long for security reasons.");
+			}
+
+			_keyBytes = Encoding.UTF8.GetBytes(jwtKey);
+			_issuer = _configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("JWT Issuer is not configured.");
+			_audience = _configuration["Jwt:Audience"] ?? throw new InvalidOperationException("JWT Audience is not configured.");
 			_expiresInMinutes = int.TryParse(_configuration["Jwt:ExpiresInMinutes"], out var m) ? m : 30;
 			_signingKey = new SymmetricSecurityKey(_keyBytes);
 		}
@@ -35,10 +49,10 @@ namespace erp_backend.Services
 
 			var claims = new List<Claim>
 			{
-				new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+				new Claim("userid", user.Id.ToString()),
 				new Claim(ClaimTypes.Name, user.Name),
 				new Claim(ClaimTypes.Email, user.Email),
-				new Claim(ClaimTypes.Role, user.Role)
+				new Claim(ClaimTypes.Role, user.Role?.Name ?? "User")
 			};
 
 			var tokenDescriptor = new SecurityTokenDescriptor

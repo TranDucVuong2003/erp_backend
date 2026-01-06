@@ -5,18 +5,12 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using erp_backend.Data;
 using erp_backend.Services;
-using IronPdf;
+using erp_backend.Middleware;
+using erp_backend.Hubs;
 using Microsoft.AspNetCore.Http.Features;
-using System.Text.Json.Serialization; // ✅ THÊM
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Cấu hình IronPDF License Key từ appsettings.json
-var ironPdfLicenseKey = builder.Configuration["IronPdf:LicenseKey"];
-if (!string.IsNullOrEmpty(ironPdfLicenseKey))
-{
-	IronPdf.License.LicenseKey = ironPdfLicenseKey;
-}
 
 // Add services to the container.	
 // ✅ CẤU HÌNH JSON SERIALIZER
@@ -85,6 +79,30 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 // Add FileService
 builder.Services.AddScoped<IFileService, FileService>();
 
+// ✅ Add FileUploadService
+builder.Services.AddScoped<IFileUploadService, FileUploadService>();
+
+// ✅ Add PdfService (using PuppeteerSharp) as Singleton to reuse browser instance
+builder.Services.AddSingleton<IPdfService, PdfService>();
+
+// Add Salary Report Service
+builder.Services.AddScoped<ISalaryReportService, SalaryReportService>();
+
+// Add Account Activation Service
+builder.Services.AddScoped<IAccountActivationService, AccountActivationService>();
+
+// ✅ Add KPI Calculation Service
+builder.Services.AddScoped<IKpiCalculationService, KpiCalculationService>();
+
+// ✅ Add Password Reset OTP Service
+builder.Services.AddScoped<IPasswordResetOtpService, PasswordResetOtpService>();
+
+// ✅ Add Notification Service
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
+// ✅ Add SignalR
+builder.Services.AddSignalR();
+
 // Add Authorization
 builder.Services.AddAuthorization();
 
@@ -93,10 +111,10 @@ builder.Services.AddCors(options =>
 {
 	options.AddPolicy("AllowReactApp", policy =>
 	{
-		policy.WithOrigins("http://localhost:3000", "http://localhost:5173", "http://localhost:4200") // React dev server ports
+		policy.WithOrigins("http://localhost:5173", "https://erpsystem.click") // React dev server ports
 			  .AllowAnyMethod()
 			  .AllowAnyHeader()
-			  .AllowCredentials();
+			  .AllowCredentials(); // ✅ QUAN TRỌNG cho SignalR
 	});
 });
 
@@ -140,6 +158,10 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// ✅ Initialize PuppeteerSharp browser on startup
+var pdfService = app.Services.GetRequiredService<IPdfService>();
+await pdfService.InitializeBrowserAsync();
+
 // Ensure static files middleware is included
 app.UseStaticFiles();
 
@@ -159,6 +181,13 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Add JWT Token Validation Middleware - Kiểm tra session có bị revoke không
+app.UseMiddleware<JwtTokenValidationMiddleware>();
+
 app.MapControllers();
+
+// ✅ Map SignalR Hub
+app.MapHub<PaymentHub>("/paymentHub");
+app.MapHub<NotificationHub>("/hubs/notification");
 
 app.Run();

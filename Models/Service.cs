@@ -20,9 +20,6 @@ namespace erp_backend.Models
 		[Range(1, int.MaxValue, ErrorMessage = "Số lượng phải lớn hơn 0")]
 		public int? Quantity { get; set; }
 
-		[StringLength(50)]
-        public string? Category { get; set; }
-
         public bool IsActive { get; set; } = true;
 
         public int? TaxId { get; set; } 

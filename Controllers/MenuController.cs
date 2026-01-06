@@ -19,6 +19,7 @@ namespace erp_backend.Controllers
 		/// <summary>
 		/// Lấy sidebar menu theo role của user
 		/// Admin: Full menu với tất cả chức năng
+		/// Manager: Menu có quyền xem báo cáo và KPI Dashboard
 		/// User: Menu giới hạn chỉ những gì họ được phép truy cập
 		/// </summary>
 		[HttpGet("sidebar")]
@@ -42,9 +43,117 @@ namespace erp_backend.Controllers
 						{
 							new
 							{
+								name = "Tổng quan",
+								path = "/",
+								icon = "HomeIcon"
+							},
+							new
+							{
+								name = "Thông báo",
+								path = "/notifications",
+								icon = "BellIcon"
+							},
+							new
+							{
+								name = "Khách hàng",
+								path = "/customers",
+								icon = "UsersIcon"
+							},
+							new
+							{
+								name = "Bán hàng",
+								icon = "ChartBarIcon",
+								children = new[]
+								{
+									new { name = "Đơn hàng", path = "/sales" },
+									new { name = "Hợp đồng", path = "/contract" }
+								}
+							},
+							new
+							{
+								name = "Báo giá",
+								path = "/quotes",
+								icon = "DocumentTextIcon"
+							},
+							new
+							{
+								name = "Dữ liệu công ty",
+								path = "/companies",
+								icon = "CalendarIcon"
+							},
+							new
+							{
+								name = "Dịch vụ",
+								icon = "CogIcon",
+								children = new[]
+								{
+									new { name = "Dịch vụ", path = "/service" },
+									new { name = "Dịch vụ đi kèm", path = "/addons" }
+								}
+							},
+							new
+							{
+								name = "Phiên đăng nhập",
+								path = "/sessions",
+								icon = "LifebuoyIcon"
+							},
+							new
+							{
+								name = "Chỉ tiêu (KPI)",
+								icon = "ChartPieIcon",
+								children = new[]
+								{
+									new { name = "Tổng Quan chỉ tiêu", path = "/kpi/dashboard" },
+									new { name = "Quản lý chỉ tiêu", path = "/kpi/management" },
+									//new { name = "KPI của tôi", path = "/kpi/my-kpi" },
+									new { name = "Bảng xếp hạng", path = "/kpi/leaderboard" },
+									new { name = "Bậc hoa hồng", path = "/kpi/commission-rates" }
+								}
+							},
+							new
+							{
+								name = "Quản lý người dùng",
+								path = "/usermanagement",
+								icon = "CogIcon"
+							},
+							new
+							{
+								name = "Kế toán",
+								icon = "CurrencyDollarIcon",
+								children = new[]
+								{
+									new { name = "Lương", path = "/accounting/salary" }
+								}
+							},
+							new
+							{
+								name = "Hỗ trợ",
+								icon = "LifebuoyIcon",
+								path = "/helpdesk"
+							}
+						}
+					});
+				}
+				else if (role?.ToLower() == "manager")
+				{
+					// Menu cho Manager (có quyền xem báo cáo và KPI Dashboard)
+					return Ok(new
+					{
+						role = "Manager",
+						userId = userId,
+						menu = new object[]
+						{
+							new
+							{
 								name = "Dashboard",
 								path = "/",
 								icon = "HomeIcon"
+							},
+							new
+							{
+								name = "Thông báo",
+								path = "/notifications",
+								icon = "BellIcon"
 							},
 							new
 							{
@@ -68,57 +177,35 @@ namespace erp_backend.Controllers
 								path = "/quotes",
 								icon = "DocumentTextIcon"
 							},
-                            //new
-                            //{
-                            //    name = "Task",
-                            //    path = "/tasks",
-                            //    icon = "CalendarIcon"
-                            //},
-                            new
+							new
 							{
-								name = "Service",
-								icon = "CogIcon",
+								name = "Lead",
+								path = "/companies",
+								icon = "CalendarIcon"
+							},
+							new
+							{
+								name = "KPI",
+								icon = "ChartPieIcon",
 								children = new[]
 								{
-									new { name = "Service", path = "/service" },
-									new { name = "Addons", path = "/addons" },
-									new { name = "Categories", path = "/category-service-addons" }
+									new { name = "Dashboard KPI", path = "/kpi/dashboard" },
+									new { name = "KPI của tôi", path = "/kpi/my-kpi" },
+									new { name = "Bảng xếp hạng", path = "/kpi/leaderboard" }
 								}
 							},
 							new
 							{
-								name = "Support",
-								path = "/sessions",
+								name = "My Tickets",
+								path = "/helpdesk",
 								icon = "LifebuoyIcon"
-							},
-                            //new
-                            //{
-                            //    name = "Report",
-                            //    path = "/reports",
-                            //    icon = "DocumentChartBarIcon"
-                            //},
-                            new
-							{
-								name = "User management",
-								path = "/usermanagement",
-								icon = "CogIcon"
-							},
-							new
-							{
-								name = "HelpDesk",
-								icon = "LifebuoyIcon",
-								children = new[]
-								{
-									new { name = "All Tickets", path = "/helpdesk" },
-									new { name = "Categories Ticket", path = "/ticket-categories" }
-								}
 							}
 						}
 					});
 				}
 				else
 				{
-					// Menu giới hạn cho User thường
+					// Menu cho User
 					return Ok(new
 					{
 						role = "User",
@@ -133,9 +220,25 @@ namespace erp_backend.Controllers
 							},
 							new
 							{
+								name = "Thông báo",
+								path = "/notifications",
+								icon = "BellIcon"
+							},
+							new
+							{
 								name = "Customer",
 								path = "/customers",
 								icon = "UsersIcon"
+							},
+							new
+							{
+								name = "Sale",
+								icon = "ChartBarIcon",
+								children = new[]
+								{
+									new { name = "Sales order", path = "/sales" },
+									new { name = "Contract", path = "/contract" }
+								}
 							},
 							new
 							{
@@ -145,27 +248,25 @@ namespace erp_backend.Controllers
 							},
 							new
 							{
-								name = "My Tickets",
-								path = "/my-tickets",
-								icon = "LifebuoyIcon"
-							},
-							new
-							{
-								name = "Tasks",
-								path = "/tasks",
+								name = "Lead",
+								path = "/companies",
 								icon = "CalendarIcon"
 							},
 							new
 							{
-								name = "Support",
-								path = "/sessions",
-								icon = "LifebuoyIcon"
+								name = "KPI",
+								icon = "ChartPieIcon",
+								children = new[]
+								{
+									new { name = "KPI của tôi", path = "/kpi/my-kpi" },
+									new { name = "Bảng xếp hạng", path = "/kpi/leaderboard" }
+								}
 							},
 							new
 							{
-								name = "Profile",
-								path = "/profile",
-								icon = "CogIcon"
+								name = "My Tickets",
+								path = "/helpdesk",
+								icon = "LifebuoyIcon"
 							}
 						}
 					});
