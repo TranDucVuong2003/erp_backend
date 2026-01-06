@@ -730,25 +730,20 @@ namespace erp_backend.Controllers
 				if (customer == null)
 					return BadRequest(new { message = "Customer không tồn tại" });
 
-				// Chọn template dựa vào CustomerType
-				var templateFileName = customer.CustomerType?.ToLower() == "individual" 
-					? "generate_contract_individual.html" 
-					: "generate_contract_business.html";
+				// ✅ Lấy template từ database dựa vào CustomerType
+				var templateCode = customer.CustomerType?.ToLower() == "individual" 
+					? "CONTRACT_INDIVIDUAL" 
+					: "CONTRACT_BUSINESS";
 				
-				var templatePath = Path.Combine(
-					Directory.GetCurrentDirectory(), 
-					"wwwroot", 
-					"Templates", 
-					templateFileName
-				);
+				var template = await _context.DocumentTemplates
+					.Where(t => t.Code == templateCode && t.IsActive)
+					.FirstOrDefaultAsync();
 				
-				if (!System.IO.File.Exists(templatePath))
-					return NotFound(new { message = $"Không tìm thấy template: {templateFileName}" });
+				if (template == null)
+					return NotFound(new { message = $"Không tìm thấy template hợp đồng trong database: {templateCode}" });
 
-				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
-				
 				// Sử dụng cùng method BindContractDataToTemplate như export PDF
-				var htmlContent = BindContractDataToTemplate(htmlTemplate, contract);
+				var htmlContent = BindContractDataToTemplate(template.HtmlContent, contract);
 
 				// Trả về HTML content để preview trong browser
 				return Content(htmlContent, "text/html");
@@ -821,22 +816,22 @@ namespace erp_backend.Controllers
 					}
 				}
 
-				// Bước 2: Đọc HTML template dựa vào loại khách hàng
-				var templateFileName = customer.CustomerType?.ToLower() == "individual"
-					? "generate_contract_individual.html"
-					: "generate_contract_business.html";
+				// Bước 2: Lấy template từ database dựa vào loại khách hàng
+				var templateCode = customer.CustomerType?.ToLower() == "individual"
+					? "CONTRACT_INDIVIDUAL"
+					: "CONTRACT_BUSINESS";
 
-				var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Templates", templateFileName);
+				var template = await _context.DocumentTemplates
+					.Where(t => t.Code == templateCode && t.IsActive)
+					.FirstOrDefaultAsync();
 
-				if (!System.IO.File.Exists(templatePath))
+				if (template == null)
 				{
-					return NotFound(new { message = $"Không tìm thấy template hợp đồng: {templateFileName}" });
+					return NotFound(new { message = $"Không tìm thấy template hợp đồng trong database: {templateCode}" });
 				}
 
-				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
-
 				// Bước 3: Bind dữ liệu vào template
-				var htmlContent = BindContractDataToTemplate(htmlTemplate, contract);
+				var htmlContent = BindContractDataToTemplate(template.HtmlContent, contract);
 
 				// Bước 4: Sử dụng PuppeteerSharp để convert HTML sang PDF
 				_logger.LogInformation("Converting HTML to PDF using PuppeteerSharp for Contract {ContractId}", id);
@@ -1146,6 +1141,13 @@ namespace erp_backend.Controllers
         // Helper method: Bind dữ liệu Contract vào template
 		private string BindContractDataToTemplate(string template, Contract contract)
 		{
+			// ✅ Decode escape characters từ database bằng cách Replace
+			template = template
+				.Replace("\\r\\n", "\r\n")
+				.Replace("\\n", "\n")
+				.Replace("\\\"", "\"")
+				.Replace("\\\\", "\\");
+
 			var customer = contract.SaleOrder!.Customer!;
 			var now = DateTime.Now;
 

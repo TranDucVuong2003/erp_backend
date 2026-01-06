@@ -100,23 +100,27 @@ namespace erp_backend.Services
 
 		private async Task<string> GenerateHtmlFromTemplateAsync(SalaryReportDto data)
 		{
-			// Load template HTML
-			var templatePath = Path.Combine(_env.WebRootPath, "Templates", "SalaryReportTemplate.html");
-			if (!File.Exists(templatePath))
+			// ✅ Lấy template từ database thay vì đọc từ file
+			var template = await _context.DocumentTemplates
+				.Where(t => t.Code == "SALARY_REPORT_DEFAULT" && t.IsActive)
+				.FirstOrDefaultAsync();
+
+			if (template == null)
 			{
-				throw new FileNotFoundException($"Template không tìm th?y: {templatePath}");
+				throw new InvalidOperationException("Không tìm thấy template báo cáo lương trong database");
 			}
 
-			var htmlTemplate = await File.ReadAllTextAsync(templatePath, Encoding.UTF8);
-
 			// Replace placeholders
-			var htmlContent = ReplaceTemplatePlaceholders(htmlTemplate, data);
+			var htmlContent = ReplaceTemplatePlaceholders(template.HtmlContent, data);
 
 			return htmlContent;
 		}
 
 		private string ReplaceTemplatePlaceholders(string htmlTemplate, SalaryReportDto data)
 		{
+			// ✅ HTML template is already properly stored in database, no need to decode escape sequences
+			// The template.HtmlContent from database is clean HTML
+
 			// Replace header info
 			var html = htmlTemplate
 				.Replace("{{PayPeriod}}", data.PayPeriod)
@@ -132,15 +136,15 @@ namespace erp_backend.Services
 			foreach (var emp in data.Employees)
 			{
 				rowsBuilder.AppendLine($@"
-          <tr>
-            <td class=""text-center"">{index}</td>
-            <td>{emp.FullName}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.BaseSalary)}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.Allowance)}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.Bonus)}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.Deduction)}</td>
-            <td class=""text-right number-format"">{FormatCurrency(emp.NetSalary)}</td>
-          </tr>");
+      <tr>
+        <td class=""text-center"">{index}</td>
+        <td>{emp.FullName}</td>
+        <td class=""text-right number-format"">{FormatCurrency(emp.BaseSalary)}</td>
+        <td class=""text-right number-format"">{FormatCurrency(emp.Allowance)}</td>
+        <td class=""text-right number-format"">{FormatCurrency(emp.Bonus)}</td>
+        <td class=""text-right number-format"">{FormatCurrency(emp.Deduction)}</td>
+        <td class=""text-right number-format"">{FormatCurrency(emp.NetSalary)}</td>
+      </tr>");
 				index++;
 			}
 

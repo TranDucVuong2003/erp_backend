@@ -1,8 +1,10 @@
-using System.Net;
+Ôªøusing System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Configuration;
 using System.Threading.Tasks;
 using erp_backend.Models;
+using erp_backend.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace erp_backend.Services
 {
@@ -23,33 +25,38 @@ namespace erp_backend.Services
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<EmailService> _logger;
+        private readonly ApplicationDbContext _context;
 
-        public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+        public EmailService(
+            IConfiguration configuration, 
+            ILogger<EmailService> logger,
+            ApplicationDbContext context)
         {
             _configuration = configuration;
             _logger = logger;
+            _context = context;
         }
 
         public async Task SendTicketLogNotificationAsync(Ticket ticket, User actingUser, string logContent)
         {
-            await SendEmailNotificationAsync(ticket, actingUser, "BÏnh lu?n m?i", logContent, "comment");
+            await SendEmailNotificationAsync(ticket, actingUser, "B√¨nh lu·∫≠n m·ªõi", logContent, "comment");
         }
 
         public async Task SendTicketCreatedNotificationAsync(Ticket ticket, User createdByUser)
         {
-            var content = $"Ticket m?i ?„ ???c t?o v?i tiÍu ??: {ticket.Title}";
-            await SendEmailNotificationAsync(ticket, createdByUser, "Ticket m?i ???c t?o", content, "created");
+            var content = $"Ticket m·ªõi ƒë√£ ƒë∆∞·ª£c t·∫°o v·ªõi ti√™u ƒë·ªÅ: {ticket.Title}";
+            await SendEmailNotificationAsync(ticket, createdByUser, "Ticket m·ªõi ƒë∆∞·ª£c t·∫°o", content, "created");
         }
 
         public async Task SendTicketAssignedNotificationAsync(Ticket ticket, User assignedBy, string assignmentDetails)
         {
-            await SendEmailNotificationAsync(ticket, assignedBy, "Ph‚n cÙng ticket", assignmentDetails, "assigned");
+            await SendEmailNotificationAsync(ticket, assignedBy, "Ph√¢n c√¥ng ticket", assignmentDetails, "assigned");
         }
 
         public async Task SendTicketStatusChangedNotificationAsync(Ticket ticket, User changedBy, string oldStatus, string newStatus)
         {
-            var content = $"Tr?ng th·i ticket ?„ ???c thay ??i t? '{oldStatus}' th‡nh '{newStatus}'";
-            await SendEmailNotificationAsync(ticket, changedBy, "Thay ??i tr?ng th·i", content, "status_changed");
+            var content = $"Tr·∫°ng th√°i ticket ƒë√£ ƒë∆∞·ª£c thay ƒë·ªïi t·ª´ '{oldStatus}' th√†nh '{newStatus}'";
+            await SendEmailNotificationAsync(ticket, changedBy, "Thay ƒë·ªïi tr·∫°ng th√°i", content, "status_changed");
         }
 
         public async Task SendAccountCreationEmailAsync(User user, string plainPassword, string activationLink)
@@ -65,7 +72,20 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send account creation email to {Email} for user {UserId}", user.Email, user.Id);
 
-                // L?y thÙng tin SMTP t? config
+                // ‚úÖ L·∫•y template t·ª´ database
+                var template = await _context.DocumentTemplates
+                    .Where(t => t.Code == "EMAIL_ACCOUNT_CREATION" && t.IsActive)
+                    .FirstOrDefaultAsync();
+
+                if (template == null)
+                {
+                    _logger.LogWarning("Template EMAIL_ACCOUNT_CREATION not found in database. Falling back to hardcoded template.");
+                    // Fallback to old method if template not found
+                    await SendAccountCreationEmailLegacyAsync(user, plainPassword, activationLink);
+                    return;
+                }
+
+                // L·∫•y th√¥ng tin SMTP t·ª´ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -73,29 +93,38 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // T?o email message
+                // ‚úÖ Bind d·ªØ li·ªáu v√†o template
+                var htmlBody = template.HtmlContent
+                    .Replace("{{UserName}}", user.Name)
+                    .Replace("{{UserEmail}}", user.Email)
+                    .Replace("{{PlainPassword}}", plainPassword)
+                    .Replace("{{DepartmentName}}", user.Department?.Name ?? "Ch∆∞a x√°c ƒë·ªãnh")
+                    .Replace("{{PositionName}}", user.Position?.PositionName ?? "Ch∆∞a x√°c ƒë·ªãnh")
+                    .Replace("{{ActivationLink}}", activationLink)
+                    .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
+
+                // T·∫°o email message
                 var mail = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
-                    Subject = "T‡i kho?n ERP c?a b?n ?„ ???c t?o - Vui lÚng kÌch ho?t",
-                    Body = FormatAccountCreationEmailBody(user, plainPassword, activationLink),
+                    Subject = "T√†i kho·∫£n ERP c·ªßa b·∫°n ƒë√£ ƒë∆∞·ª£c t·∫°o - Vui l√≤ng k√≠ch ho·∫°t",
+                    Body = htmlBody,
                     IsBodyHtml = true
                 };
 
-                // ThÍm ng??i nh?n
                 mail.To.Add(user.Email);
 
-                // T?o SMTP client v‡ g?i email
+                // G·ª≠i email
                 using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
                 {
                     smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
                     smtpClient.EnableSsl = true;
-                    smtpClient.Timeout = 30000; // 30 seconds timeout
+                    smtpClient.Timeout = 30000;
 
                     await smtpClient.SendMailAsync(mail);
                 }
 
-                _logger.LogInformation("Account creation email sent successfully to {Email} for user {UserId}", user.Email, user.Id);
+                _logger.LogInformation("Account creation email sent successfully to {Email} for user {UserId} using database template", user.Email, user.Id);
             }
             catch (SmtpException smtpEx)
             {
@@ -108,77 +137,32 @@ namespace erp_backend.Services
             }
         }
 
-        private async Task SendEmailNotificationAsync(Ticket ticket, User actingUser, string actionType, string content, string emailType)
+        public async Task SendPasswordResetOtpAsync(string email, string userName, string otpCode, DateTime expiresAt)
         {
             try
             {
                 // Validate email configuration first
                 if (!ValidateEmailConfiguration())
                 {
-                    _logger.LogWarning("Email configuration is incomplete. Skipping email notification for ticket {TicketId}", ticket.Id);
+                    _logger.LogWarning("Email configuration is incomplete. Skipping OTP email for {Email}", email);
                     return;
                 }
 
-                // X·c ??nh ng??i nh?n - s? d?ng HashSet ?? tr·nh tr˘ng l?p
-                var recipients = new HashSet<string>();
+                _logger.LogInformation("Preparing to send OTP email to {Email}", email);
 
-                // ?? LOGIC M?I: Ch? g?i cho ng??i KH¡C, khÙng g?i cho chÌnh ng??i th?c hi?n h‡nh ??ng
-                
-                // ThÍm email c?a ng??i t?o ticket (n?u KH‘NG ph?i l‡ ng??i ?ang th?c hi?n h‡nh ??ng)
-                if (ticket.CreatedBy != null && 
-                    !string.IsNullOrEmpty(ticket.CreatedBy.Email) &&
-                    ticket.CreatedBy.Id != actingUser.Id) // ? Lo?i tr? ng??i th?c hi?n
-                {
-                    recipients.Add(ticket.CreatedBy.Email.Trim().ToLower());
-                    _logger.LogDebug("Added CreatedBy email to recipients: {Email} for ticket {TicketId} (acting user: {ActingUserId})", 
-                        ticket.CreatedBy.Email, ticket.Id, actingUser.Id);
-                }
+                // ‚úÖ L·∫•y template t·ª´ database
+                var template = await _context.DocumentTemplates
+                    .Where(t => t.Code == "EMAIL_PASSWORD_RESET_OTP" && t.IsActive)
+                    .FirstOrDefaultAsync();
 
-                // ThÍm email c?a ng??i ???c ph‚n cÙng (n?u KH‘NG ph?i l‡ ng??i ?ang th?c hi?n h‡nh ??ng)
-                if (ticket.AssignedTo != null && 
-                    !string.IsNullOrEmpty(ticket.AssignedTo.Email) &&
-                    ticket.AssignedTo.Id != actingUser.Id) // ? Lo?i tr? ng??i th?c hi?n
+                if (template == null)
                 {
-                    recipients.Add(ticket.AssignedTo.Email.Trim().ToLower());
-                    _logger.LogDebug("Added AssignedTo email to recipients: {Email} for ticket {TicketId} (acting user: {ActingUserId})", 
-                        ticket.AssignedTo.Email, ticket.Id, actingUser.Id);
-                }
-
-                // ThÍm secondary email c?a ng??i t?o ticket (n?u KH‘NG ph?i l‡ ng??i th?c hi?n)
-                if (ticket.CreatedBy != null && 
-                    !string.IsNullOrEmpty(ticket.CreatedBy.SecondaryEmail) &&
-                    ticket.CreatedBy.Id != actingUser.Id) // ? Lo?i tr? ng??i th?c hi?n
-                {
-                    recipients.Add(ticket.CreatedBy.SecondaryEmail.Trim().ToLower());
-                    _logger.LogDebug("Added CreatedBy secondary email to recipients: {Email} for ticket {TicketId} (acting user: {ActingUserId})", 
-                        ticket.CreatedBy.SecondaryEmail, ticket.Id, actingUser.Id);
-                }
-
-                // ThÍm secondary email c?a ng??i ???c ph‚n cÙng (n?u KH‘NG ph?i l‡ ng??i th?c hi?n)
-                if (ticket.AssignedTo != null && 
-                    !string.IsNullOrEmpty(ticket.AssignedTo.SecondaryEmail) &&
-                    ticket.AssignedTo.Id != actingUser.Id) // ? Lo?i tr? ng??i th?c hi?n
-                {
-                    recipients.Add(ticket.AssignedTo.SecondaryEmail.Trim().ToLower());
-                    _logger.LogDebug("Added AssignedTo secondary email to recipients: {Email} for ticket {TicketId} (acting user: {ActingUserId})", 
-                        ticket.AssignedTo.SecondaryEmail, ticket.Id, actingUser.Id);
-                }
-
-                // N?u khÙng cÛ ng??i nh?n, khÙng g?i email
-                if (!recipients.Any())
-                {
-                    _logger.LogInformation("No email recipients for ticket notification on ticket {TicketId} after excluding acting user {ActingUserId}. CreatedBy: {CreatedById}, AssignedTo: {AssignedToId}", 
-                        ticket.Id, 
-                        actingUser.Id,
-                        ticket.CreatedBy?.Id ?? 0, 
-                        ticket.AssignedTo?.Id ?? 0);
+                    _logger.LogWarning("Template EMAIL_PASSWORD_RESET_OTP not found in database. Falling back to hardcoded template.");
+                    await SendPasswordResetOtpLegacyAsync(email, userName, otpCode, expiresAt);
                     return;
                 }
 
-                _logger.LogInformation("Preparing to send email for ticket {TicketId} to {RecipientCount} recipients: {Recipients} (excluding acting user: {ActingUserId})", 
-                    ticket.Id, recipients.Count, string.Join(", ", recipients), actingUser.Id);
-
-                // L?y thÙng tin SMTP t? config
+                // L·∫•y th√¥ng tin SMTP t·ª´ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -186,52 +170,127 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // T?o email message
+                // T√≠nh th·ªùi gian h·∫øt h·∫°n
+                var expiryMinutes = (int)(expiresAt - DateTime.UtcNow).TotalMinutes;
+
+                // ‚úÖ Bind d·ªØ li·ªáu v√†o template
+                var htmlBody = template.HtmlContent
+                    .Replace("{{UserName}}", userName)
+                    .Replace("{{OtpCode}}", otpCode)
+                    .Replace("{{ExpiryMinutes}}", expiryMinutes.ToString())
+                    .Replace("{{ExpiresAt}}", expiresAt.ToString("dd/MM/yyyy HH:mm:ss"))
+                    .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
+
+                // T·∫°o email message
                 var mail = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
-                    Subject = GenerateEmailSubject(ticket, actionType),
-                    Body = FormatEmailBody(ticket, actingUser, actionType, content, emailType),
+                    Subject = "M√£ OTP ƒë·ªïi m·∫≠t kh·∫©u - ERP System",
+                    Body = htmlBody,
                     IsBodyHtml = true
                 };
 
-                // ThÍm ng??i nh?n - chuy?n v? email g?c (khÙng lowercase)
-                foreach (var recipient in recipients)
-                {
-                    try
-                    {
-                        mail.To.Add(recipient);
-                        _logger.LogDebug("Added recipient to email: {Recipient}", recipient);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to add recipient {Recipient} to email for ticket {TicketId}", recipient, ticket.Id);
-                    }
-                }
+                mail.To.Add(email);
 
-                // T?o SMTP client v‡ g?i email
+                // G·ª≠i email
                 using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
                 {
                     smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
                     smtpClient.EnableSsl = true;
-                    smtpClient.Timeout = 30000; // 30 seconds timeout
+                    smtpClient.Timeout = 30000;
 
                     await smtpClient.SendMailAsync(mail);
                 }
 
-                _logger.LogInformation("Email notification sent successfully for ticket {TicketId} - Type: {EmailType} to {RecipientCount} recipients: {Recipients} (acting user {ActingUserId} excluded)", 
-                    ticket.Id, emailType, recipients.Count, string.Join(", ", recipients), actingUser.Id);
+                _logger.LogInformation("OTP email sent successfully to {Email} using database template", email);
             }
             catch (SmtpException smtpEx)
             {
-                // Log specific SMTP errors
-                _logger.LogError(smtpEx, "SMTP error sending email notification for ticket {TicketId}: {StatusCode} - {Message}", 
-                    ticket.Id, smtpEx.StatusCode, smtpEx.Message);
+                _logger.LogError(smtpEx, "SMTP error sending OTP email to {Email}: {StatusCode} - {Message}", 
+                    email, smtpEx.StatusCode, smtpEx.Message);
             }
             catch (Exception ex)
             {
-                // Log l?i nh?ng khÙng throw exception ?? khÙng ?nh h??ng ??n vi?c l?u TicketLog
-                _logger.LogError(ex, "Error sending email notification for ticket {TicketId}", ticket.Id);
+                _logger.LogError(ex, "Error sending OTP email to {Email}", email);
+            }
+        }
+
+        public async Task SendNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt)
+        {
+            try
+            {
+                // Validate email configuration first
+                if (!ValidateEmailConfiguration())
+                {
+                    _logger.LogWarning("Email configuration is incomplete. Skipping notification email for {Email}", recipientEmail);
+                    return;
+                }
+
+                _logger.LogInformation("Preparing to send notification email to {Email}", recipientEmail);
+
+                // ‚úÖ L·∫•y template t·ª´ database
+                var template = await _context.DocumentTemplates
+                    .Where(t => t.Code == "EMAIL_NOTIFICATION" && t.IsActive)
+                    .FirstOrDefaultAsync();
+
+                if (template == null)
+                {
+                    _logger.LogWarning("Template EMAIL_NOTIFICATION not found in database. Falling back to hardcoded template.");
+                    await SendNotificationEmailLegacyAsync(recipientEmail, recipientName, notificationTitle, notificationContent, createdAt);
+                    return;
+                }
+
+                // L·∫•y th√¥ng tin SMTP t·ª´ config
+                var smtpServer = _configuration["Email:SmtpServer"];
+                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+                var smtpUsername = _configuration["Email:Username"];
+                var smtpPassword = _configuration["Email:Password"];
+                var senderEmail = _configuration["Email:SenderEmail"];
+                var senderName = _configuration["Email:SenderName"];
+
+                var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+                var notificationUrl = $"{frontendUrl}/notifications";
+
+                // ‚úÖ Bind d·ªØ li·ªáu v√†o template
+                var htmlBody = template.HtmlContent
+                    .Replace("{{RecipientName}}", recipientName)
+                    .Replace("{{NotificationTitle}}", notificationTitle)
+                    .Replace("{{NotificationContent}}", notificationContent)
+                    .Replace("{{CreatedAt}}", createdAt.ToString("dd/MM/yyyy HH:mm:ss"))
+                    .Replace("{{NotificationUrl}}", notificationUrl)
+                    .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
+
+                // T·∫°o email message
+                var mail = new MailMessage
+                {
+                    From = new MailAddress(senderEmail, senderName),
+                    Subject = $"[ERP Notification] {notificationTitle}",
+                    Body = htmlBody,
+                    IsBodyHtml = true
+                };
+
+                mail.To.Add(recipientEmail);
+
+                // G·ª≠i email
+                using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+                {
+                    smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                    smtpClient.EnableSsl = true;
+                    smtpClient.Timeout = 30000;
+
+                    await smtpClient.SendMailAsync(mail);
+                }
+
+                _logger.LogInformation("Notification email sent successfully to {Email} using database template", recipientEmail);
+            }
+            catch (SmtpException smtpEx)
+            {
+                _logger.LogError(smtpEx, "SMTP error sending notification email to {Email}: {StatusCode} - {Message}", 
+                    recipientEmail, smtpEx.StatusCode, smtpEx.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending notification email to {Email}", recipientEmail);
             }
         }
 
@@ -255,10 +314,22 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send payment success notification for contract {ContractId}", contract.Id);
 
-                // X·c ??nh ng??i nh?n - s? d?ng Dictionary ?? ph‚n bi?t lo?i ng??i nh?n
-                var recipients = new Dictionary<string, string>(); // email -> recipient type
+                // ‚úÖ L·∫•y template t·ª´ database
+                var template = await _context.DocumentTemplates
+                    .Where(t => t.Code == "EMAIL_PAYMENT_SUCCESS" && t.IsActive)
+                    .FirstOrDefaultAsync();
 
-                // 1. Email kh·ch h‡ng
+                if (template == null)
+                {
+                    _logger.LogWarning("Template EMAIL_PAYMENT_SUCCESS not found in database. Falling back to hardcoded template.");
+                    await SendPaymentSuccessNotificationLegacyAsync(contract, amount, paymentType, transactionId, transactionDate, customer, saleUser);
+                    return;
+                }
+
+                // X√°c ƒë·ªãnh ng∆∞·ªùi nh·∫≠n
+                var recipients = new Dictionary<string, string>();
+
+                // 1. Email kh√°ch h√†ng
                 if (!string.IsNullOrEmpty(customer.Email))
                 {
                     recipients[customer.Email.Trim().ToLower()] = "customer";
@@ -268,7 +339,7 @@ namespace erp_backend.Services
                     recipients[customer.RepresentativeEmail.Trim().ToLower()] = "customer";
                 }
 
-                // 2. Email sale (ng??i t?o kh·ch h‡ng)
+                // 2. Email sale
                 if (saleUser != null && !string.IsNullOrEmpty(saleUser.Email))
                 {
                     recipients[saleUser.Email.Trim().ToLower()] = "sale";
@@ -278,7 +349,7 @@ namespace erp_backend.Services
                     recipients[saleUser.SecondaryEmail.Trim().ToLower()] = "sale";
                 }
 
-                // 3. Email admin - l?y t? config ho?c tÏm user cÛ role admin
+                // 3. Email admin
                 var adminEmail = _configuration["AdminEmail"];
                 if (!string.IsNullOrEmpty(adminEmail))
                 {
@@ -294,24 +365,72 @@ namespace erp_backend.Services
                 _logger.LogInformation("Preparing to send payment notification emails to {RecipientCount} recipients for contract {ContractId}", 
                     recipients.Count, contract.Id);
 
-                // L?y thÙng tin SMTP t? config
+                // L·∫•y th√¥ng tin SMTP t·ª´ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
                 var smtpPassword = _configuration["Email:Password"];
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
+                var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
 
-                // G?i email riÍng cho t?ng lo?i ng??i nh?n
+                // D·ªØ li·ªáu chung cho template
+                var paymentTypeText = paymentType switch
+                {
+                    "deposit50" => "ƒê·∫∑t c·ªçc 50%",
+                    "final50" => "Thanh to√°n n·ªët 50%",
+                    "full100" => "Thanh to√°n 100%",
+                    _ => "Thanh to√°n"
+                };
+
+                // G·ª≠i email ri√™ng cho t·ª´ng lo·∫°i ng∆∞·ªùi nh·∫≠n
                 foreach (var recipient in recipients)
                 {
                     try
                     {
+                        var greeting = recipient.Value switch
+                        {
+                            "customer" => $"K√≠nh g·ª≠i qu√Ω kh√°ch h√†ng <strong>{customer.Name ?? customer.CompanyName}</strong>,",
+                            "sale" => $"Xin ch√†o <strong>{saleUser?.Name}</strong>,",
+                            "admin" => "K√≠nh g·ª≠i Qu·∫£n tr·ªã vi√™n,",
+                            _ => "Xin ch√†o,"
+                        };
+
+                        var mainMessage = recipient.Value switch
+                        {
+                            "customer" => $"Ch√∫ng t√¥i x√°c nh·∫≠n ƒë√£ nh·∫≠n ƒë∆∞·ª£c thanh to√°n {paymentTypeText} cho h·ª£p ƒë·ªìng #{contract.NumberContract}.",
+                            "sale" => $"B·∫°n ƒë√£ th·ª±c hi·ªán thanh to√°n {paymentTypeText} cho h·ª£p ƒë·ªìng #{contract.NumberContract}.",
+                            "admin" => $"ƒê√£ c√≥ giao d·ªãch thanh to√°n {paymentTypeText} cho h·ª£p ƒë·ªìng #{contract.NumberContract}.",
+                            _ => $"ƒê√£ c√≥ giao d·ªãch thanh to√°n {paymentTypeText} cho h·ª£p ƒë·ªìng #{contract.NumberContract}."
+                        };
+
+                        var customerInfo = recipient.Value == "customer" ? 
+                            $"<p><strong>Th√¥ng tin kh√°ch h√†ng:</strong> {customer.Name} - {customer.Email}</p>" : "";
+
+                        var saleInfo = recipient.Value == "sale" && saleUser != null ? 
+                            $"<p><strong>Ng∆∞·ªùi t·∫°o:</strong> {saleUser.Name} ({saleUser.Email})</p>" : "";
+
+                        var contractUrl = $"{frontendUrl}/contracts/{contract.Id}";
+
+                        // ‚úÖ Bind d·ªØ li·ªáu v√†o template
+                        var htmlBody = template.HtmlContent
+                            .Replace("{{Greeting}}", greeting)
+                            .Replace("{{MainMessage}}", mainMessage)
+                            .Replace("{{ContractNumber}}", contract.NumberContract.ToString())
+                            .Replace("{{Amount}}", amount.ToString("N0") + " VNƒê")
+                            .Replace("{{PaymentType}}", paymentTypeText)
+                            .Replace("{{TransactionId}}", transactionId)
+                            .Replace("{{TransactionDate}}", transactionDate.ToString("dd/MM/yyyy HH:mm:ss"))
+                            .Replace("{{CustomerInfo}}", customerInfo)
+                            .Replace("{{SaleInfo}}", saleInfo)
+                            .Replace("{{ContractUrl}}", contractUrl)
+                            .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
+
                         var mail = new MailMessage
                         {
                             From = new MailAddress(senderEmail, senderName),
-                            Subject = GeneratePaymentEmailSubject(contract, paymentType),
-                            Body = FormatPaymentEmailBody(contract, amount, paymentType, transactionId, transactionDate, customer, saleUser, recipient.Value),
+                            Subject = $"[H·ª£p ƒë·ªìng #{contract.NumberContract}] X√°c nh·∫≠n {paymentTypeText} th√†nh c√¥ng",
+                            Body = htmlBody,
                             IsBodyHtml = true
                         };
 
@@ -326,7 +445,7 @@ namespace erp_backend.Services
                             await smtpClient.SendMailAsync(mail);
                         }
 
-                        _logger.LogInformation("Payment notification email sent successfully to {Email} ({RecipientType}) for contract {ContractId}", 
+                        _logger.LogInformation("Payment notification email sent successfully to {Email} ({RecipientType}) for contract {ContractId} using database template", 
                             recipient.Key, recipient.Value, contract.Id);
                     }
                     catch (Exception ex)
@@ -341,128 +460,6 @@ namespace erp_backend.Services
             }
         }
 
-        /// <summary>
-        /// G?i email m„ OTP ?? ??i m?t kh?u
-        /// </summary>
-        public async Task SendPasswordResetOtpAsync(string email, string userName, string otpCode, DateTime expiresAt)
-        {
-            try
-            {
-                // Validate email configuration first
-                if (!ValidateEmailConfiguration())
-                {
-                    _logger.LogWarning("Email configuration is incomplete. Skipping OTP email for {Email}", email);
-                    return;
-                }
-
-                _logger.LogInformation("Preparing to send OTP email to {Email}", email);
-
-                // L?y thÙng tin SMTP t? config
-                var smtpServer = _configuration["Email:SmtpServer"];
-                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
-                var smtpUsername = _configuration["Email:Username"];
-                var smtpPassword = _configuration["Email:Password"];
-                var senderEmail = _configuration["Email:SenderEmail"];
-                var senderName = _configuration["Email:SenderName"];
-
-                // TÌnh th?i gian h?t h?n
-                var expiryMinutes = (int)(expiresAt - DateTime.UtcNow).TotalMinutes;
-
-                // T?o email message
-                var mail = new MailMessage
-                {
-                    From = new MailAddress(senderEmail, senderName),
-                    Subject = "M„ OTP ??i m?t kh?u - ERP System",
-                    Body = FormatOtpEmailBody(userName, otpCode, expiresAt, expiryMinutes),
-                    IsBodyHtml = true
-                };
-
-                mail.To.Add(email);
-
-                // T?o SMTP client v‡ g?i email
-                using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
-                {
-                    smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
-                    smtpClient.EnableSsl = true;
-                    smtpClient.Timeout = 30000; // 30 seconds timeout
-
-                    await smtpClient.SendMailAsync(mail);
-                }
-
-                _logger.LogInformation("OTP email sent successfully to {Email}", email);
-            }
-            catch (SmtpException smtpEx)
-            {
-                _logger.LogError(smtpEx, "SMTP error sending OTP email to {Email}: {StatusCode} - {Message}", 
-                    email, smtpEx.StatusCode, smtpEx.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error sending OTP email to {Email}", email);
-            }
-        }
-
-        /// <summary>
-        /// G?i email thÙng b·o notification cho ng??i nh?n
-        /// </summary>
-        public async Task SendNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt)
-        {
-            try
-            {
-                // Validate email configuration first
-                if (!ValidateEmailConfiguration())
-                {
-                    _logger.LogWarning("Email configuration is incomplete. Skipping notification email for {Email}", recipientEmail);
-                    return;
-                }
-
-                _logger.LogInformation("Preparing to send notification email to {Email}", recipientEmail);
-
-                // L?y thÙng tin SMTP t? config
-                var smtpServer = _configuration["Email:SmtpServer"];
-                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
-                var smtpUsername = _configuration["Email:Username"];
-                var smtpPassword = _configuration["Email:Password"];
-                var senderEmail = _configuration["Email:SenderEmail"];
-                var senderName = _configuration["Email:SenderName"];
-
-                // T?o email message
-                var mail = new MailMessage
-                {
-                    From = new MailAddress(senderEmail, senderName),
-                    Subject = $"[ERP Notification] {notificationTitle}",
-                    Body = FormatNotificationEmailBody(recipientName, notificationTitle, notificationContent, createdAt),
-                    IsBodyHtml = true
-                };
-
-                mail.To.Add(recipientEmail);
-
-                // T?o SMTP client v‡ g?i email
-                using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
-                {
-                    smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
-                    smtpClient.EnableSsl = true;
-                    smtpClient.Timeout = 30000; // 30 seconds timeout
-
-                    await smtpClient.SendMailAsync(mail);
-                }
-
-                _logger.LogInformation("Notification email sent successfully to {Email}", recipientEmail);
-            }
-            catch (SmtpException smtpEx)
-            {
-                _logger.LogError(smtpEx, "SMTP error sending notification email to {Email}: {StatusCode} - {Message}", 
-                    recipientEmail, smtpEx.StatusCode, smtpEx.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error sending notification email to {Email}", recipientEmail);
-            }
-        }
-
-        /// <summary>
-        /// G?i email thÙng b·o cho kh·ch h‡ng v?i template riÍng
-        /// </summary>
         public async Task SendCustomerNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt, string customerType)
         {
             try
@@ -476,7 +473,7 @@ namespace erp_backend.Services
 
                 _logger.LogInformation("Preparing to send customer notification email to {Email}", recipientEmail);
 
-                // L?y thÙng tin SMTP t? config
+                // L·∫•y th√¥ng tin SMTP t·ª´ config
                 var smtpServer = _configuration["Email:SmtpServer"];
                 var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
                 var smtpUsername = _configuration["Email:Username"];
@@ -484,23 +481,23 @@ namespace erp_backend.Services
                 var senderEmail = _configuration["Email:SenderEmail"];
                 var senderName = _configuration["Email:SenderName"];
 
-                // T?o email message
+                // T·∫°o email message - s·ª≠ d·ª•ng hardcoded template (kh√¥ng c√≥ template ri√™ng cho customer notification trong DB)
                 var mail = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
-                    Subject = $"[ThÙng b·o] {notificationTitle}",
+                    Subject = $"[Th√¥ng b√°o] {notificationTitle}",
                     Body = FormatCustomerNotificationEmailBody(recipientName, notificationTitle, notificationContent, createdAt, customerType),
                     IsBodyHtml = true
                 };
 
                 mail.To.Add(recipientEmail);
 
-                // T?o SMTP client v‡ g?i email
+                // G·ª≠i email
                 using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
                 {
                     smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
                     smtpClient.EnableSsl = true;
-                    smtpClient.Timeout = 30000; // 30 seconds timeout
+                    smtpClient.Timeout = 30000;
 
                     await smtpClient.SendMailAsync(mail);
                 }
@@ -537,107 +534,313 @@ namespace erp_backend.Services
             return true;
         }
 
-        private string GenerateEmailSubject(Ticket ticket, string actionType)
+        // ==================== LEGACY FALLBACK METHODS ====================
+
+        private async Task SendAccountCreationEmailLegacyAsync(User user, string plainPassword, string activationLink)
         {
-            return $"[Ticket #{ticket.Id}] {ticket.Title} - {actionType}";
+            var smtpServer = _configuration["Email:SmtpServer"];
+            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var smtpUsername = _configuration["Email:Username"];
+            var smtpPassword = _configuration["Email:Password"];
+            var senderEmail = _configuration["Email:SenderEmail"];
+            var senderName = _configuration["Email:SenderName"];
+
+            var mail = new MailMessage
+            {
+                From = new MailAddress(senderEmail ?? "", senderName),
+                Subject = "T√†i kho·∫£n ERP c·ªßa b·∫°n ƒë√£ ƒë∆∞·ª£c t·∫°o - Vui l√≤ng k√≠ch ho·∫°t",
+                Body = FormatAccountCreationEmailBody(user, plainPassword, activationLink),
+                IsBodyHtml = true
+            };
+
+            mail.To.Add(user.Email);
+
+            using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+            {
+                smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                smtpClient.EnableSsl = true;
+                smtpClient.Timeout = 30000;
+
+                await smtpClient.SendMailAsync(mail);
+            }
+
+            _logger.LogInformation("Account creation email sent successfully to {Email} for user {UserId} using legacy template", user.Email, user.Id);
         }
 
-        private string FormatEmailBody(Ticket ticket, User actingUser, string actionType, string content, string emailType)
+        private async Task SendPasswordResetOtpLegacyAsync(string email, string userName, string otpCode, DateTime expiresAt)
         {
-            var statusColor = GetStatusColor(ticket.Status);
-            var actionIcon = GetActionIcon(emailType);
-            
-            // L?y frontend URL t? configuration
-            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
-            var ticketUrl = $"{frontendUrl}/helpdesk";
+            var smtpServer = _configuration["Email:SmtpServer"];
+            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var smtpUsername = _configuration["Email:Username"];
+            var smtpPassword = _configuration["Email:Password"];
+            var senderEmail = _configuration["Email:SenderEmail"];
+            var senderName = _configuration["Email:SenderName"];
 
+            var expiryMinutes = (int)(expiresAt - DateTime.UtcNow).TotalMinutes;
+
+            var mail = new MailMessage
+            {
+                From = new MailAddress(senderEmail ?? "", senderName),
+                Subject = "M√£ OTP ƒë·ªïi m·∫≠t kh·∫©u - ERP System",
+                Body = FormatOtpEmailBody(userName, otpCode, expiresAt, expiryMinutes),
+                IsBodyHtml = true
+            };
+
+            mail.To.Add(email);
+
+            using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+            {
+                smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                smtpClient.EnableSsl = true;
+                smtpClient.Timeout = 30000;
+
+                await smtpClient.SendMailAsync(mail);
+            }
+
+            _logger.LogInformation("OTP email sent successfully to {Email} using legacy template", email);
+        }
+
+        private async Task SendNotificationEmailLegacyAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt)
+        {
+            var smtpServer = _configuration["Email:SmtpServer"];
+            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var smtpUsername = _configuration["Email:Username"];
+            var smtpPassword = _configuration["Email:Password"];
+            var senderEmail = _configuration["Email:SenderEmail"];
+            var senderName = _configuration["Email:SenderName"];
+
+            var mail = new MailMessage
+            {
+                From = new MailAddress(senderEmail ?? "", senderName),
+                Subject = $"[ERP Notification] {notificationTitle}",
+                Body = FormatNotificationEmailBody(recipientName, notificationTitle, notificationContent, createdAt),
+                IsBodyHtml = true
+            };
+
+            mail.To.Add(recipientEmail);
+
+            using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+            {
+                smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                smtpClient.EnableSsl = true;
+                smtpClient.Timeout = 30000;
+
+                await smtpClient.SendMailAsync(mail);
+            }
+
+            _logger.LogInformation("Notification email sent successfully to {Email} using legacy template", recipientEmail);
+        }
+
+        private async Task SendPaymentSuccessNotificationLegacyAsync(
+            Contract contract, decimal amount, string paymentType, string transactionId,
+            DateTime transactionDate, Customer customer, User? saleUser)
+        {
+            var recipients = new Dictionary<string, string>();
+
+            if (!string.IsNullOrEmpty(customer.Email))
+                recipients[customer.Email.Trim().ToLower()] = "customer";
+            if (!string.IsNullOrEmpty(customer.RepresentativeEmail))
+                recipients[customer.RepresentativeEmail.Trim().ToLower()] = "customer";
+            if (saleUser != null && !string.IsNullOrEmpty(saleUser.Email))
+                recipients[saleUser.Email.Trim().ToLower()] = "sale";
+            if (saleUser != null && !string.IsNullOrEmpty(saleUser.SecondaryEmail))
+                recipients[saleUser.SecondaryEmail.Trim().ToLower()] = "sale";
+
+            var adminEmail = _configuration["AdminEmail"];
+            if (!string.IsNullOrEmpty(adminEmail))
+                recipients[adminEmail.Trim().ToLower()] = "admin";
+
+            var smtpServer = _configuration["Email:SmtpServer"];
+            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var smtpUsername = _configuration["Email:Username"];
+            var smtpPassword = _configuration["Email:Password"];
+            var senderEmail = _configuration["Email:SenderEmail"];
+            var senderName = _configuration["Email:SenderName"];
+
+            foreach (var recipient in recipients)
+            {
+                try
+                {
+                    var mail = new MailMessage
+                    {
+                        From = new MailAddress(senderEmail ?? "", senderName),
+                        Subject = GeneratePaymentEmailSubject(contract, paymentType),
+                        Body = FormatPaymentEmailBody(contract, amount, paymentType, transactionId, transactionDate, customer, saleUser, recipient.Value),
+                        IsBodyHtml = true
+                    };
+
+                    mail.To.Add(recipient.Key);
+
+                    using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+                    {
+                        smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                        smtpClient.EnableSsl = true;
+                        smtpClient.Timeout = 30000;
+
+                        await smtpClient.SendMailAsync(mail);
+                    }
+
+                    _logger.LogInformation("Payment notification email sent successfully to {Email} ({RecipientType}) for contract {ContractId} using legacy template", 
+                        recipient.Key, recipient.Value, contract.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send payment notification to {Email} for contract {ContractId}", recipient.Key, contract.Id);
+                }
+            }
+        }
+
+        // ==================== TICKET EMAIL NOTIFICATION ====================
+
+        private async Task SendEmailNotificationAsync(Ticket ticket, User actingUser, string actionType, string content, string emailType)
+        {
+            try
+            {
+                // Validate email configuration first
+                if (!ValidateEmailConfiguration())
+                {
+                    _logger.LogWarning("Email configuration is incomplete. Skipping email notification for ticket {TicketId}", ticket.Id);
+                    return;
+                }
+
+                // X√°c ƒë·ªãnh ng∆∞·ªùi nh·∫≠n - s·ª≠ d·ª•ng HashSet ƒë·ªÉ tr√°nh tr√πng l·∫∑p
+                var recipients = new HashSet<string>();
+
+                // Logic EXCLUDE ng∆∞·ªùi th·ª±c hi·ªán action
+                
+                // Th√™m email ng∆∞·ªùi t·∫°o ticket (n·∫øu KH√îNG ph·∫£i ng∆∞·ªùi th·ª±c hi·ªán)
+                if (ticket.CreatedBy != null && 
+                    !string.IsNullOrEmpty(ticket.CreatedBy.Email) &&
+                    ticket.CreatedBy.Id != actingUser.Id)
+                {
+                    recipients.Add(ticket.CreatedBy.Email.Trim().ToLower());
+                    _logger.LogDebug("Added CreatedBy email to recipients: {Email} for ticket {TicketId}", 
+                        ticket.CreatedBy.Email, ticket.Id);
+                }
+
+                // Th√™m email ng∆∞·ªùi ƒë∆∞·ª£c ph√¢n c√¥ng (n·∫øu KH√îNG ph·∫£i ng∆∞·ªùi th·ª±c hi·ªán)
+                if (ticket.AssignedTo != null && 
+                    !string.IsNullOrEmpty(ticket.AssignedTo.Email) &&
+                    ticket.AssignedTo.Id != actingUser.Id)
+                {
+                    recipients.Add(ticket.AssignedTo.Email.Trim().ToLower());
+                    _logger.LogDebug("Added AssignedTo email to recipients: {Email} for ticket {TicketId}", 
+                        ticket.AssignedTo.Email, ticket.Id);
+                }
+
+                // Th√™m secondary emails n·∫øu c√≥
+                if (ticket.CreatedBy != null && 
+                    !string.IsNullOrEmpty(ticket.CreatedBy.SecondaryEmail) &&
+                    ticket.CreatedBy.Id != actingUser.Id)
+                {
+                    recipients.Add(ticket.CreatedBy.SecondaryEmail.Trim().ToLower());
+                }
+
+                if (ticket.AssignedTo != null && 
+                    !string.IsNullOrEmpty(ticket.AssignedTo.SecondaryEmail) &&
+                    ticket.AssignedTo.Id != actingUser.Id)
+                {
+                    recipients.Add(ticket.AssignedTo.SecondaryEmail.Trim().ToLower());
+                }
+
+                // N·∫øu kh√¥ng c√≥ ng∆∞·ªùi nh·∫≠n, kh√¥ng g·ª≠i email
+                if (!recipients.Any())
+                {
+                    _logger.LogInformation("No email recipients for ticket notification on ticket {TicketId} after excluding acting user {ActingUserId}", 
+                        ticket.Id, actingUser.Id);
+                    return;
+                }
+
+                _logger.LogInformation("Preparing to send email for ticket {TicketId} to {RecipientCount} recipients", 
+                    ticket.Id, recipients.Count);
+
+                // L·∫•y th√¥ng tin SMTP t·ª´ config
+                var smtpServer = _configuration["Email:SmtpServer"];
+                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+                var smtpUsername = _configuration["Email:Username"];
+                var smtpPassword = _configuration["Email:Password"];
+                var senderEmail = _configuration["Email:SenderEmail"];
+                var senderName = _configuration["Email:SenderName"];
+
+                // T·∫°o email message
+                var mail = new MailMessage
+                {
+                    From = new MailAddress(senderEmail ?? "", senderName),
+                    Subject = GenerateEmailSubject(ticket, actionType),
+                    Body = FormatEmailBody(ticket, actingUser, actionType, content, emailType),
+                    IsBodyHtml = true
+                };
+
+                // Th√™m ng∆∞·ªùi nh·∫≠n
+                foreach (var recipient in recipients)
+                {
+                    try
+                    {
+                        mail.To.Add(recipient);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to add recipient {Recipient} to email for ticket {TicketId}", recipient, ticket.Id);
+                    }
+                }
+
+                // G·ª≠i email
+                using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+                {
+                    smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                    smtpClient.EnableSsl = true;
+                    smtpClient.Timeout = 30000;
+
+                    await smtpClient.SendMailAsync(mail);
+                }
+
+                _logger.LogInformation("Email notification sent successfully for ticket {TicketId} to {RecipientCount} recipients", 
+                    ticket.Id, recipients.Count);
+            }
+            catch (SmtpException smtpEx)
+            {
+                _logger.LogError(smtpEx, "SMTP error sending email notification for ticket {TicketId}: {StatusCode} - {Message}", 
+                    ticket.Id, smtpEx.StatusCode, smtpEx.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending email notification for ticket {TicketId}", ticket.Id);
+            }
+        }
+
+        // ==================== EMAIL FORMATTING HELPER METHODS ====================
+
+        private string FormatCustomerNotificationEmailBody(string recipientName, string notificationTitle, string notificationContent, DateTime createdAt, string customerType)
+        {
             return $@"
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset='utf-8'>
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #f8f9fa; padding: 15px; border-bottom: 3px solid #0066cc; text-align: center; }}
-        .content {{ padding: 20px 0; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px; text-align: center; }}
-        .ticket-info {{ background-color: #f0f7ff; padding: 15px; border-left: 4px solid #0066cc; margin: 15px 0; border-radius: 4px; }}
-        .action-content {{ border-left: 3px solid #28a745; padding-left: 15px; margin: 20px 0; background-color: #f8fff9; padding: 15px; border-radius: 4px; }}
-        .highlight {{ color: #0066cc; font-weight: bold; }}
-        .status {{ padding: 3px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: bold; }}
-        .action-icon {{ font-size: 20px; margin-right: 10px; }}
-        .user-info {{ background-color: #e9ecef; padding: 10px; border-radius: 4px; margin: 10px 0; }}
-        .btn {{ display: inline-block; padding: 10px 20px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 4px; }}
-        .recipients-info {{ background-color: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 4px solid #ffc107; }}
-        .urgency {{ padding: 3px 8px; border-radius: 3px; background-color: #ffc107; color: white; font-size: 12px; font-weight: bold; }}
+        .header {{ background-color: #007bff; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f9f9f9; padding: 20px; margin-top: 20px; }}
+        .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #666; }}
     </style>
 </head>
 <body>
     <div class='container'>
         <div class='header'>
-            <h2><span class='action-icon'>{actionIcon}</span>C?p nh?t trÍn Ticket #{ticket.Id}</h2>
+            <h2>{notificationTitle}</h2>
         </div>
         <div class='content'>
-            <p>Ticket <span class='highlight'>{ticket.Title}</span> v?a cÛ c?p nh?t m?i.</p>
-            
-            <div class='ticket-info'>
-                <p><strong>Ticket ID:</strong> #{ticket.Id}</p>
-                <p><strong>TiÍu ??:</strong> {ticket.Title}</p>
-                <p><strong>Tr?ng th·i:</strong> <span class='status' style='background-color: {statusColor};'>{ticket.Status}</span></p>
-                <p><strong>M?c ?? kh?n c?p:</strong> <span class='urgency'>{ticket.UrgencyLevel} ?</span></p>
-                <p><strong>Danh m?c:</strong> {ticket.Category?.Name ?? "N/A"}</p>
-                <p><strong>Ng??i t?o:</strong> {ticket.CreatedBy?.Name ?? "N/A"} ({ticket.CreatedBy?.Email ?? "N/A"})</p>
-                <p><strong>Ng??i ???c ph‚n cÙng:</strong> {ticket.AssignedTo?.Name ?? "Ch?a ph‚n cÙng"} {(ticket.AssignedTo != null ? $"({ticket.AssignedTo.Email})" : "")}</p>
-            </div>
-            
-            <div class='user-info'>
-                <p><strong>?? {actingUser.Name}</strong> ?„ th?c hi?n: <strong>{actionType}</strong></p>
-                <p><small>?? {actingUser.Email} | ?? {DateTime.Now:dd/MM/yyyy HH:mm:ss}</small></p>
-            </div>
-            
-            <div class='action-content'>
-                <h4>Chi ti?t c?p nh?t:</h4>
-                <p>{content}</p>
-            </div>
-            
-            <div style='text-align: center; margin: 20px 0;'>
-                <p>Vui lÚng ??ng nh?p v‡o h? th?ng ?? xem chi ti?t v‡ ph?n h?i.</p>
-                <a href='{ticketUrl}' class='btn'>Xem Ticket</a>
-            </div>
+            <p>K√≠nh g·ª≠i <strong>{recipientName}</strong>,</p>
+            <p>{notificationContent}</p>
+            <p><strong>Th·ªùi gian:</strong> {createdAt:dd/MM/yyyy HH:mm:ss}</p>
         </div>
         <div class='footer'>
-            <p>?? Email n‡y ???c g?i t? ??ng t? ERP Ticket System, vui lÚng khÙng tr? l?i.</p>
-            <p>Email ???c g?i t?i ng??i liÍn quan (khÙng bao g?m ng??i th?c hi?n h‡nh ??ng)</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l˝ ticket</p>
+            <p>¬© {DateTime.Now.Year} ERP System. All rights reserved.</p>
         </div>
     </div>
 </body>
 </html>";
-        }
-
-        private string GetStatusColor(string? status)
-        {
-            return status?.ToLower() switch
-            {
-                "open" or "new" => "#007bff",
-                "in progress" or "working" => "#fd7e14",
-                "closed" or "completed" or "resolved" => "#28a745",
-                "on hold" or "pending" => "#ffc107",
-                "cancelled" => "#dc3545",
-                _ => "#6c757d"
-            };
-        }
-
-        private string GetActionIcon(string emailType)
-        {
-            return emailType switch
-            {
-                "comment" => "??",
-                "created" => "??",
-                "assigned" => "??",
-                "status_changed" => "??",
-                _ => "??"
-            };
         }
 
         private string FormatAccountCreationEmailBody(User user, string plainPassword, string activationLink)
@@ -646,105 +849,125 @@ namespace erp_backend.Services
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset='utf-8'>
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
-        .content {{ padding: 30px; background-color: #f8f9fa; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
-        .credentials-box {{ background-color: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .credential-item {{ padding: 10px 0; border-bottom: 1px solid #eee; }}
-        .credential-item:last-child {{ border-bottom: none; }}
-        .credential-label {{ font-weight: bold; color: #667eea; display: inline-block; width: 150px; }}
-        .credential-value {{ color: #333; font-family: 'Courier New', monospace; background-color: #f0f0f0; padding: 5px 10px; border-radius: 3px; }}
-        .btn {{ display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
-        .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
-        .icon {{ font-size: 24px; margin-right: 10px; }}
-        .highlight {{ color: #667eea; font-weight: bold; }}
-        .welcome-text {{ font-size: 18px; margin: 20px 0; }}
-        .steps {{ background-color: white; padding: 20px; border-radius: 4px; margin: 20px 0; }}
-        .step {{ padding: 10px 0; }}
-        .step-number {{ display: inline-block; width: 30px; height: 30px; background-color: #667eea; color: white; border-radius: 50%; text-align: center; line-height: 30px; margin-right: 10px; font-weight: bold; }}
+        .header {{ background-color: #007bff; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f9f9f9; padding: 20px; margin-top: 20px; }}
+        .credentials {{ background-color: #fff; padding: 15px; border-left: 4px solid #007bff; margin: 15px 0; }}
+        .button {{ display: inline-block; padding: 12px 24px; background-color: #28a745; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px; }}
+        .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #666; }}
     </style>
 </head>
 <body>
     <div class='container'>
         <div class='header'>
-            <h1><span class='icon'>??</span>Ch‡o m?ng ??n v?i ERP System!</h1>
-            <p style='font-size: 16px; margin-top: 10px;'>T‡i kho?n c?a b?n ?„ ???c t?o th‡nh cÙng</p>
+            <h2>T√†i kho·∫£n ERP c·ªßa b·∫°n ƒë√£ ƒë∆∞·ª£c t·∫°o</h2>
         </div>
         <div class='content'>
-            <p class='welcome-text'>Xin ch‡o <strong>{user.Name}</strong>,</p>
-            
-            <p>T‡i kho?n ERP c?a b?n ?„ ???c t?o th‡nh cÙng. D??i ?‚y l‡ thÙng tin ??ng nh?p c?a b?n:</p>
-            
-            <div class='credentials-box'>
-                <h3 style='color: #667eea; margin-top: 0;'>?? ThÙng tin ??ng nh?p</h3>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? Email/T‡i kho?n:</span>
-                    <span class='credential-value'>{user.Email}</span>
-                </div>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? M?t kh?u t?m th?i:</span>
-                    <span class='credential-value'>{plainPassword}</span>
-                </div>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? H? tÍn:</span>
-                    <span class='credential-value'>{user.Name}</span>
-                </div>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? PhÚng ban:</span>
-                    <span class='credential-value'>{user.Department?.Name ?? "Ch?a x·c ??nh"}</span>
-                </div>
-                <div class='credential-item'>
-                    <span class='credential-label'>?? Ch?c v?:</span>
-                    <span class='credential-value'>{user.Position?.PositionName ?? "Ch?a x·c ??nh"}</span>
-                </div>
+            <p>Xin ch√†o <strong>{user.Name}</strong>,</p>
+            <p>T√†i kho·∫£n ERP c·ªßa b·∫°n ƒë√£ ƒë∆∞·ª£c t·∫°o th√†nh c√¥ng. D∆∞·ªõi ƒë√¢y l√† th√¥ng tin ƒëƒÉng nh·∫≠p:</p>
+            <div class='credentials'>
+                <p><strong>Email ƒëƒÉng nh·∫≠p:</strong> {user.Email}</p>
+                <p><strong>M·∫≠t kh·∫©u t·∫°m th·ªùi:</strong> {plainPassword}</p>
+                <p><strong>Ph√≤ng ban:</strong> {user.Department?.Name ?? "Ch∆∞a x√°c ƒë·ªãnh"}</p>
+                <p><strong>Ch·ª©c v·ª•:</strong> {user.Position?.PositionName ?? "Ch∆∞a x√°c ƒë·ªãnh"}</p>
             </div>
-            
-            <div class='warning-box'>
-                <strong>?? L?u ˝ quan tr?ng:</strong>
-                <ul style='margin: 10px 0; padding-left: 20px;'>
-                    <li>?‚y l‡ m?t kh?u t?m th?i, vui lÚng ??i m?t kh?u ngay sau l?n ??ng nh?p ??u tiÍn</li>
-                    <li>KhÙng chia s? thÙng tin n‡y v?i b?t k? ai</li>
-                    <li>Link kÌch ho?t cÛ hi?u l?c trong 24 gi?</li>
-                </ul>
-            </div>
-
-            <div class='steps'>
-                <h3 style='color: #667eea; margin-top: 0;'>?? C·c b??c th?c hi?n</h3>
-                <div class='step'>
-                    <span class='step-number'>1</span>
-                    <span>Nh?n v‡o n˙t &quot;KÌch ho?t t‡i kho?n&quot; bÍn d??i</span>
-                </div>
-                <div class='step'>
-                    <span class='step-number'>2</span>
-                    <span>??ng nh?p b?ng email v‡ m?t kh?u t?m th?i</span>
-                </div>
-                <div class='step'>
-                    <span class='step-number'>3</span>
-                    <span>Thay ??i m?t kh?u theo yÍu c?u h? th?ng</span>
-                </div>
-                <div class='step'>
-                    <span class='step-number'>4</span>
-                    <span>B?t ??u s? d?ng h? th?ng ERP</span>
-                </div>
-            </div>
-            
+            <p><strong>‚ö†Ô∏è L∆∞u √Ω quan tr·ªçng:</strong> Vui l√≤ng k√≠ch ho·∫°t t√†i kho·∫£n c·ªßa b·∫°n b·∫±ng c√°ch nh·∫•p v√†o n√∫t b√™n d∆∞·ªõi:</p>
             <div style='text-align: center;'>
-                <a href='{activationLink}' class='btn'>?? KÌch ho?t t‡i kho?n ngay</a>
+                <a href='{activationLink}' class='button'>K√≠ch ho·∫°t t√†i kho·∫£n</a>
             </div>
-
-            <p style='margin-top: 30px; color: #666;'>
-                N?u n˙t khÙng ho?t ??ng, vui lÚng sao chÈp link d??i ?‚y v‡o trÏnh duy?t:<br>
-                <a href='{activationLink}' style='color: #667eea; word-break: break-all;'>{activationLink}</a>
-            </p>
+            <p style='margin-top: 15px; font-size: 12px; color: #666;'>Ho·∫∑c copy link sau v√†o tr√¨nh duy·ªát:<br>{activationLink}</p>
+            <p><strong>üîí Khuy·∫øn ngh·ªã b·∫£o m·∫≠t:</strong> Sau khi ƒëƒÉng nh·∫≠p, vui l√≤ng ƒë·ªïi m·∫≠t kh·∫©u ngay ƒë·ªÉ b·∫£o m·∫≠t t√†i kho·∫£n.</p>
         </div>
         <div class='footer'>
-            <p>?? Email n‡y ???c g?i t? ??ng t? ERP System, vui lÚng khÙng tr? l?i.</p>
-            <p>N?u b?n khÙng yÍu c?u t?o t‡i kho?n n‡y, vui lÚng liÍn h? v?i qu?n tr? viÍn ngay l?p t?c.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l˝ doanh nghi?p</p>
+            <p>¬© {DateTime.Now.Year} ERP System. All rights reserved.</p>
+            <p>N·∫øu b·∫°n kh√¥ng y√™u c·∫ßu t·∫°o t√†i kho·∫£n n√†y, vui l√≤ng b·ªè qua email n√†y.</p>
+        </div>
+    </div>
+</body>
+</html>";
+        }
+
+        private string FormatOtpEmailBody(string userName, string otpCode, DateTime expiresAt, int expiryMinutes)
+        {
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #dc3545; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f9f9f9; padding: 20px; margin-top: 20px; }}
+        .otp-box {{ background-color: #fff; padding: 20px; text-align: center; border: 2px dashed #dc3545; margin: 20px 0; }}
+        .otp-code {{ font-size: 32px; font-weight: bold; color: #dc3545; letter-spacing: 5px; }}
+        .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h2>üîí M√£ OTP ƒë·ªïi m·∫≠t kh·∫©u</h2>
+        </div>
+        <div class='content'>
+            <p>Xin ch√†o <strong>{userName}</strong>,</p>
+            <p>B·∫°n ƒë√£ y√™u c·∫ßu ƒë·∫∑t l·∫°i m·∫≠t kh·∫©u. ƒê√¢y l√† m√£ OTP c·ªßa b·∫°n:</p>
+            <div class='otp-box'>
+                <div class='otp-code'>{otpCode}</div>
+            </div>
+            <p><strong>‚è∞ M√£ OTP n√†y s·∫Ω h·∫øt h·∫°n sau {expiryMinutes} ph√∫t</strong> (v√†o l√∫c {expiresAt:dd/MM/yyyy HH:mm:ss})</p>
+            <p><strong>‚ö†Ô∏è L∆∞u √Ω b·∫£o m·∫≠t:</strong></p>
+            <ul>
+                <li>Kh√¥ng chia s·∫ª m√£ OTP n√†y v·ªõi b·∫•t k·ª≥ ai</li>
+                <li>Nh√¢n vi√™n h·ªá th·ªëng s·∫Ω kh√¥ng bao gi·ªù y√™u c·∫ßu m√£ OTP c·ªßa b·∫°n</li>
+                <li>N·∫øu b·∫°n kh√¥ng y√™u c·∫ßu ƒë·ªïi m·∫≠t kh·∫©u, vui l√≤ng b·ªè qua email n√†y</li>
+            </ul>
+        </div>
+        <div class='footer'>
+            <p>¬© {DateTime.Now.Year} ERP System. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>";
+        }
+
+        private string FormatNotificationEmailBody(string recipientName, string notificationTitle, string notificationContent, DateTime createdAt)
+        {
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            var notificationUrl = $"{frontendUrl}/notifications";
+
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #17a2b8; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f9f9f9; padding: 20px; margin-top: 20px; }}
+        .button {{ display: inline-block; padding: 12px 24px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px; }}
+        .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h2>üì¢ {notificationTitle}</h2>
+        </div>
+        <div class='content'>
+            <p>Xin ch√†o <strong>{recipientName}</strong>,</p>
+            <p>{notificationContent}</p>
+            <p><strong>Th·ªùi gian:</strong> {createdAt:dd/MM/yyyy HH:mm:ss}</p>
+            <div style='text-align: center;'>
+                <a href='{notificationUrl}' class='button'>Xem chi ti·∫øt</a>
+            </div>
+        </div>
+        <div class='footer'>
+            <p>¬© {DateTime.Now.Year} ERP System. All rights reserved.</p>
         </div>
     </div>
 </body>
@@ -755,367 +978,142 @@ namespace erp_backend.Services
         {
             var paymentTypeText = paymentType switch
             {
-                "deposit50" => "??t c?c 50%",
-                "final50" => "Thanh to·n n?t 50%",
-                "full100" => "Thanh to·n 100%",
-                _ => "Thanh to·n"
+                "deposit50" => "ƒê·∫∑t c·ªçc 50%",
+                "final50" => "Thanh to√°n n·ªët 50%",
+                "full100" => "Thanh to√°n 100%",
+                _ => "Thanh to√°n"
             };
 
-            return $"[H?p ??ng #{contract.NumberContract}] X·c nh?n {paymentTypeText} th‡nh cÙng";
+            return $"[H·ª£p ƒë·ªìng #{contract.NumberContract}] X√°c nh·∫≠n {paymentTypeText} th√†nh c√¥ng";
         }
 
-        /// <summary>
-        /// Format email body cho OTP ??i m?t kh?u
-        /// </summary>
-        private string FormatOtpEmailBody(string userName, string otpCode, DateTime expiresAt, int expiryMinutes)
+        private string FormatPaymentEmailBody(Contract contract, decimal amount, string paymentType, 
+            string transactionId, DateTime transactionDate, Customer customer, User? saleUser, string recipientType)
         {
-            return $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
-        .content {{ padding: 30px; background-color: #f8f9fa; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
-        .otp-box {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; margin: 30px 0; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-        .otp-code {{ font-size: 48px; font-weight: bold; letter-spacing: 10px; margin: 20px 0; font-family: 'Courier New', monospace; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
-        .warning-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
-        .icon {{ font-size: 48px; }}
-        .info-box {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #0066cc; }}
-        .timer {{ background-color: #ffc107; color: #333; padding: 10px 20px; border-radius: 20px; display: inline-block; font-weight: bold; margin-top: 10px; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <div class='icon'>??</div>
-            <h1 style='margin: 10px 0;'>??i m?t kh?u</h1>
-            <p style='font-size: 16px; margin: 0;'>M„ OTP x·c th?c</p>
-        </div>
-        <div class='content'>
-            <p>Xin ch‡o <strong>{userName}</strong>,</p>
-            
-            <p>B?n ?„ yÍu c?u ??i m?t kh?u cho t‡i kho?n ERP c?a mÏnh. D??i ?‚y l‡ m„ OTP ?? x·c th?c:</p>
-            
-            <div class='otp-box'>
-                <div style='font-size: 18px; margin-bottom: 10px;'>M„ OTP c?a b?n l‡:</div>
-                <div class='otp-code'>{otpCode}</div>
-                <div class='timer'>? CÛ hi?u l?c trong {expiryMinutes} ph˙t</div>
-            </div>
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            var contractUrl = $"{frontendUrl}/contracts/{contract.Id}";
 
-            <div class='info-box'>
-                <h4 style='margin-top: 0; color: #0066cc;'>?? H??ng d?n s? d?ng</h4>
-                <ol style='margin: 10px 0; padding-left: 20px;'>
-                    <li>Nh?p m„ OTP <strong>{otpCode}</strong> v‡o form ??i m?t kh?u</li>
-                    <li>Nh?p m?t kh?u m?i (t?i thi?u 8 k˝ t?)</li>
-                    <li>X·c nh?n m?t kh?u m?i</li>
-                    <li>Nh‚n &quot;??i m?t kh?u&quot; ?? ho‡n t?t</li>
-                </ol>
-            </div>
-            
-            <div class='warning-box'>
-                <strong>?? L?u ˝ quan tr?ng:</strong>
-                <ul style='margin: 10px 0; padding-left: 20px;'>
-                    <li>M„ OTP n‡y ch? cÛ hi?u l?c trong <strong>{expiryMinutes} ph˙t</strong></li>
-                    <li>M„ OTP ch? ???c s? d?ng <strong>m?t l?n duy nh?t</strong></li>
-                    <li>KhÙng chia s? m„ OTP n‡y v?i b?t k? ai</li>
-                    <li>N?u b?n khÙng yÍu c?u ??i m?t kh?u, vui lÚng b? qua email n‡y v‡ liÍn h? v?i qu?n tr? viÍn ngay</li>
-                </ul>
-            </div>
-
-            <div class='info-box'>
-                <p style='margin: 0;'><strong>?? Th?i gian h?t h?n:</strong> {expiresAt:dd/MM/yyyy HH:mm:ss} UTC</p>
-                <p style='margin: 10px 0 0 0; font-size: 12px; color: #666;'>
-                    (Gi? Vi?t Nam: {expiresAt.AddHours(7):dd/MM/yyyy HH:mm:ss})
-                </p>
-            </div>
-
-            <p style='margin-top: 30px; color: #666;'>
-                N?u b?n khÙng th?c hi?n yÍu c?u n‡y, vui lÚng b? qua email ho?c liÍn h? v?i qu?n tr? viÍn ?? ???c h? tr?.
-            </p>
-        </div>
-        <div class='footer'>
-            <p>?? Email n‡y ???c g?i t? ??ng t? ERP System, vui lÚng khÙng tr? l?i.</p>
-            <p>N?u b?n g?p v?n ?? khi ??i m?t kh?u, vui lÚng liÍn h? v?i qu?n tr? viÍn h? th?ng.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l˝ doanh nghi?p</p>
-        </div>
-    </div>
-</body>
-</html>";
-        }
-
-        private string FormatPaymentEmailBody(
-            Contract contract, 
-            decimal amount, 
-            string paymentType, 
-            string transactionId, 
-            DateTime transactionDate,
-            Customer customer,
-            User? saleUser,
-            string recipientType)
-        {
             var paymentTypeText = paymentType switch
             {
-                "deposit50" => "??t c?c 50%",
-                "final50" => "Thanh to·n n?t 50%",
-                "full100" => "Thanh to·n 100%",
-                _ => "Thanh to·n"
+                "deposit50" => "ƒê·∫∑t c·ªçc 50%",
+                "final50" => "Thanh to√°n n·ªët 50%",
+                "full100" => "Thanh to√°n 100%",
+                _ => "Thanh to√°n"
             };
 
             var greeting = recipientType switch
             {
-                "customer" => $"KÌnh g?i qu˝ kh·ch h‡ng <strong>{customer.Name ?? customer.CompanyName}</strong>,",
-                "sale" => $"Xin ch‡o <strong>{saleUser?.Name}</strong>,",
-                "admin" => "KÌnh g?i Qu?n tr? viÍn,",
-                _ => "Xin ch‡o,"
+                "customer" => $"K√≠nh g·ª≠i qu√Ω kh√°ch h√†ng <strong>{customer.Name ?? customer.CompanyName}</strong>,",
+                "sale" => $"Xin ch√†o <strong>{saleUser?.Name}</strong>,",
+                "admin" => "K√≠nh g·ª≠i Qu·∫£n tr·ªã vi√™n,",
+                _ => "Xin ch√†o,"
             };
 
             var mainMessage = recipientType switch
             {
-                "customer" => $"Ch˙ng tÙi x·c nh?n ?„ nh?n ???c thanh to·n {paymentTypeText} cho h?p ??ng #{contract.NumberContract} .",
-                "sale" => $"B?n ?„ th?c hi?n thanh to·n {paymentTypeText} cho h?p ??ng #{contract.NumberContract} .",
-                "admin" => $"?„ cÛ giao d?ch thanh to·n {paymentTypeText} cho h?p ??ng #{contract.NumberContract} .",
-                _ => $"?„ cÛ giao d?ch thanh to·n {paymentTypeText} cho h?p ??ng #{contract.NumberContract}."
+                "customer" => $"Ch√∫ng t√¥i x√°c nh·∫≠n ƒë√£ nh·∫≠n ƒë∆∞·ª£c thanh to√°n {paymentTypeText} cho h·ª£p ƒë·ªìng #{contract.NumberContract}.",
+                "sale" => $"B·∫°n ƒë√£ th·ª±c hi·ªán thanh to√°n {paymentTypeText} cho h·ª£p ƒë·ªìng #{contract.NumberContract}.",
+                "admin" => $"ƒê√£ c√≥ giao d·ªãch thanh to√°n {paymentTypeText} cho h·ª£p ƒë·ªìng #{contract.NumberContract}.",
+                _ => $"ƒê√£ c√≥ giao d·ªãch thanh to√°n {paymentTypeText} cho h·ª£p ƒë·ªìng #{contract.NumberContract}."
             };
 
-            var customerInfo = recipientType == "customer" ? 
-                $"<p><strong>ThÙng tin kh·ch h‡ng:</strong> {customer.Name} - {customer.Email}</p>" : "";
+            var customerInfo = recipientType == "customer" ? "" : 
+                $"<p><strong>Th√¥ng tin kh√°ch h√†ng:</strong> {customer.Name ?? customer.CompanyName} - {customer.Email}</p>";
 
-            var saleInfo = recipientType == "sale" && saleUser != null ? 
-                $"<p><strong>Ng??i t?o:</strong> {saleUser.Name} ({saleUser.Email})</p>" : "";
-
-            var transactionDateText = transactionDate.ToString("dd/MM/yyyy HH:mm:ss");
+            var saleInfo = recipientType == "sale" && saleUser != null ? "" : 
+                saleUser != null ? $"<p><strong>Ng∆∞·ªùi t·∫°o:</strong> {saleUser.Name} ({saleUser.Email})</p>" : "";
 
             return $@"
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset='utf-8'>
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #f8f9fa; padding: 15px; border-bottom: 3px solid #28a745; text-align: center; }}
-        .content {{ padding: 20px 0; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px; text-align: center; }}
-        .contract-info {{ background-color: #e9fbe9; padding: 15px; border-left: 4px solid #28a745; margin: 15px 0; border-radius: 4px; }}
-        .greeting {{ font-size: 18px; font-weight: bold; }}
-        .message {{ margin: 15px 0; }}
-        .btn {{ display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }}
-        .info-box {{ background-color: #f0f8ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #007bff; }}
+        .header {{ background-color: #28a745; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f9f9f9; padding: 20px; margin-top: 20px; }}
+        .payment-info {{ background-color: #fff; padding: 15px; border-left: 4px solid #28a745; margin: 15px 0; }}
+        .button {{ display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px; }}
+        .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #666; }}
     </style>
 </head>
 <body>
     <div class='container'>
         <div class='header'>
-            <h2>X·c nh?n thanh to·n</h2>
+            <h2>‚úÖ X√°c nh·∫≠n thanh to√°n th√†nh c√¥ng</h2>
         </div>
         <div class='content'>
-            <div class='greeting'>{
-                greeting
-            }</div>
-            
-            <div class='message'>
-                {mainMessage}
+            <p>{greeting}</p>
+            <p>{mainMessage}</p>
+            <div class='payment-info'>
+                <p><strong>S·ªë h·ª£p ƒë·ªìng:</strong> #{contract.NumberContract}</p>
+                <p><strong>S·ªë ti·ªÅn:</strong> {amount:N0} VNƒê</p>
+                <p><strong>Lo·∫°i thanh to√°n:</strong> {paymentTypeText}</p>
+                <p><strong>M√£ giao d·ªãch:</strong> {transactionId}</p>
+                <p><strong>Th·ªùi gian:</strong> {transactionDate:dd/MM/yyyy HH:mm:ss}</p>
+                {customerInfo}
+                {saleInfo}
             </div>
-            
-            <div class='contract-info'>
-                <p><strong>H?p ??ng:</strong> #{contract.NumberContract} </p>
-                <p><strong>S? ti?n:</strong> {amount:N0} VN?</p>
-                <p><strong>Lo?i thanh to·n:</strong> {paymentTypeText}</p>
-                <p><strong>ID giao d?ch:</strong> {transactionId}</p>
-                <p><strong>Th?i gian:</strong> {transactionDateText}</p>
-            </div>
-            
-            {customerInfo}
-            {saleInfo}
-            
             <div style='text-align: center;'>
-                <a href='{_configuration["FrontendUrl"]}/contracts/{contract.Id}' class='btn'>Xem chi ti?t h?p ??ng</a>
+                <a href='{contractUrl}' class='button'>Xem chi ti·∫øt h·ª£p ƒë·ªìng</a>
             </div>
         </div>
         <div class='footer'>
-            <p>?? Email n‡y ???c g?i t? ??ng t? ERP System, vui lÚng khÙng tr? l?i.</p>
-            <p>N?u b?n cÛ th?m c‚u h?i v? giao d?ch n‡y, vui lÚng li?n h? v?i qu?n tr? viÍn.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l˝ doanh nghi?p</p>
+            <p>¬© {DateTime.Now.Year} ERP System. All rights reserved.</p>
+            <p>C·∫£m ∆°n qu√Ω kh√°ch ƒë√£ s·ª≠ d·ª•ng d·ªãch v·ª• c·ªßa ch√∫ng t√¥i!</p>
         </div>
     </div>
 </body>
 </html>";
         }
 
-        /// <summary>
-        /// Format email body cho notification
-        /// </summary>
-        private string FormatNotificationEmailBody(string recipientName, string notificationTitle, string notificationContent, DateTime createdAt)
+        private string GenerateEmailSubject(Ticket ticket, string actionType)
         {
-            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
-            var notificationUrl = $"{frontendUrl}/notifications";
-
-            return $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
-        .content {{ padding: 30px; background-color: #f8f9fa; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
-        .notification-box {{ background-color: white; padding: 25px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .notification-title {{ color: #667eea; font-size: 20px; font-weight: bold; margin-bottom: 15px; }}
-        .notification-content {{ color: #333; font-size: 14px; line-height: 1.8; padding: 15px; background-color: #f8f9fa; border-radius: 4px; }}
-        .btn {{ display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-        .btn:hover {{ box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
-        .icon {{ font-size: 48px; }}
-        .info-box {{ background-color: #e7f5ff; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #0066cc; }}
-        .timestamp {{ color: #666; font-size: 12px; margin-top: 10px; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <div class='icon'>??</div>
-            <h1 style='margin: 10px 0;'>ThÙng b·o m?i</h1>
-            <p style='font-size: 16px; margin: 0;'>ERP System</p>
-        </div>
-        <div class='content'>
-            <p>Xin ch‡o <strong>{recipientName}</strong>,</p>
-            
-            <p>B?n cÛ m?t thÙng b·o m?i t? h? th?ng ERP:</p>
-            
-            <div class='notification-box'>
-                <div class='notification-title'>
-                    ?? {notificationTitle}
-                </div>
-                <div class='notification-content'>
-                    {notificationContent}
-                </div>
-                <div class='timestamp'>
-                    ?? Th?i gian: {createdAt:dd/MM/yyyy HH:mm:ss}
-                </div>
-            </div>
-
-            <div class='info-box'>
-                <p style='margin: 0;'><strong>?? L?u ˝:</strong></p>
-                <ul style='margin: 10px 0; padding-left: 20px;'>
-                    <li>??ng nh?p v‡o h? th?ng ?? xem chi ti?t v‡ c·c thÙng b·o kh·c</li>
-                    <li>B?n cÛ th? qu?n l˝ thÙng b·o c?a mÏnh trong m?c Notifications</li>
-                </ul>
-            </div>
-            
-            <div style='text-align: center;'>
-                <a href='{notificationUrl}' class='btn'>?? Xem thÙng b·o</a>
-            </div>
-
-            <p style='margin-top: 30px; color: #666; font-size: 14px;'>
-                Email n‡y ???c g?i t? ??ng khi cÛ thÙng b·o m?i trong h? th?ng. 
-                N?u b?n khÙng mu?n nh?n email thÙng b·o, vui lÚng c?p nh?t trong c‡i ??t t‡i kho?n.
-            </p>
-        </div>
-        <div class='footer'>
-            <p>?? Email n‡y ???c g?i t? ??ng t? ERP System, vui lÚng khÙng tr? l?i.</p>
-            <p>N?u cÛ th?c m?c, vui lÚng liÍn h? v?i qu?n tr? viÍn h? th?ng.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l˝ doanh nghi?p</p>
-        </div>
-    </div>
-</body>
-</html>";
+            return $"[Ticket #{ticket.Id}] {actionType} - {ticket.Title}";
         }
 
-        /// <summary>
-        /// Format email body cho kh·ch h‡ng v?i template riÍng
-        /// </summary>
-        private string FormatCustomerNotificationEmailBody(string recipientName, string notificationTitle, string notificationContent, DateTime createdAt, string customerType)
+        private string FormatEmailBody(Ticket ticket, User actingUser, string actionType, string content, string emailType)
         {
             var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
-            var contactEmail = _configuration["Email:SenderEmail"] ?? "support@erpsystem.com";
-            var contactPhone = _configuration["SupportPhone"] ?? "1900-xxxx";
+            var ticketUrl = $"{frontendUrl}/tickets/{ticket.Id}";
 
             return $@"
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset='utf-8'>
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0; }}
-        .content {{ padding: 30px; background-color: #f8f9fa; }}
-        .footer {{ font-size: 12px; color: #777; border-top: 1px solid #eee; padding: 20px; text-align: center; background-color: #fff; border-radius: 0 0 10px 10px; }}
-        .notification-box {{ background-color: white; padding: 25px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .notification-title {{ color: #28a745; font-size: 22px; font-weight: bold; margin-bottom: 20px; }}
-        .notification-content {{ color: #333; font-size: 15px; line-height: 1.8; padding: 20px; background-color: #f8fff9; border-radius: 4px; border: 1px dashed #28a745; }}
-        .icon {{ font-size: 48px; }}
-        .customer-badge {{ background-color: #ffc107; color: #333; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 10px; }}
-        .timestamp {{ color: #666; font-size: 13px; margin-top: 15px; padding: 10px; background-color: #e9ecef; border-radius: 4px; }}
-        .contact-box {{ background-color: #e7f5ff; padding: 20px; border-radius: 4px; margin: 20px 0; border-left: 4px solid #0066cc; }}
-        .contact-info {{ margin: 10px 0; }}
-        .contact-info strong {{ color: #0066cc; }}
-        .thank-you {{ background-color: #d4edda; border-left: 4px solid #28a745; padding: 20px; margin: 20px 0; border-radius: 4px; text-align: center; }}
-        .company-logo {{ font-size: 32px; margin-bottom: 10px; }}
+        .header {{ background-color: #6c757d; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f9f9f9; padding: 20px; margin-top: 20px; }}
+        .ticket-info {{ background-color: #fff; padding: 15px; border-left: 4px solid #6c757d; margin: 15px 0; }}
+        .button {{ display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px; }}
+        .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #666; }}
     </style>
 </head>
 <body>
     <div class='container'>
         <div class='header'>
-            <div class='company-logo'>??</div>
-            <h1 style='margin: 10px 0;'>ThÙng b·o d‡nh cho kh·ch h‡ng</h1>
-            <p style='font-size: 16px; margin: 0;'>ERP System</p>
+            <h2>üé´ {actionType}</h2>
         </div>
         <div class='content'>
-            <p>KÌnh g?i Qu˝ kh·ch <strong>{recipientName}</strong>,</p>
-            
-            <div style='text-align: center; margin: 15px 0;'>
-                <span class='customer-badge'>?? Kh·ch h‡ng {customerType}</span>
+            <p>Xin ch√†o,</p>
+            <p><strong>{actingUser.Name}</strong> ƒë√£ th·ª±c hi·ªán h√†nh ƒë·ªông: <strong>{actionType}</strong></p>
+            <div class='ticket-info'>
+                <p><strong>Ticket ID:</strong> #{ticket.Id}</p>
+                <p><strong>Ti√™u ƒë·ªÅ:</strong> {ticket.Title}</p>
+                <p><strong>Tr·∫°ng th√°i:</strong> {ticket.Status}</p>
+                <p><strong>N·ªôi dung:</strong></p>
+                <p>{content}</p>
             </div>
-            
-            <p>Ch˙ng tÙi cÛ thÙng b·o quan tr?ng g?i ??n Qu˝ kh·ch:</p>
-            
-            <div class='notification-box'>
-                <div class='notification-title'>
-                    ?? {notificationTitle}
-                </div>
-                <div class='notification-content'>
-                    {notificationContent}
-                </div>
-                <div class='timestamp'>
-                    ?? Th?i gian g?i: {createdAt:dd/MM/yyyy HH:mm:ss}
-                </div>
+            <div style='text-align: center;'>
+                <a href='{ticketUrl}' class='button'>Xem chi ti·∫øt ticket</a>
             </div>
-
-            <div class='thank-you'>
-                <strong>?? C?m ?n Qu˝ kh·ch ?„ tin t??ng v‡ s? d?ng d?ch v? c?a ch˙ng tÙi!</strong>
-                <p style='margin: 10px 0 0 0; font-size: 14px;'>
-                    Ch˙ng tÙi luÙn s?n s‡ng h? tr? v‡ ph?c v? Qu˝ kh·ch t?t nh?t.
-                </p>
-            </div>
-
-            <div class='contact-box'>
-                <h4 style='margin-top: 0; color: #0066cc;'>?? LiÍn h? v?i ch˙ng tÙi</h4>
-                <div class='contact-info'>
-                    <strong>? Email:</strong> {contactEmail}
-                </div>
-                <div class='contact-info'>
-                    <strong>? Hotline:</strong> {contactPhone}
-                </div>
-                <div class='contact-info'>
-                    <strong>? Website:</strong> <a href='{frontendUrl}' style='color: #0066cc;'>{frontendUrl}</a>
-                </div>
-                <p style='margin: 15px 0 0 0; font-size: 13px; color: #666;'>
-                    N?u Qu˝ kh·ch cÛ b?t k? c‚u h?i hay yÍu c?u h? tr? n‡o, xin vui lÚng liÍn h? v?i ch˙ng tÙi. 
-                    ??i ng? c?a ch˙ng tÙi s?n s‡ng ph?c v? 24/7.
-                </p>
-            </div>
-
-            <p style='margin-top: 30px; color: #666; font-size: 14px; text-align: center;'>
-                Tr‚n tr?ng,<br>
-                <strong>??i ng? ERP System</strong>
-            </p>
         </div>
         <div class='footer'>
-            <p>?? Email n‡y ???c g?i t? ??ng t? ERP System.</p>
-            <p>Qu˝ kh·ch vui lÚng khÙng tr? l?i email n‡y. ?? liÍn h?, vui lÚng s? d?ng thÙng tin liÍn h? bÍn trÍn.</p>
-            <p>&copy; {DateTime.Now.Year} ERP System - H? th?ng qu?n l˝ doanh nghi?p</p>
+            <p>¬© {DateTime.Now.Year} ERP System. All rights reserved.</p>
         </div>
     </div>
 </body>

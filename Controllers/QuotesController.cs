@@ -850,18 +850,15 @@ namespace erp_backend.Controllers
 				if (quote.Customer == null)
 					return BadRequest(new { message = "Customer không tồn tại" });
 
-				var templatePath = Path.Combine(
-					Directory.GetCurrentDirectory(), 
-					"wwwroot", 
-					"Templates", 
-					"QuoteTemplate.html"
-				);
-				
-				if (!System.IO.File.Exists(templatePath))
-					return NotFound(new { message = "Không tìm thấy template báo giá" });
+				// ✅ Lấy template từ database thay vì file
+				var template = await _context.DocumentTemplates
+					.Where(t => t.Code == "QUOTE_DEFAULT" && t.IsActive)
+					.FirstOrDefaultAsync();
 
-				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
-				var htmlContent = BindQuoteDataToTemplate(htmlTemplate, quote);
+				if (template == null)
+					return NotFound(new { message = "Không tìm thấy template báo giá trong database" });
+
+				var htmlContent = BindQuoteDataToTemplate(template.HtmlContent, quote);
 
 				return Content(htmlContent, "text/html");
 			}
@@ -899,18 +896,15 @@ namespace erp_backend.Controllers
 				if (quote.Customer == null)
 					return BadRequest(new { message = "Customer không tồn tại" });
 
-				var templatePath = Path.Combine(
-					Directory.GetCurrentDirectory(), 
-					"wwwroot", 
-					"Templates", 
-					"QuoteTemplate.html"
-				);
+				// ✅ Lấy template từ database thay vì file
+				var template = await _context.DocumentTemplates
+					.Where(t => t.Code == "QUOTE_DEFAULT" && t.IsActive)
+					.FirstOrDefaultAsync();
 
-				if (!System.IO.File.Exists(templatePath))
-					return NotFound(new { message = "Không tìm thấy template báo giá" });
+				if (template == null)
+					return NotFound(new { message = "Không tìm thấy template báo giá trong database" });
 
-				var htmlTemplate = await System.IO.File.ReadAllTextAsync(templatePath);
-				var htmlContent = BindQuoteDataToTemplate(htmlTemplate, quote);
+				var htmlContent = BindQuoteDataToTemplate(template.HtmlContent, quote);
 
 				// ✅ Use PuppeteerSharp through IPdfService
 				var pdfBytes = await _pdfService.ConvertHtmlToPdfAsync(htmlContent);
@@ -941,6 +935,9 @@ namespace erp_backend.Controllers
 
 		private string BindQuoteDataToTemplate(string template, Quote quote)
 		{
+			// ✅ Decode escape characters từ database
+			template = System.Text.RegularExpressions.Regex.Unescape(template);
+
 			var customer = quote.Customer!;
 			var now = DateTime.Now;
 

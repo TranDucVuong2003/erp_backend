@@ -32,7 +32,14 @@ namespace erp_backend.Models
 
 		public bool HasCommitment08 { get; set; } = false; // Có làm cam kết 08 không? (Cho CTV lương thấp)
 
-		// --- NHÓM 4: QUẢN LÝ ---
+		// --- NHÓM 4: TÀI LIỆU ĐÍNH KÈM ---
+		[StringLength(500)]
+		public string? AttachmentPath { get; set; } // Đường dẫn file đính kèm (VD: /uploads/contracts/user123_contract.pdf)
+
+		[StringLength(255)]
+		public string? AttachmentFileName { get; set; } // Tên file gốc (VD: hop_dong_lao_dong.pdf)
+
+		// --- NHÓM 5: QUẢN LÝ ---
 		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 		public DateTime? UpdatedAt { get; set; }
 

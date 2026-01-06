@@ -79,6 +79,9 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 // Add FileService
 builder.Services.AddScoped<IFileService, FileService>();
 
+// ✅ Add FileUploadService
+builder.Services.AddScoped<IFileUploadService, FileUploadService>();
+
 // ✅ Add PdfService (using PuppeteerSharp) as Singleton to reuse browser instance
 builder.Services.AddSingleton<IPdfService, PdfService>();
 

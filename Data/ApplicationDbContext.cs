@@ -71,6 +71,9 @@ namespace erp_backend.Data
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<UserNotification> UserNotifications { get; set; }
 
+        // ✅ Document Templates Module
+        public DbSet<DocumentTemplate> DocumentTemplates { get; set; }
+
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -1186,6 +1189,40 @@ namespace erp_backend.Data
 				entity.HasIndex(e => e.NotificationId);
 				entity.HasIndex(e => e.CreatedAt);
 			});
-		}
+
+			// Configure DocumentTemplate entity
+			modelBuilder.Entity<DocumentTemplate>(entity =>
+			{
+				entity.ToTable("document_templates");
+				entity.HasKey(e => e.Id);
+				
+				entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+				entity.Property(e => e.TemplateType).IsRequired().HasMaxLength(50);
+				entity.Property(e => e.Code).IsRequired().HasMaxLength(50);
+				entity.Property(e => e.HtmlContent).IsRequired();
+				entity.Property(e => e.Description).HasMaxLength(500);
+				entity.Property(e => e.AvailablePlaceholders).HasColumnType("text");
+				entity.Property(e => e.Version).HasDefaultValue(1);
+				entity.Property(e => e.IsActive).HasDefaultValue(true);
+				entity.Property(e => e.IsDefault).HasDefaultValue(false);
+				entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+				entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+
+				// Foreign key relationship with User (CreatedByUser)
+				entity.HasOne(e => e.CreatedByUser)
+					  .WithMany()
+					  .HasForeignKey(e => e.CreatedByUserId)
+					  .OnDelete(DeleteBehavior.SetNull);
+
+				// Indexes
+				entity.HasIndex(e => e.Code).IsUnique(); // Code phải unique
+				entity.HasIndex(e => e.TemplateType);
+				entity.HasIndex(e => e.IsActive);
+				entity.HasIndex(e => e.IsDefault);
+				entity.HasIndex(e => new { e.TemplateType, e.IsDefault }); // Tìm template mặc định theo loại
+				entity.HasIndex(e => e.CreatedByUserId);
+				entity.HasIndex(e => e.CreatedAt);
+			});
+        }
     }
 }
