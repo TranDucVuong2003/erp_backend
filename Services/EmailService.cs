@@ -19,6 +19,15 @@ namespace erp_backend.Services
         Task SendPasswordResetOtpAsync(string email, string userName, string otpCode, DateTime expiresAt);
         Task SendNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt);
         Task SendCustomerNotificationEmailAsync(string recipientEmail, string recipientName, string notificationTitle, string notificationContent, DateTime createdAt, string customerType);
+        
+        /// <summary>
+        /// Gửi email thông báo upload cam kết thông tư 08 sau khi cấu hình lương
+        /// </summary>
+        Task SendSalaryConfigCommitment08NotificationAsync(
+            User user, 
+            SalaryContracts contract, 
+            string uploadLink, 
+            string downloadTemplateLink);
     }
 
     public class EmailService : IEmailService
@@ -512,6 +521,103 @@ namespace erp_backend.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending customer notification email to {Email}", recipientEmail);
+            }
+        }
+
+        public async Task SendSalaryConfigCommitment08NotificationAsync(
+            User user, 
+            SalaryContracts contract, 
+            string uploadLink, 
+            string downloadTemplateLink)
+        {
+            try
+            {
+                // Validate email configuration
+                if (!ValidateEmailConfiguration())
+                {
+                    _logger.LogWarning("Email configuration is incomplete. Skipping commitment notification for user {UserId}", user.Id);
+                    return;
+                }
+
+                _logger.LogInformation("Preparing to send commitment notification email to {Email} for user {UserId}", user.Email, user.Id);
+
+                // ✅ Lấy template từ database
+                var template = await _context.DocumentTemplates
+                    .Where(t => t.Code == "EMAIL_UPLOAD_08" && t.IsActive)
+                    .FirstOrDefaultAsync();
+
+                if (template == null)
+                {
+                    _logger.LogWarning("Template EMAIL_UPLOAD_08 not found in database.");
+                    return;
+                }
+
+                // Lấy thông tin SMTP từ config
+                var smtpServer = _configuration["Email:SmtpServer"];
+                var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+                var smtpUsername = _configuration["Email:Username"];
+                var smtpPassword = _configuration["Email:Password"];
+                var senderEmail = _configuration["Email:SenderEmail"];
+                var senderName = _configuration["Email:SenderName"];
+                var hrEmail = _configuration["Email:HrEmail"] ?? senderEmail;
+
+                // Format contract type
+                var contractTypeText = contract.ContractType switch
+                {
+                    "OFFICIAL" => "Chính thức",
+                    "FREELANCE" => "Vãng lai",
+                    _ => contract.ContractType
+                };
+
+                // Tính deadline upload (7 ngày từ ngày tạo)
+                var uploadDeadline = contract.CreatedAt.AddDays(7).ToString("dd/MM/yyyy");
+
+                // ✅ Bind dữ liệu vào template
+                var htmlBody = template.HtmlContent
+                    .Replace("{{UserName}}", user.Name)
+                    .Replace("{{UserEmail}}", user.Email)
+                    .Replace("{{BaseSalary}}", contract.BaseSalary.ToString("N0"))
+                    .Replace("{{InsuranceSalary}}", contract.InsuranceSalary.ToString("N0"))
+                    .Replace("{{ContractType}}", contractTypeText)
+                    .Replace("{{DependentsCount}}", contract.DependentsCount.ToString())
+                    .Replace("{{CreatedAt}}", contract.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss"))
+                    .Replace("{{UploadAttachmentLink}}", uploadLink)
+                    .Replace("{{DownloadTemplateLink}}", downloadTemplateLink)
+                    .Replace("{{UploadDeadline}}", uploadDeadline)
+                    .Replace("{{HrEmail}}", hrEmail)
+                    .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
+
+                // Tạo email message
+                var mail = new MailMessage
+                {
+                    From = new MailAddress(senderEmail, senderName),
+                    Subject = "[ERP] Cấu hình lương thành công - Vui lòng upload Cam kết Thông tư 08",
+                    Body = htmlBody,
+                    IsBodyHtml = true
+                };
+
+                mail.To.Add(user.Email);
+
+                // Gửi email
+                using (var smtpClient = new SmtpClient(smtpServer, smtpPort))
+                {
+                    smtpClient.Credentials = new NetworkCredential(smtpUsername, smtpPassword);
+                    smtpClient.EnableSsl = true;
+                    smtpClient.Timeout = 30000;
+
+                    await smtpClient.SendMailAsync(mail);
+                }
+
+                _logger.LogInformation("Commitment notification email sent successfully to {Email} for user {UserId}", user.Email, user.Id);
+            }
+            catch (SmtpException smtpEx)
+            {
+                _logger.LogError(smtpEx, "SMTP error sending commitment notification for user {UserId}: {StatusCode} - {Message}", 
+                    user.Id, smtpEx.StatusCode, smtpEx.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending commitment notification for user {UserId}", user.Id);
             }
         }
 

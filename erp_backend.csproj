@@ -34,7 +34,7 @@
     <Folder Include="Models\Configuration\" />
     <Folder Include="Postman\" />
     <Folder Include="Scripts\" />
-    <Folder Include="wwwroot\uploads\" />
+    <Folder Include="wwwroot\uploads\salary-contracts\" />
   </ItemGroup>
 
 </Project>

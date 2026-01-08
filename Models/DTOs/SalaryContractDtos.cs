@@ -62,4 +62,13 @@ namespace erp_backend.Models.DTOs
 		public string? UserName { get; set; }
 		public string? UserEmail { get; set; }
 	}
+
+	/// <summary>
+	/// DTO for uploading commitment08 file
+	/// </summary>
+	public class UploadCommitment08Dto
+	{
+		[Required(ErrorMessage = "File is required")]
+		public IFormFile File { get; set; } = null!;
+	}
 }
