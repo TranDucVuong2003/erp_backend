@@ -287,6 +287,8 @@ namespace erp_backend.Controllers
 					// Gửi email thông báo tạo tài khoản
 					try
 					{
+						_logger.LogInformation("Bắt đầu gửi email tạo tài khoản cho user {UserId}", user.Id);
+						
 						// Tạo activation token
 						var activationToken = await _activationService.GenerateActivationTokenAsync(user.Id, expiryHours: 24);
 						
@@ -294,25 +296,16 @@ namespace erp_backend.Controllers
 						var baseUrl = _configuration["FrontendUrl"] ?? "https://erpsystem.click";
 						var activationLink = $"{baseUrl}/activate-account?token={Uri.EscapeDataString(activationToken)}";
 						
-						// Gửi email không đồng bộ
-						_ = Task.Run(async () =>
-						{
-							try
-							{
-								await _emailService.SendAccountCreationEmailAsync(user, plainPassword, activationLink);
-							}
-							catch (Exception emailEx)
-							{
-								_logger.LogError(emailEx, "Lỗi khi gửi email tạo tài khoản cho user {UserId}", user.Id);
-							}
-						});
-
-						_logger.LogInformation("Email tạo tài khoản đã được lên lịch gửi cho user {UserId}", user.Id);
+						// Gửi email đồng bộ - đợi email gửi xong mới trả về response
+						await _emailService.SendAccountCreationEmailAsync(user, plainPassword, activationLink);
+						
+						_logger.LogInformation("Email tạo tài khoản đã được gửi thành công cho user {UserId}", user.Id);
 					}
 					catch (Exception emailEx)
 					{
 						// Log lỗi nhưng không throw để không ảnh hưởng đến việc tạo user
-						_logger.LogError(emailEx, "Lỗi khi lên lịch gửi email cho user {UserId}", user.Id);
+						_logger.LogError(emailEx, "Lỗi khi gửi email tạo tài khoản cho user {UserId}. User đã được tạo thành công nhưng email không gửi được.", user.Id);
+						// Có thể thêm warning vào response nếu cần
 					}
 
 					return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);

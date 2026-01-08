@@ -38,6 +38,7 @@ namespace erp_backend.Migrations.Scripts
 			await MigrateEmailPasswordResetOTPTemplateAsync();
 			await MigrateEmailNotificationTemplateAsync();
 			await MigrateEmailPaymentSuccessTemplateAsync();
+			await MigrateEmailSalaryConfigCommitment08TemplateAsync(); // ✅ Thêm
 
 			_logger.LogInformation("=== HOÀN THÀNH MIGRATE TEMPLATES ===");
 		}
@@ -466,6 +467,23 @@ namespace erp_backend.Migrations.Scripts
 			await _context.SaveChangesAsync();
 
 			_logger.LogInformation("✔ Đã migrate template: {Code}", code);
+		}
+
+		// ✅ Thêm method migrate template Email Salary Config Commitment 08
+		private async Task MigrateEmailSalaryConfigCommitment08TemplateAsync()
+		{
+			const string code = "EMAIL_UPLOAD_08";
+
+			if (await _context.DocumentTemplates.AnyAsync(t => t.Code == code))
+			{
+				_logger.LogWarning("Template {Code} đã tồn tại, bỏ qua", code);
+				return;
+			}
+
+			// Template này đã được thêm trực tiếp vào database qua UI
+			// Nếu chưa có, có thể tạo file Email_SalaryConfigCommitment08.html
+			// hoặc insert trực tiếp vào database
+			_logger.LogInformation("⚠ Template {Code} cần được tạo thủ công hoặc đã có sẵn trong database", code);
 		}
 	}
 }
