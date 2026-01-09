@@ -69,23 +69,6 @@ namespace erp_backend.Migrations.Scripts
 				Code = code,
 				HtmlContent = htmlContent,
 				Description = "Template báo giá dịch vụ mặc định cho khách hàng",
-				AvailablePlaceholders = System.Text.Json.JsonSerializer.Serialize(new[]
-				{
-					"{{ngay_thang_nam}}",
-					"{{ten_khach_hang}}",
-					"{{dia_chi_khach_hang}}",
-					"{{sdt_khach_hang}}",
-					"{{email_khach_hang}}",
-					"{{nguoi_tao_quote}}",
-					"{{email_nguoi_tao}}",
-					"{{sdt_nguoi_tao}}",
-					"{{chuc_vu_nguoi_tao}}",
-					"{{ten_category_service_addon}}",
-					"{{SummaryItems}}",
-					"{{DetailItems}}",
-					"{{tong_thanh_toan}}",
-					"{{tong_thanh_toan_chi_tiet}}"
-				}),
 				IsActive = true,
 				IsDefault = true,
 				CreatedAt = DateTime.UtcNow
@@ -123,20 +106,6 @@ namespace erp_backend.Migrations.Scripts
 				Code = code,
 				HtmlContent = htmlContent,
 				Description = "Template báo cáo thống kê lương tháng",
-				AvailablePlaceholders = System.Text.Json.JsonSerializer.Serialize(new[]
-				{
-					"{{PayPeriod}}",
-					"{{ReportDate}}",
-					"{{CreatedBy}}",
-					"{{EmployeeRows}}",
-					"{{TotalEmployees}}",
-					"{{TotalBaseSalary}}",
-					"{{TotalAllowance}}",
-					"{{TotalBonus}}",
-					"{{TotalDeduction}}",
-					"{{TotalNetSalary}}",
-					"{{GeneratedDateTime}}"
-				}),
 				IsActive = true,
 				IsDefault = true,
 				CreatedAt = DateTime.UtcNow
@@ -174,33 +143,6 @@ namespace erp_backend.Migrations.Scripts
 				Code = code,
 				HtmlContent = htmlContent,
 				Description = "Template hợp đồng dành cho khách hàng cá nhân",
-				AvailablePlaceholders = System.Text.Json.JsonSerializer.Serialize(new[]
-				{
-					"{{ContractNumber}}",
-					"{{NumberContract}}",
-					"{{ContractYear}}",
-					"{{Day}}",
-					"{{Month}}",
-					"{{Year}}",
-					"{{ContractDate}}",
-					"{{ExpirationDate}}",
-					"{{Location}}",
-					"{{CompanyBName}}",
-					"{{CompanyBAddress}}",
-					"{{CompanyBPhone}}",
-					"{{CompanyBEmail}}",
-					"{{CustomerBirthDay}}",
-					"{{CustomerBirthMonth}}",
-					"{{CustomerBirthYear}}",
-					"{{SubTotal}}",
-					"{{TaxAmount}}",
-					"{{TotalAmount}}",
-					"{{AmountInWords}}",
-					"{{PaymentMethod}}",
-					"{{Items}}",
-					"{{UserName}}",
-					"{{UserPosition}}"
-				}),
 				IsActive = true,
 				IsDefault = false,
 				CreatedAt = DateTime.UtcNow
@@ -238,35 +180,6 @@ namespace erp_backend.Migrations.Scripts
 				Code = code,
 				HtmlContent = htmlContent,
 				Description = "Template hợp đồng dành cho khách hàng doanh nghiệp",
-				AvailablePlaceholders = System.Text.Json.JsonSerializer.Serialize(new[]
-				{
-					"{{ContractNumber}}",
-					"{{NumberContract}}",
-					"{{ContractYear}}",
-					"{{Day}}",
-					"{{Month}}",
-					"{{Year}}",
-					"{{ContractDate}}",
-					"{{ExpirationDate}}",
-					"{{Location}}",
-					"{{CompanyBName}}",
-					"{{CompanyBAddress}}",
-					"{{CompanyBTaxCode}}",
-					"{{CompanyBRepName}}",
-					"{{CompanyBRepPosition}}",
-					"{{CompanyBRepID}}",
-					"{{CompanyBPhone}}",
-					"{{CompanyBEmail}}",
-					"{{CompanyBEstablishedDate}}",
-					"{{SubTotal}}",
-					"{{TaxAmount}}",
-					"{{TotalAmount}}",
-					"{{AmountInWords}}",
-					"{{PaymentMethod}}",
-					"{{Items}}",
-					"{{UserName}}",
-					"{{UserPosition}}"
-				}),
 				IsActive = true,
 				IsDefault = true,
 				CreatedAt = DateTime.UtcNow
@@ -306,16 +219,6 @@ namespace erp_backend.Migrations.Scripts
 				Code = code,
 				HtmlContent = htmlContent,
 				Description = "Template email gửi khi tạo tài khoản mới cho nhân viên",
-				AvailablePlaceholders = System.Text.Json.JsonSerializer.Serialize(new[]
-				{
-					"{{UserName}}",
-					"{{UserEmail}}",
-					"{{PlainPassword}}",
-					"{{DepartmentName}}",
-					"{{PositionName}}",
-					"{{ActivationLink}}",
-					"{{CurrentYear}}"
-				}),
 				IsActive = true,
 				IsDefault = true,
 				CreatedAt = DateTime.UtcNow
@@ -353,14 +256,6 @@ namespace erp_backend.Migrations.Scripts
 				Code = code,
 				HtmlContent = htmlContent,
 				Description = "Template email gửi mã OTP để đổi mật khẩu",
-				AvailablePlaceholders = System.Text.Json.JsonSerializer.Serialize(new[]
-				{
-					"{{UserName}}",
-					"{{OtpCode}}",
-					"{{ExpiryMinutes}}",
-					"{{ExpiresAt}}",
-					"{{CurrentYear}}"
-				}),
 				IsActive = true,
 				IsDefault = true,
 				CreatedAt = DateTime.UtcNow
@@ -398,15 +293,6 @@ namespace erp_backend.Migrations.Scripts
 				Code = code,
 				HtmlContent = htmlContent,
 				Description = "Template email gửi thông báo chung cho người dùng",
-				AvailablePlaceholders = System.Text.Json.JsonSerializer.Serialize(new[]
-				{
-					"{{RecipientName}}",
-					"{{NotificationTitle}}",
-					"{{NotificationContent}}",
-					"{{CreatedAt}}",
-					"{{NotificationUrl}}",
-					"{{CurrentYear}}"
-				}),
 				IsActive = true,
 				IsDefault = true,
 				CreatedAt = DateTime.UtcNow
@@ -444,20 +330,6 @@ namespace erp_backend.Migrations.Scripts
 				Code = code,
 				HtmlContent = htmlContent,
 				Description = "Template email xác nhận thanh toán hợp đồng thành công",
-				AvailablePlaceholders = System.Text.Json.JsonSerializer.Serialize(new[]
-				{
-					"{{Greeting}}",
-					"{{MainMessage}}",
-					"{{ContractNumber}}",
-					"{{Amount}}",
-					"{{PaymentType}}",
-					"{{TransactionId}}",
-					"{{TransactionDate}}",
-					"{{CustomerInfo}}",
-					"{{SaleInfo}}",
-					"{{ContractUrl}}",
-					"{{CurrentYear}}"
-				}),
 				IsActive = true,
 				IsDefault = true,
 				CreatedAt = DateTime.UtcNow

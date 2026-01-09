@@ -85,6 +85,12 @@ builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 // ✅ Add PdfService (using PuppeteerSharp) as Singleton to reuse browser instance
 builder.Services.AddSingleton<IPdfService, PdfService>();
 
+// ✅ Add Template Render Service - TỰ ĐỘNG RENDER TEMPLATE VỚI DYNAMIC PLACEHOLDERS
+builder.Services.AddScoped<ITemplateRenderService, TemplateRenderService>();
+
+// ✅ Add Placeholder Schema Service - QUẢN LÝ SCHEMA VÀ GỢI Ý PLACEHOLDERS
+builder.Services.AddScoped<IPlaceholderSchemaService, PlaceholderSchemaService>();
+
 // Add Salary Report Service
 builder.Services.AddScoped<ISalaryReportService, SalaryReportService>();
 

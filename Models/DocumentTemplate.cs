@@ -15,9 +15,8 @@ namespace erp_backend.Models
 		[StringLength(100)]
 		public string Name { get; set; } = string.Empty; // "Contract Template", "Quote Template"
 
-		[Required]
 		[StringLength(50)]
-		public string TemplateType { get; set; } = string.Empty; // "contract", "quote", "email", "salary_report"
+		public string? TemplateType { get; set; } // "contract", "quote", "email", "salary_report"
 
 		[Required]
 		[StringLength(50)]
@@ -28,9 +27,6 @@ namespace erp_backend.Models
 
 		[StringLength(500)]
 		public string? Description { get; set; }
-
-		// Metadata cho placeholders (JSON array: ["{{CustomerName}}", "{{TotalAmount}}"])
-		public string? AvailablePlaceholders { get; set; }
 
 		// Versioning
 		public int Version { get; set; } = 1;
